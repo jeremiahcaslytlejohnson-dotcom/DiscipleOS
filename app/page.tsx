@@ -599,9 +599,9 @@ export default function DiscipleOSApp() {
   const [form, setForm] = useState({
     name: "",
     preset: "custom",
-    selectedBooks: ["Psalms", "Proverbs"],
+    selectedBooks: [],
     startDate: todayISO(),
-    endDate: calculateAutoEndDate(["Psalms", "Proverbs"], todayISO(), 2.5),
+    endDate: todayISO(),
     color: "from-violet-400 via-fuchsia-400 to-cyan-400",
     readingMode: "random",
     readingTime: "07:00",
@@ -1264,6 +1264,10 @@ export default function DiscipleOSApp() {
                               {plan.name}
                             </div>
                             <div className="mt-2 text-sm text-white/55">{stats.percent}% complete</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Pill>Finish: {formatDate(plan.endDate)}</Pill>
+                            <Pill>{formatTime(plan.readingTime || "07:00")}</Pill>
+                          </div>
                           </div>
                           <button
                             onClick={() => {
@@ -1352,46 +1356,7 @@ export default function DiscipleOSApp() {
                 </div>
               </SectionCard>
 
-              <SectionCard className="p-5 sm:p-6">
-                <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                  <Bookmark className="h-5 w-5 text-violet-300" />
-                  Active plans snapshot
-                </div>
-                <div className="space-y-3">
-                  {plans.length === 0 ? (
-                    <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm text-white/60">
-                      No reading plans yet — create your first plan to see progress here.
-                    </div>
-                  ) : plans.map((plan) => {
-                    const stats = getPlanStats(plan);
-                    return (
-                      <button
-                        key={plan.id}
-                        onClick={() => {
-                          setSelectedPlanId(plan.id);
-                          setActiveTab("plans");
-                        }}
-                        className="w-full rounded-[24px] border border-white/10 bg-white/[0.04] p-4 text-left hover:bg-white/10"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-medium text-white ${plan.color}`}>
-                              {plan.name}
-                            </div>
-                            <div className="mt-2 text-sm text-white/55">Finish target: {formatDate(plan.endDate)}</div>
-                            <div className="mt-1 text-xs text-white/50">Reading time: {formatTime(plan.readingTime || "07:00")}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-semibold">{stats.percent}%</div>
-                            <div className="text-xs text-white/50">complete</div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </SectionCard>
-            </div>
+              </div>
           </div>
         )}
 
@@ -1647,7 +1612,7 @@ export default function DiscipleOSApp() {
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-medium text-white">Day details</div>
+                      <div className="text-sm font-medium text-white">Today’s walk activities</div>
                       <div className="text-xs text-white/50">{formatDate(selectedCalendarDate)}</div>
                     </div>
                     <button
@@ -1701,7 +1666,7 @@ export default function DiscipleOSApp() {
                                     <Pencil className="h-4 w-4" />
                                   </button>
                                   <button
-                                    onClick={() => deleteEvent(event.id)}
+                                    onClick={() => deleteEvent(event.sourceEventId || event.id)}
                                     className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
                                   >
                                     <Trash2 className="h-4 w-4" />
