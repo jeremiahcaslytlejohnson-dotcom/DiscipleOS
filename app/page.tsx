@@ -421,7 +421,14 @@ function defaultPlans() {
 }
 
 function defaultEvents() {
-  const today = todayISO();
+ const today = todayISO();
+
+const remainingDays = plan.assignments.filter(
+  (day: any) => day.date >= today && !completedDates.has(day.date)
+).length;
+
+const neededPerRemainingDay =
+  remainingDays > 0 ? remainingChapters / remainingDays : remainingChapters;
   const id = () =>
     typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
