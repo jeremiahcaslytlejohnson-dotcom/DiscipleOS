@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -282,7 +282,7 @@ function summarizePlanInput(form: any) {
 }
 
 function getPlanStats(plan: any) {
-  const totalChapters = plan.assignments.reduce((sum: number, day: any) => sum + day.readings.length, 0);
+  const totalChapters = plan.assignments.reduce((sum, day) => sum + day.readings.length, 0);
   const completed = plan.completedChapterKeys.length;
   const percent = totalChapters === 0 ? 0 : Math.round((completed / totalChapters) * 100);
   const totalDays = Math.max(1, plan.assignments.length);
@@ -292,15 +292,16 @@ function getPlanStats(plan: any) {
   const remainingChapters = Math.max(0, totalChapters - completed);
   const completedDates = new Set();
 
-  plan.assignments.forEach((day: any) => {
+  plan.assignments.forEach((day) => {
     const allDone =
       day.readings.length > 0 &&
-      day.readings.every((reading: any) => plan.completedChapterKeys.includes(reading.key));
+      day.readings.every((reading) => plan.completedChapterKeys.includes(reading.key));
     if (allDone) completedDates.add(day.date);
   });
 
+  const today = todayISO();
   const remainingDays = plan.assignments.filter(
-   (day: any) => day.date >= today && !completedDates.has(day.date)
+    (day) => day.date >= today && !completedDates.has(day.date)
   ).length;
   const neededPerRemainingDay =
     remainingDays > 0 ? remainingChapters / remainingDays : remainingChapters;
@@ -421,14 +422,7 @@ function defaultPlans() {
 }
 
 function defaultEvents() {
- const today = todayISO();
-
-const remainingDays = plan.assignments.filter(
-  (day: any) => day.date >= today && !completedDates.has(day.date)
-).length;
-
-const neededPerRemainingDay =
-  remainingDays > 0 ? remainingChapters / remainingDays : remainingChapters;
+  const today = todayISO();
   const id = () =>
     typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
