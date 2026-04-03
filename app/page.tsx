@@ -292,10 +292,10 @@ function getPlanStats(plan: any) {
   const remainingChapters = Math.max(0, totalChapters - completed);
   const completedDates = new Set();
 
-  plan.assignments.forEach((day) => {
+  plan.assignments.forEach((day: any) => {
     const allDone =
       day.readings.length > 0 &&
-      day.readings.every((reading) => plan.completedChapterKeys.includes(reading.key));
+      day.readings.every((reading: any) => plan.completedChapterKeys.includes(reading.key));
     if (allDone) completedDates.add(day.date);
   });
 
