@@ -299,9 +299,8 @@ function getPlanStats(plan: any) {
     if (allDone) completedDates.add(day.date);
   });
 
-  const today = todayISO();
   const remainingDays = plan.assignments.filter(
-    (day) => day.date >= today && !completedDates.has(day.date)
+   (day: any) => day.date >= today && !completedDates.has(day.date)
   ).length;
   const neededPerRemainingDay =
     remainingDays > 0 ? remainingChapters / remainingDays : remainingChapters;
