@@ -282,7 +282,7 @@ function summarizePlanInput(form: any) {
 }
 
 function getPlanStats(plan: any) {
-  const totalChapters = plan.assignments.reduce((sum, day) => sum + day.readings.length, 0);
+  const totalChapters = plan.assignments.reduce((sum: number, day: any) => sum + day.readings.length, 0);
   const completed = plan.completedChapterKeys.length;
   const percent = totalChapters === 0 ? 0 : Math.round((completed / totalChapters) * 100);
   const totalDays = Math.max(1, plan.assignments.length);
