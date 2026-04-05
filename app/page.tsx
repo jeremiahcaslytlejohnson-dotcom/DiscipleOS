@@ -591,9 +591,7 @@ export default function DiscipleOSApp() {
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
-  const [notificationPermission, setNotificationPermission] = useState(
-    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported"
-  );
+  const [notificationPermission, setNotificationPermission] = useState("unknown");
   const sentNotificationsRef = useRef(new Set());
 
   const [form, setForm] = useState({
@@ -764,6 +762,14 @@ export default function DiscipleOSApp() {
 
     return [...manualItems, ...readingItems].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
   }, [events, plans, selectedCalendarDate]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    } else {
+      setNotificationPermission("unsupported");
+    }
+  }, []);
 
   useEffect(() => {
     try {
