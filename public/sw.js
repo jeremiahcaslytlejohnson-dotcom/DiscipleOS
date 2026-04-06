@@ -8,17 +8,13 @@ const urlsToCache = [
   "/apple-touch-icon.png",
 ];
 
-// Install
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
   );
   self.skipWaiting();
 });
 
-// Activate (cleanup old caches)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -34,7 +30,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch (cache-first strategy)
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -44,15 +39,13 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(event.request)
         .then((response) => {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, response.clone());
-            return response;
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
           });
+          return response;
         })
-        .catch(() => {
-          // Optional fallback (you can expand later)
-          return caches.match("/");
-        });
+        .catch(() => caches.match("/"));
     })
   );
 });
