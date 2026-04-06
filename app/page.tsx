@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import InstallButton from "./install-button";
 import {
   Calendar,
   BookOpen,
@@ -1119,6 +1120,7 @@ export default function DiscipleOSApp() {
                   >
                     Create a Plan
                   </button>
+                  <InstallButton />
                   <button
                     onClick={enableNotifications}
                     className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
@@ -1238,6 +1240,49 @@ export default function DiscipleOSApp() {
                   </div>
                 </SectionCard>
               ) : null}
+            </div>
+
+            <div className="space-y-4">
+              <SectionCard className="p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
+                  <Calendar className="h-5 w-5 text-[#D4A017]" />
+                  Today’s schedule
+                </div>
+                <div className="space-y-3">
+                  {todayFocusItems.manual.length === 0 ? (
+                    <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm text-white/60">
+                      No spiritual events scheduled today — add prayer, fasting, church, or a custom event.
+                    </div>
+                  ) : (
+                    todayFocusItems.manual.map((event) => (
+                      <div key={event.id} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <EventBadge type={event.type} />
+                          <div className="flex items-center gap-2">
+                            {event.remind ? <Pill accent>{event.reminderMinutes} min reminder</Pill> : null}
+                            <button
+                              onClick={() => beginEditEvent(event)}
+                              className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-base font-medium">{event.title}</div>
+                        <div className="mt-1 text-sm text-white/55">{formatTime(event.time)} today</div>
+                        {event.notes ? <div className="mt-2 text-sm text-white/70">{event.notes}</div> : null}
+                        {event.repeat && event.repeat !== "none" ? (
+                          <div className="mt-2 text-xs text-white/50">
+                            {event.repeat === "daily"
+                              ? "Repeats daily until turned off"
+                              : `Repeats on ${normalizeWeekdays(event.repeatWeekdays).map((day) => weekdayOptions.find((item) => item.value === day)?.label).join(", ")}${event.repeatUntil ? ` through ${formatDate(event.repeatUntil)}` : " until turned off"}`}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </SectionCard>
 
               <SectionCard className="p-5 sm:p-6">
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -1270,10 +1315,10 @@ export default function DiscipleOSApp() {
                               {plan.name}
                             </div>
                             <div className="mt-2 text-sm text-white/55">{stats.percent}% complete</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Pill>Finish: {formatDate(plan.endDate)}</Pill>
-                            <Pill>{formatTime(plan.readingTime || "07:00")}</Pill>
-                          </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Pill>Finish: {formatDate(plan.endDate)}</Pill>
+                              <Pill>{formatTime(plan.readingTime || "07:00")}</Pill>
+                            </div>
                           </div>
                           <button
                             onClick={() => {
@@ -1319,50 +1364,6 @@ export default function DiscipleOSApp() {
                 </div>
               </SectionCard>
             </div>
-
-            <div className="space-y-4">
-              <SectionCard className="p-5 sm:p-6">
-                <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                  <Calendar className="h-5 w-5 text-[#D4A017]" />
-                  Today’s schedule
-                </div>
-                <div className="space-y-3">
-                  {todayFocusItems.manual.length === 0 ? (
-                    <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm text-white/60">
-                      No spiritual events scheduled today — add prayer, fasting, church, or a custom event.
-                    </div>
-                  ) : (
-                    todayFocusItems.manual.map((event) => (
-                      <div key={event.id} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <EventBadge type={event.type} />
-                          <div className="flex items-center gap-2">
-                            {event.remind ? <Pill accent>{event.reminderMinutes} min reminder</Pill> : null}
-                            <button
-                              onClick={() => beginEditEvent(event)}
-                              className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-base font-medium">{event.title}</div>
-                        <div className="mt-1 text-sm text-white/55">{formatTime(event.time)} today</div>
-                        {event.notes ? <div className="mt-2 text-sm text-white/70">{event.notes}</div> : null}
-                        {event.repeat && event.repeat !== "none" ? (
-                          <div className="mt-2 text-xs text-white/50">
-                            {event.repeat === "daily"
-                              ? "Repeats daily until turned off"
-                              : `Repeats on ${normalizeWeekdays(event.repeatWeekdays).map((day) => weekdayOptions.find((item) => item.value === day)?.label).join(", ")}${event.repeatUntil ? ` through ${formatDate(event.repeatUntil)}` : " until turned off"}`}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </SectionCard>
-
-              </div>
           </div>
         )}
 
