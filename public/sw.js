@@ -1,4 +1,4 @@
-const CACHE_NAME = "discipleos-v1";
+const CACHE_NAME = "discipleos-v2";
 
 const urlsToCache = [
   "/",
