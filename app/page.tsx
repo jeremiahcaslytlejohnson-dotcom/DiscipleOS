@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import InstallButton from "./install-button";
+import PushSubscribe from "./push-subscribe";
 import {
   Calendar,
   BookOpen,
@@ -1121,6 +1122,7 @@ export default function DiscipleOSApp() {
                     Create a Plan
                   </button>
                   <InstallButton />
+				  <PushSubscribe />
                   <button
                     onClick={enableNotifications}
                     className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
