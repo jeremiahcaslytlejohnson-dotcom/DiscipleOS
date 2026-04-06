@@ -49,3 +49,26 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+// 🔔 Listen for push events
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "DiscipleOS",
+    body: "You have a new reminder",
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+    })
+  );
+});
