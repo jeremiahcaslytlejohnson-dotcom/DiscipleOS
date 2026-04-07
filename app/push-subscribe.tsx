@@ -83,8 +83,7 @@ const testLocalNotification = async () => {
     >
       Enable Push Notifications
     </button>
-
-    {/* ADD THIS BUTTON */}
+	
     <button
       onClick={testLocalNotification}
       className="mt-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
