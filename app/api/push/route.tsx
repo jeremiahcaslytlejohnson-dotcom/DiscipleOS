@@ -1,3 +1,4 @@
+// @ts-import
 import webpush from 'web-push';
 
 const vapidKeys = {
