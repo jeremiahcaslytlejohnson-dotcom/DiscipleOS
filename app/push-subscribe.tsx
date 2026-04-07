@@ -17,7 +17,34 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export default function PushSubscribe() {
   const [status, setStatus] = useState("");
+const testLocalNotification = async () => {
+  try {
+    if (!("serviceWorker" in navigator)) {
+      setStatus("Service worker not supported");
+      return;
+    }
 
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setStatus("Notifications not granted");
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    await registration.showNotification("DiscipleOS Test", {
+      body: "Immediate notification test",
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/icon-192x192.png",
+      tag: "discipleos-test",
+    });
+
+    setStatus("Test notification sent");
+  } catch (error) {
+    console.error(error);
+    setStatus("Test notification failed");
+  }
+};
   const subscribe = async () => {
     try {
       if (!("serviceWorker" in navigator)) {
@@ -49,14 +76,23 @@ export default function PushSubscribe() {
   };
 
   return (
-    <div className="mt-3">
-      <button
-        onClick={subscribe}
-        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
-      >
-        Enable Push Notifications
-      </button>
-      {status ? <div className="mt-2 text-sm text-white/60">{status}</div> : null}
-    </div>
-  );
+  <div className="mt-3">
+    <button
+      onClick={subscribe}
+      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
+    >
+      Enable Push Notifications
+    </button>
+
+    {/* ADD THIS BUTTON */}
+    <button
+      onClick={testLocalNotification}
+      className="mt-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
+    >
+      Test Notification
+    </button>
+
+    {status ? <div className="mt-2 text-sm text-white/60">{status}</div> : null}
+  </div>
+);
 }
