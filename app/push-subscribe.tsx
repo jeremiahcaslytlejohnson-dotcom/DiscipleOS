@@ -62,13 +62,21 @@ const testLocalNotification = async () => {
 
       const vapidPublicKey = "BC_R-09PEHK4oePTLQwpb6tICfyvjUxBnTqUBUuWWtW97CpMTYpQzOoyn6jt71zAnNP9SfhRerq3FPwvNvZvJVQ";
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
+     const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+});
 
-      console.log("PUSH SUBSCRIPTION:", JSON.stringify(subscription));
-      setStatus("Subscribed. Check browser console.");
+await fetch("/api/push", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(subscription),
+});
+
+console.log("PUSH SUBSCRIPTION:", JSON.stringify(subscription));
+setStatus("Subscribed and push test sent.");
     } catch (error) {
       console.error(error);
       setStatus("Subscription failed");
