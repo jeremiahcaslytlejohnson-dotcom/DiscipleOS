@@ -785,20 +785,45 @@ export default function DiscipleOSApp() {
     }
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
+  const loadData = async () => {
     try {
       const saved = localStorage.getItem("discipleos-data");
+
       if (saved) {
         const parsed = JSON.parse(saved);
         setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
+      }
+
+      const response = await fetch("/api/events");
+      const result = await response.json();
+
+      if (response.ok && Array.isArray(result.events)) {
+        setEvents(result.events);
+      } else if (saved) {
+        const parsed = JSON.parse(saved);
         setEvents(Array.isArray(parsed.events) ? parsed.events : []);
       }
     } catch (error) {
-      console.error("Failed to load DiscipleOS data from localStorage", error);
+      console.error("Failed to load DiscipleOS data", error);
+
+      try {
+        const saved = localStorage.getItem("discipleos-data");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
+          setEvents(Array.isArray(parsed.events) ? parsed.events : []);
+        }
+      } catch (innerError) {
+        console.error("Failed to load fallback localStorage data", innerError);
+      }
     } finally {
       setHasHydrated(true);
     }
-  }, []);
+  };
+
+  loadData();
+}, []);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -1010,59 +1035,89 @@ export default function DiscipleOSApp() {
     });
   };
 
-  const createEvent = () => {
-    if (!eventForm.title.trim()) return;
+const createEvent = async () => {
+  if (!eventForm.title.trim()) return;
 
-    const normalizedEvent = {
-      title: eventForm.title.trim(),
-      type: eventForm.type,
-      date: eventForm.date,
-      time: eventForm.time,
-      notes: eventForm.notes.trim(),
-      remind: eventForm.remind,
-      reminderMinutes: Number(eventForm.reminderMinutes || 0),
-      repeat: eventForm.repeat,
-      repeatWeekdays:
-        eventForm.repeat === "weekly"
-          ? normalizeWeekdays(eventForm.repeatWeekdays)
-          : eventForm.repeat === "daily"
-            ? [0, 1, 2, 3, 4, 5, 6]
-            : [],
-      repeatUntil: eventForm.repeatUntil || "",
+  const normalizedEvent = {
+    title: eventForm.title.trim(),
+    type: eventForm.type,
+    date: eventForm.date,
+    time: eventForm.time,
+    notes: eventForm.notes.trim(),
+    remind: eventForm.remind,
+    reminderMinutes: Number(eventForm.reminderMinutes || 0),
+    repeat: eventForm.repeat,
+    repeatWeekdays:
+      eventForm.repeat === "weekly"
+        ? normalizeWeekdays(eventForm.repeatWeekdays)
+        : eventForm.repeat === "daily"
+          ? [0, 1, 2, 3, 4, 5, 6]
+          : [],
+    repeatUntil: eventForm.repeatUntil || "",
+  };
+
+  if (editingEventId) {
+    const updatedEvent = {
+      id: editingEventId,
+      ...normalizedEvent,
     };
 
-    if (editingEventId) {
-      setEvents((prev) =>
-        sortEvents(
-          prev.map((event) =>
-            event.id !== editingEventId
-              ? event
-              : {
-                  ...event,
-                  ...normalizedEvent,
-                }
-          )
-        )
-      );
-      resetEventForm();
+    const response = await fetch("/api/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updatedEvent),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to save edited event to server");
       return;
     }
 
-    const eventId =
-      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-
     setEvents((prev) =>
-      sortEvents([
-        ...prev,
-        {
-          id: eventId,
-          ...normalizedEvent,
-        },
-      ])
+      sortEvents(
+        prev.map((event) =>
+          event.id !== editingEventId
+            ? event
+            : {
+                ...event,
+                ...normalizedEvent,
+              }
+        )
+      )
     );
 
     resetEventForm();
+    return;
+  }
+
+  const eventId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+
+  const newEvent = {
+    id: eventId,
+    ...normalizedEvent,
   };
+
+  const response = await fetch("/api/events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(newEvent),
+  });
+
+  if (!response.ok) {
+    console.error("Failed to save new event to server");
+    return;
+  }
+
+  setEvents((prev) => sortEvents([...prev, newEvent]));
+  resetEventForm();
+};
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -1079,6 +1134,27 @@ function urlBase64ToUint8Array(base64String: string) {
 
   return outputArray;
 }
+
+const deleteEvent = async (eventId: string) => {
+  const response = await fetch("/api/events", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id: eventId }),
+  });
+
+  if (!response.ok) {
+    console.error("Failed to delete event from server");
+    return;
+  }
+
+  setEvents((prev) => prev.filter((event) => event.id !== eventId));
+
+  if (editingEventId === eventId) {
+    resetEventForm();
+  }
+};
 
 const enableNotifications = async () => {
   try {
@@ -1733,7 +1809,7 @@ const enableNotifications = async () => {
                                     <Pencil className="h-4 w-4" />
                                   </button>
                                   <button
-                                    onClick={() => deleteEvent(event.sourceEventId || event.id)}
+									onClick={() => deleteEvent(event.id)}
                                     className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
                                   >
                                     <Trash2 className="h-4 w-4" />
