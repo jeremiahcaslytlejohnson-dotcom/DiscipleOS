@@ -3,7 +3,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import InstallButton from "./install-button";
-import PushSubscribe from "./push-subscribe";
 import {
   Calendar,
   BookOpen,
@@ -586,6 +585,19 @@ function EventBadge({ type }: any) {
   );
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
 export default function DiscipleOSApp() {
   const [plans, setPlans] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1052,38 +1064,83 @@ export default function DiscipleOSApp() {
     resetEventForm();
   };
 
-  const enableNotifications = async () => {
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
+const enableNotifications = async () => {
+  try {
     if (typeof window === "undefined" || !("Notification" in window)) {
       setNotificationPermission("unsupported");
+      alert("Notifications are unsupported on this device/browser.");
       return;
     }
+
+    if (!("serviceWorker" in navigator)) {
+      setNotificationPermission("unsupported");
+      alert("Service workers are unsupported on this device/browser.");
+      return;
+    }
+
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
-  };
 
-  const deleteEvent = (eventId) => {
-    setEvents((prev) => prev.filter((event) => event.id !== eventId));
-    if (editingEventId === eventId) resetEventForm();
-  };
+    if (permission !== "granted") {
+      alert("Notification permission was not granted.");
+      return;
+    }
 
-  const markDayPlanComplete = (planId, date) => {
-    setPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== planId) return plan;
-        const assignment = plan.assignments.find((day) => day.date === date);
-        if (!assignment) return plan;
-        const chapterKeys = assignment.readings.map((reading) => reading.key);
-        const allDone = chapterKeys.every((key) => plan.completedChapterKeys.includes(key));
-        return {
-          ...plan,
-          completedChapterKeys: allDone
-            ? plan.completedChapterKeys.filter((key) => !chapterKeys.includes(key))
-            : Array.from(new Set([...plan.completedChapterKeys, ...chapterKeys])),
-        };
-      })
-    );
-  };
+    const registration = await navigator.serviceWorker.ready;
 
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      await existingSubscription.unsubscribe();
+    }
+
+    const vapidPublicKey =
+      "BFYUizKcRaV50mWxCVk3qdRqkUhyXaB5QXeLJQe56D__bLcJClTiT4DOPw3yE4p5L0EggMdEPkNuxh5TnWqg0W0";
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+    });
+
+    console.log("NEW SUB ENDPOINT:", subscription.endpoint);
+
+    const response = await fetch("/api/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(subscription),
+    });
+
+    const result = await response.json();
+    console.log("SAVE PUSH RESULT:", result);
+
+    if (!response.ok) {
+      alert("Subscription save failed.");
+      return;
+    }
+
+    alert("Notifications enabled and subscription saved.");
+  } catch (error) {
+    console.error("Enable notifications failed:", error);
+    alert("Enable notifications failed. Check console.");
+  }
+};
   const tabs = [
     { key: "today", label: "Today", icon: LayoutDashboard },
     { key: "calendar", label: "Calendar", icon: Calendar },
@@ -1114,29 +1171,30 @@ export default function DiscipleOSApp() {
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 sm:text-base">
                   A system for your daily walk with God.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    onClick={() => setActiveTab("build")}
-                    className="rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-medium text-white transition hover:scale-[0.99] active:scale-[0.98]"
-                  >
-                    Create a Plan
-                  </button>
-                  <InstallButton />
-				  <PushSubscribe />
-                  <button
-                    onClick={enableNotifications}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
-                  >
-                    <Bell className="h-4 w-4" />
-                    {notificationPermission === "granted"
-                      ? "Notifications enabled"
-                      : notificationPermission === "denied"
-                        ? "Notifications blocked"
-                        : notificationPermission === "unsupported"
-                          ? "Notifications unavailable"
-                          : "Enable reminders"}
-                  </button>
-                </div>
+                <div className="flex flex-wrap items-center gap-3">
+  <button
+    onClick={() => setActiveTab("build")}
+    className="rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-medium text-white transition hover:scale-[0.99] active:scale-[0.98]"
+  >
+    Create a Plan
+  </button>
+
+  <InstallButton />
+
+  <button
+    onClick={enableNotifications}
+    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
+  >
+    <Bell className="h-4 w-4" />
+    {notificationPermission === "granted"
+      ? "Notifications enabled"
+      : notificationPermission === "denied"
+        ? "Notifications blocked"
+        : notificationPermission === "unsupported"
+          ? "Notifications unavailable"
+          : "Enable reminders"}
+  </button>
+</div>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
                 <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
