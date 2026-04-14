@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import InstallButton from "./install-button";
 import {
   Calendar,
   BookOpen,
@@ -785,13 +784,14 @@ export default function DiscipleOSApp() {
     }
   }, []);
 
- useEffect(() => {
+useEffect(() => {
   const loadData = async () => {
     try {
       const saved = localStorage.getItem("discipleos-data");
+      let parsed = null;
 
       if (saved) {
-        const parsed = JSON.parse(saved);
+        parsed = JSON.parse(saved);
         setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
       }
 
@@ -800,12 +800,11 @@ export default function DiscipleOSApp() {
 
       if (response.ok && Array.isArray(result.events)) {
         setEvents(result.events);
-      } else if (saved) {
-        const parsed = JSON.parse(saved);
-        setEvents(Array.isArray(parsed.events) ? parsed.events : []);
+      } else {
+        throw new Error("Bad API response");
       }
     } catch (error) {
-      console.error("Failed to load DiscipleOS data", error);
+      console.error("Failed to load DiscipleOS data, falling back to localStorage", error);
 
       try {
         const saved = localStorage.getItem("discipleos-data");
@@ -823,6 +822,20 @@ export default function DiscipleOSApp() {
   };
 
   loadData();
+}, []);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker
+    .register("/sw.js")
+    .then((registration) => {
+      console.log("SW registered:", registration.scope);
+    })
+    .catch((error) => {
+      console.error("SW registration failed:", error);
+    });
 }, []);
 
   useEffect(() => {
@@ -1000,6 +1013,27 @@ export default function DiscipleOSApp() {
     );
   };
 
+  const markDayPlanComplete = (planId, dateISO) => {
+    setPlans((prev) =>
+      prev.map((plan) => {
+        if (plan.id !== planId) return plan;
+
+        const assignment = plan.assignments.find((day) => day.date === dateISO);
+        if (!assignment || assignment.readings.length === 0) return plan;
+
+        const dayKeys = assignment.readings.map((reading) => reading.key);
+        const allDone = dayKeys.every((key) => plan.completedChapterKeys.includes(key));
+
+        return {
+          ...plan,
+          completedChapterKeys: allDone
+            ? plan.completedChapterKeys.filter((key) => !dayKeys.includes(key))
+            : [...new Set([...plan.completedChapterKeys, ...dayKeys])],
+        };
+      })
+    );
+  };
+
   const resetEventForm = () => {
     setEventForm({
       title: "",
@@ -1119,22 +1153,6 @@ const createEvent = async () => {
   resetEventForm();
 };
 
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-
-  return outputArray;
-}
-
 const deleteEvent = async (eventId: string) => {
   const response = await fetch("/api/events", {
     method: "DELETE",
@@ -1185,8 +1203,11 @@ const enableNotifications = async () => {
       await existingSubscription.unsubscribe();
     }
 
-    const vapidPublicKey =
-      "BFYUizKcRaV50mWxCVk3qdRqkUhyXaB5QXeLJQe56D__bLcJClTiT4DOPw3yE4p5L0EggMdEPkNuxh5TnWqg0W0";
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+if (!vapidPublicKey) {
+  alert("Missing VAPID public key");
+  return;
+}
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
@@ -1255,7 +1276,7 @@ const enableNotifications = async () => {
     Create a Plan
   </button>
 
-  <InstallButton />
+  {/* InstallButton temporarily disabled for debugging */}
 
   <button
     onClick={enableNotifications}
@@ -1744,630 +1765,645 @@ const enableNotifications = async () => {
         )}
 
         {activeTab === "calendar" && (
-          <div className="space-y-4">
-            <SectionCard className="p-5 sm:p-6">
-              <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                <Calendar className="h-5 w-5 text-[#D4A017]" />
-                Faith calendar
+  <div className="space-y-4">
+    <SectionCard className="p-5 sm:p-6">
+      <div className="mb-4 flex items-center gap-2 text-lg font-semibold">
+        <Calendar className="h-5 w-5 text-[#D4A017]" />
+        Faith calendar
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="space-y-4">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-white">Today’s walk activities</div>
+                <div className="text-xs text-white/50">{formatDate(selectedCalendarDate)}</div>
               </div>
+              <button
+                onClick={() => setSelectedCalendarDate(todayISO())}
+                className="text-xs text-white/60 hover:text-white"
+              >
+                Today
+              </button>
+            </div>
 
-              <div className="space-y-4">
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-white">Today’s walk activities</div>
-                      <div className="text-xs text-white/50">{formatDate(selectedCalendarDate)}</div>
-                    </div>
-                    <button
-                      onClick={() => setSelectedCalendarDate(todayISO())}
-                      className="text-xs text-white/60 hover:text-white"
-                    >
-                      Today
-                    </button>
-                  </div>
-
-                  <div className="space-y-3 max-h-[360px] overflow-auto">
-                    {dayViewItems.length === 0 ? (
-                      <div className="text-sm text-white/50">No events for this day — add prayer, fasting, church, or a custom event.</div>
-                    ) : (
-                      dayViewItems.map((event) => {
-                        const isPlanItem = event.kind === "plan";
-                        const allDone = isPlanItem && event.completedCount === event.readings.length;
-
-                        return (
-                          <div key={event.id} className="rounded-2xl border border-white/10 bg-[#0B1020]/40 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="font-medium text-white">{event.title}</div>
-                                  <EventBadge type={event.type || "event"} />
-                                </div>
-                                <div className="mt-1 text-sm text-white/50">{formatTime(event.time || "07:00")}</div>
-                                {event.notes ? <div className="mt-2 text-sm text-white/65">{event.notes}</div> : null}
-                                {!isPlanItem && event.repeat && event.repeat !== "none" ? (
-                                  <div className="mt-2 text-xs text-white/50">
-                                    {event.repeat === "daily"
-                                      ? "Repeats daily until turned off"
-                                      : `Repeats on ${normalizeWeekdays(event.repeatWeekdays).map((day) => weekdayOptions.find((item) => item.value === day)?.label).join(", ")}${event.repeatUntil ? ` through ${formatDate(event.repeatUntil)}` : " until turned off"}`}
-                                  </div>
-                                ) : null}
-                              </div>
-
-                              {isPlanItem ? (
-                                <button
-                                  onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate)}
-                                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:bg-white/10"
-                                >
-                                  {allDone ? "Undo day" : "Complete day"}
-                                </button>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => beginEditEvent(event)}
-                                    className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </button>
-                                  <button
-									onClick={() => deleteEvent(event.id)}
-                                    className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {isPlanItem ? (
-                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                {event.readings.map((reading) => {
-                                  const plan = plans.find((p) => p.id === event.planId);
-                                  const done = plan?.completedChapterKeys.includes(reading.key);
-
-                                  return (
-                                    <button
-                                      key={reading.key}
-                                      onClick={() => toggleChapterComplete(event.planId, reading.key)}
-                                      className={cn(
-                                        "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
-                                        done
-                                          ? "border-emerald-400/30 bg-emerald-500/10"
-                                          : "border-white/10 bg-white/5 hover:bg-white/10"
-                                      )}
-                                    >
-                                      <span>{reading.book} {reading.chapter}</span>
-                                      {done ? (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                                      ) : (
-                                        <Circle className="h-4 w-4 text-white/35" />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+            <div className="space-y-3 max-h-[360px] overflow-auto">
+              {dayViewItems.length === 0 ? (
+                <div className="text-sm text-white/50">
+                  No events for this day — add prayer, fasting, church, or a custom event.
                 </div>
+              ) : (
+                dayViewItems.map((event) => {
+                  const isPlanItem = event.kind === "plan";
+                  const allDone = isPlanItem && event.completedCount === event.readings.length;
 
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-white">{editingEventId ? "Edit event" : "Add event"}</div>
-                      <div className="text-xs text-white/50">For {formatDate(eventForm.date)}</div>
-                    </div>
-                    {editingEventId ? (
-                      <button
-                        onClick={resetEventForm}
-                        className="inline-flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Cancel edit
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                    <label className="xl:col-span-2">
-                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Title</div>
-                      <input
-                        value={eventForm.title}
-                        onChange={(e) => setEventForm((prev) => ({ ...prev, title: e.target.value }))}
-                        placeholder="Morning prayer"
-                        className="h-12 w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20"
-                      />
-                    </label>
-
-                    <label className="relative">
-                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Type</div>
-                      <select
-                        value={eventForm.type}
-                        onChange={(e) => setEventForm((prev) => ({ ...prev, type: e.target.value }))}
-                        className="h-12 w-full appearance-none rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 pr-10 text-sm text-white outline-none transition focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20"
-                      >
-                        <option value="prayer" className="bg-slate-950 text-white">Prayer</option>
-                        <option value="fast" className="bg-slate-950 text-white">Fast</option>
-                        <option value="church" className="bg-slate-950 text-white">Church</option>
-                        <option value="event" className="bg-slate-950 text-white">Event</option>
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-[2.55rem] h-4 w-4 text-white/45" />
-                    </label>
-
-                    <label>
-                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Date</div>
-                      <input
-                        type="date"
-                        value={eventForm.date}
-                        onChange={(e) => setEventForm((prev) => ({ ...prev, date: e.target.value }))}
-                        className="h-12 w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 text-sm text-white outline-none transition focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20 [color-scheme:dark]"
-                      />
-                    </label>
-
-                    <label>
-                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Time</div>
-                      <input
-                        type="time"
-                        value={eventForm.time}
-                        onChange={(e) => setEventForm((prev) => ({ ...prev, time: e.target.value }))}
-                        className="h-12 w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 text-sm text-white outline-none transition focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20 [color-scheme:dark]"
-                      />
-                    </label>
-
-                    <div className="flex items-end">
-                      <button
-                        onClick={createEvent}
-                        className="h-12 w-full rounded-2xl bg-[linear-gradient(135deg,#7C3AED_0%,#9333EA_45%,#06B6D4_100%)] px-4 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(124,58,237,0.30)] transition hover:scale-[0.99] active:scale-[0.98]"
-                      >
-                        {editingEventId ? "Save Event" : "Add Event"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Repeat</div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {[
-                        { value: "none", label: "One time" },
-                        { value: "daily", label: "Every day" },
-                        { value: "weekly", label: "Days of week" },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() =>
-                            setEventForm((prev) => ({
-                              ...prev,
-                              repeat: option.value,
-                              repeatWeekdays:
-                                option.value === "weekly"
-                                  ? (prev.repeatWeekdays?.length ? prev.repeatWeekdays : [getWeekdayIndex(prev.date)])
-                                  : option.value === "daily"
-                                    ? [0, 1, 2, 3, 4, 5, 6]
-                                    : [],
-                              repeatUntil: option.value === "none" ? "" : prev.repeatUntil,
-                            }))
-                          }
-                          type="button"
-                          className={cn(
-                            "rounded-2xl border px-3 py-2 text-sm transition",
-                            eventForm.repeat === option.value
-                              ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
-                              : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {eventForm.repeat === "weekly" ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {weekdayOptions.map((day) => {
-                          const active = eventForm.repeatWeekdays.includes(day.value);
-                          return (
-                            <button
-                              key={day.value}
-                              type="button"
-                              onClick={() =>
-                                setEventForm((prev) => {
-                                  const exists = prev.repeatWeekdays.includes(day.value);
-                                  const nextDays = exists
-                                    ? prev.repeatWeekdays.filter((value) => value !== day.value)
-                                    : [...prev.repeatWeekdays, day.value];
-                                  return {
-                                    ...prev,
-                                    repeatWeekdays: normalizeWeekdays(nextDays.length ? nextDays : [day.value]),
-                                  };
-                                })
-                              }
-                              className={cn(
-                                "h-10 w-10 rounded-full border text-sm transition",
-                                active
-                                  ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
-                                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
-                              )}
-                            >
-                              {day.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    {eventForm.repeat !== "none" ? (
-                      <label className="mt-3 block">
-                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Ends on (optional)</div>
-                        <input
-                          type="date"
-                          value={eventForm.repeatUntil}
-                          onChange={(e) => setEventForm((prev) => ({ ...prev, repeatUntil: e.target.value }))}
-                          className="h-12 w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 text-sm text-white outline-none transition focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20 [color-scheme:dark]"
-                        />
-                        <div className="mt-2 text-xs text-white/50">Leave blank to keep this running until you edit or turn it off.</div>
-                      </label>
-                    ) : null}
-                  </div>
-
-                  <label className="mt-3 block">
-                    <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Notes</div>
-                    <textarea
-                      value={eventForm.notes}
-                      onChange={(e) => setEventForm((prev) => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Add context, location, or prayer focus"
-                      className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(11,16,32,0.88))] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-violet-400/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-violet-500/20"
-                    />
-                  </label>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <button
-                      onClick={() =>
-                        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))
-                      }
-                      className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
-                    >
-                      Prev
-                    </button>
-                    <div className="text-sm font-medium">{formatMonthLabel(calendarMonth)}</div>
-                    <button
-                      onClick={() =>
-                        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
-                      }
-                      className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
-                    >
-                      Next
-                    </button>
-                  </div>
-
-                  <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs text-white/40">
-                    {["S", "M", "T", "W", "T", "F", "S"].map((d, index) => (
-                      <div key={`${d}-${index}`}>{d}</div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-2">
-                    {monthDays.map((day) => {
-                      const iso = toISODate(day);
-                      const dayEvents = monthEventMap[iso] || [];
-                      const hasEvents = dayEvents.length > 0;
-                      const selected = iso === selectedCalendarDate;
-                      const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                      const isToday = iso === todayISO();
-
-                      const dotTypes = Array.from(
-                        new Set(
-                          dayEvents.map((event) => {
-                            if (event.isPlan) return "bible";
-                            return event.type || "event";
-                          })
-                        )
-                      ).slice(0, 4);
-
-                      const dotClassMap = {
-                        bible: "bg-violet-400",
-                        prayer: "bg-fuchsia-400",
-                        fast: "bg-amber-400",
-                        church: "bg-sky-400",
-                        event: "bg-emerald-400",
-                      };
-
-                      return (
-                        <button
-                          key={iso}
-                          onClick={() => setSelectedCalendarDate(iso)}
-                          className={cn(
-                            "min-h-[88px] rounded-2xl p-2.5 text-left transition",
-                            selected && "bg-violet-500/30 ring-1 ring-violet-400/40",
-                            !selected && "hover:bg-white/5",
-                            hasEvents && "border border-white/10",
-                            !hasEvents && "border border-transparent",
-                            !isCurrentMonth && "opacity-45"
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className={cn("text-sm", isToday && "font-semibold text-[#D4A017]")}>{day.getDate()}</span>
-                            {dayEvents.length > 0 ? <span className="text-[10px] text-white/40">{dayEvents.length}</span> : null}
+                  return (
+                    <div key={event.id} className="rounded-2xl border border-white/10 bg-[#0B1020]/40 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-medium text-white">{event.title}</div>
+                            <EventBadge type={event.type || "event"} />
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            {dotTypes.map((type, index) => (
-                              <span
-                                key={`${iso}-${type}-${index}`}
-                                className={cn("h-2.5 w-2.5 rounded-full", dotClassMap[type] || dotClassMap.event)}
-                              />
-                            ))}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-          </div>
-        )}
+                          <div className="mt-1 text-sm text-white/50">{formatTime(event.time || "07:00")}</div>
+                          {event.notes ? <div className="mt-2 text-sm text-white/65">{event.notes}</div> : null}
+                        </div>
 
-        {activeTab === "plans" && (
-          <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
-            <div className="space-y-4">
-              <SectionCard className="p-5 sm:p-6">
-                <div className="mb-3 text-lg font-semibold">Planned reading</div>
-                <div className="space-y-3">
-                  {plans.length === 0 ? (
-                    <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm text-white/60">
-                      No reading plans yet — create one to start building your daily rhythm.
-                    </div>
-                  ) : plans.map((plan) => {
-                    const stats = getPlanStats(plan);
-                    const isActive = selectedPlan?.id === plan.id;
-                    return (
-                      <button
-                        key={plan.id}
-                        onClick={() => setSelectedPlanId(plan.id)}
-                        className={cn(
-                          "w-full rounded-[24px] border p-4 text-left transition",
-                          isActive ? "border-white/20 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-medium text-white ${plan.color}`}>
-                              {plan.name}
-                            </div>
-                            <div className="mt-2 text-sm text-white/55">
-                              {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <Pill>{plan.selectedBooks.length} books</Pill>
-                              <Pill>{stats.totalChapters} chapters</Pill>
-                              <Pill>{plan.readingMode === "random" ? "Randomized" : "Consecutive"}</Pill>
-                              <Pill>{formatTime(plan.readingTime || "07:00")}</Pill>
-                              <Pill accent>{stats.percent}% complete</Pill>
-                            </div>
-                          </div>
+                        {isPlanItem ? (
+                          <button
+                            onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate)}
+                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:bg-white/10"
+                          >
+                            {allDone ? "Undo day" : "Complete day"}
+                          </button>
+                        ) : (
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                beginEditPlan(plan);
-                              }}
+                              onClick={() => beginEditEvent(event)}
                               className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deletePlan(plan.id);
-                              }}
+                              onClick={() => deleteEvent(event.sourceEventId || event.id)}
                               className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </SectionCard>
-            </div>
-
-            <SectionCard className="p-5 sm:p-6">
-              {selectedPlan ? (
-                <>
-                  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-medium text-white ${selectedPlan.color}`}>
-                        {selectedPlan.name}
-                      </div>
-                      <h2 className="mt-3 text-2xl font-semibold">Plan details</h2>
-                      <p className="mt-1 text-sm text-white/60">{selectedPlan.selectedBooks.join(", ")}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Pill>
-                          {selectedPlan.readingMode === "random" ? "Randomized reading order" : "Consecutive reading order"}
-                        </Pill>
-                      </div>
-                    </div>
-                    {planStats && (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-right">
-                        <div className="text-sm text-white/60">Progress</div>
-                        <div className="mt-1 text-3xl font-semibold">{planStats.percent}%</div>
-                        <div className="text-sm text-white/60">{planStats.completed} / {planStats.totalChapters} chapters</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {editingPlan && editingPlan.id === selectedPlan.id ? (
-                    <div className="mb-5 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-                      <div className="mb-3 flex items-center gap-2 text-lg font-semibold">
-                        <Pencil className="h-5 w-5" />
-                        Edit plan
-                      </div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <input
-                          value={editForm.name}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                          className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
-                          placeholder="Plan name"
-                        />
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="date"
-                            value={editForm.startDate}
-                            onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                            className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
-                          />
-                          <input
-                            type="date"
-                            value={editForm.endDate}
-                            onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                            className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
-                          />
-                        </div>
-                      </div>
-                      <label className="mt-3 block rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-[#F8FAFC]">
-                        <div className="mb-2">Reading time</div>
-                        <input
-                          type="time"
-                          value={editForm.readingTime}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, readingTime: e.target.value }))}
-                          className="h-10 w-full rounded-xl border border-white/10 bg-[#0B1020]/40 px-3 outline-none"
-                        />
-                      </label>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
-                        <button
-                          onClick={() => setEditForm((prev) => ({ ...prev, readingMode: "consecutive" }))}
-                          className={cn(
-                            "rounded-2xl border px-4 py-3 text-left transition",
-                            editForm.readingMode === "consecutive"
-                              ? "border-white/30 bg-[#7C3AED] text-white"
-                              : "border-white/10 bg-slate-950/50 text-[#F8FAFC] hover:bg-white/10"
-                          )}
-                        >
-                          <div className="font-medium">Consecutive</div>
-                          <div className="text-xs opacity-75">Read in order</div>
-                        </button>
-                        <button
-                          onClick={() => setEditForm((prev) => ({ ...prev, readingMode: "random" }))}
-                          className={cn(
-                            "rounded-2xl border px-4 py-3 text-left transition",
-                            editForm.readingMode === "random"
-                              ? "border-white/30 bg-[#7C3AED] text-white"
-                              : "border-white/10 bg-slate-950/50 text-[#F8FAFC] hover:bg-white/10"
-                          )}
-                        >
-                          <div className="font-medium">Randomized</div>
-                          <div className="text-xs opacity-75">Shuffle chapters</div>
-                        </button>
-                      </div>
-                      {editPreview && (
-                        <div className="mt-3 rounded-2xl border border-white/10 bg-[#0B1020]/50 p-4 text-sm text-white/70">
-                          <div className="mb-2 font-medium text-[#F8FAFC]">Updated plan summary</div>
-                          <div className="grid gap-2 md:grid-cols-2">
-                            <div>Total chapters: <span className="text-white">{editPreview.totalChapters}</span></div>
-                            <div>Total days: <span className="text-white">{editPreview.totalDays}</span></div>
-                            <div>Average needed: <span className="text-white">{editPreview.chaptersPerDayExact.toFixed(2)} ch/day</span></div>
-                            <div>Daily load: <span className="text-white">{editPreview.minPerDay === editPreview.maxPerDay ? `${editPreview.maxPerDay} chapters/day` : `${editPreview.minPerDay}-${editPreview.maxPerDay} chapters/day`}</span></div>
-                            <div>Reading time: <span className="text-white">{formatTime(editForm.readingTime)}</span></div>
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-4 flex gap-3">
-                        <button onClick={savePlanEdit} className="rounded-2xl bg-[#7C3AED] px-4 py-3 font-medium text-white">Save changes</button>
-                        <button onClick={cancelPlanEdit} className="rounded-2xl border border-white/10 px-4 py-3 text-[#F8FAFC]">Cancel</button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {planStats && (
-                    <>
-                      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                          <div className="text-sm text-white/60">Target pace</div>
-                          <div className="mt-1 text-xl font-semibold">{planStats.chaptersPerDayExact.toFixed(2)}</div>
-                          <div className="text-xs text-white/55">chapters per day</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                          <div className="text-sm text-white/60">Planned load</div>
-                          <div className="mt-1 text-xl font-semibold">
-                            {planStats.minPerDay === planStats.maxPerDay ? `${planStats.maxPerDay}` : `${planStats.minPerDay}-${planStats.maxPerDay}`}
-                          </div>
-                          <div className="text-xs text-white/55">chapters per day</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                          <div className="text-sm text-white/60">Remaining</div>
-                          <div className="mt-1 text-xl font-semibold">{planStats.remainingChapters}</div>
-                          <div className="text-xs text-white/55">chapters left</div>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                          <div className="text-sm text-white/60">Needed now</div>
-                          <div className="mt-1 text-xl font-semibold">{planStats.neededPerRemainingDay.toFixed(2)}</div>
-                          <div className="text-xs text-white/55">chapters per remaining day</div>
-                        </div>
+                        )}
                       </div>
 
-                      <div className={cn(
-                        "mb-5 rounded-2xl border p-4",
-                        planStats.onTrack ? "border-emerald-400/20 bg-emerald-500/10" : "border-amber-400/20 bg-amber-500/10"
-                      )}>
-                        <div className="font-medium">
-                          {planStats.onTrack ? "On track to finish on time" : "Current pace is behind the target timeline"}
-                        </div>
-                        <div className="mt-1 text-sm text-white/70">
-                          {planStats.onTrack
-                            ? `Keep averaging about ${planStats.neededPerRemainingDay.toFixed(2)} chapters per remaining day to finish by ${formatDate(selectedPlan.endDate)}.`
-                            : `To finish by ${formatDate(selectedPlan.endDate)}, this plan now needs about ${planStats.neededPerRemainingDay.toFixed(2)} chapters per remaining day.`}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                      {isPlanItem ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {event.readings.map((reading) => {
+                            const plan = plans.find((p) => p.id === event.planId);
+                            const done = plan?.completedChapterKeys.includes(reading.key);
 
-                  <div className="max-h-[700px] space-y-3 overflow-auto pr-1">
-                    {selectedPlan.assignments.map((day) => (
-                      <div key={day.date} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm text-white/60">{formatDate(day.date)}</div>
-                            <div className="mt-1 text-xs text-white/50">Reading time: {formatTime(selectedPlan.readingTime || "07:00")}</div>
-                            <div className="text-lg font-medium">{day.readings.length} chapter{day.readings.length === 1 ? "" : "s"}</div>
-                          </div>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                          {day.readings.map((reading) => {
-                            const done = selectedPlan.completedChapterKeys.includes(reading.key);
                             return (
                               <button
                                 key={reading.key}
-                                onClick={() => toggleChapterComplete(selectedPlan.id, reading.key)}
+                                onClick={() => toggleChapterComplete(event.planId, reading.key)}
                                 className={cn(
-                                  "flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition",
+                                  "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
                                   done
                                     ? "border-emerald-400/30 bg-emerald-500/10"
-                                    : "border-white/10 bg-[#0B1020]/50 hover:bg-white/5"
+                                    : "border-white/10 bg-white/5 hover:bg-white/10"
                                 )}
                               >
-                                <div>
-                                  <div className="font-medium">{reading.book}</div>
-                                  <div className="text-sm text-white/60">Chapter {reading.chapter}</div>
-                                </div>
-                                {done ? <CheckCircle2 className="h-5 w-5 text-emerald-300" /> : <Circle className="h-5 w-5 text-white/35" />}
+                                <span>{reading.book} {reading.chapter}</span>
+                                {done ? (
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                                ) : (
+                                  <Circle className="h-4 w-4 text-white/35" />
+                                )}
                               </button>
                             );
                           })}
                         </div>
-                      </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-white">{editingEventId ? "Edit event" : "Add event"}</div>
+                <div className="text-xs text-white/50">For {formatDate(eventForm.date)}</div>
+              </div>
+              {editingEventId ? (
+                <button
+                  onClick={resetEventForm}
+                  className="inline-flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Cancel edit
+                </button>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Title</div>
+                <input
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Morning prayer"
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none placeholder:text-white/30"
+                />
+              </label>
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Type</div>
+                <select
+                  value={eventForm.type}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, type: e.target.value }))}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none"
+                >
+                  <option value="prayer">Prayer</option>
+                  <option value="fast">Fast</option>
+                  <option value="church">Church</option>
+                  <option value="event">Event</option>
+                </select>
+              </label>
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Date</div>
+                <input
+                  type="date"
+                  value={eventForm.date}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, date: e.target.value }))}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none [color-scheme:dark]"
+                />
+              </label>
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Time</div>
+                <input
+                  type="time"
+                  value={eventForm.time}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, time: e.target.value }))}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none [color-scheme:dark]"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Repeats</div>
+                <select
+                  value={eventForm.repeat}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, repeat: e.target.value }))}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none"
+                >
+                  <option value="none">Does not repeat</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </label>
+              <label>
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Ends on</div>
+                <input
+                  type="date"
+                  value={eventForm.repeatUntil}
+                  onChange={(e) => setEventForm((prev) => ({ ...prev, repeatUntil: e.target.value }))}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none [color-scheme:dark]"
+                />
+              </label>
+            </div>
+
+            {eventForm.repeat === "weekly" ? (
+              <div className="mt-3">
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Repeat on</div>
+                <div className="flex flex-wrap gap-2">
+                  {weekdayOptions.map((day) => {
+                    const active = eventForm.repeatWeekdays.includes(day.value);
+                    return (
+                      <button
+                        key={day.value}
+                        type="button"
+                        onClick={() =>
+                          setEventForm((prev) => {
+                            const exists = prev.repeatWeekdays.includes(day.value);
+                            const nextDays = exists
+                              ? prev.repeatWeekdays.filter((value) => value !== day.value)
+                              : [...prev.repeatWeekdays, day.value];
+                            return {
+                              ...prev,
+                              repeatWeekdays: normalizeWeekdays(nextDays.length ? nextDays : [day.value]),
+                            };
+                          })
+                        }
+                        className={cn(
+                          "h-10 w-10 rounded-full border text-sm transition",
+                          active
+                            ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
+                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                      >
+                        {day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-white">Reminder</div>
+                  <div className="text-xs text-white/50">Send a notification before this event starts</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventForm((prev) => ({ ...prev, remind: !prev.remind }))}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs transition",
+                    eventForm.remind
+                      ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
+                      : "border-white/10 bg-white/5 text-white/70"
+                  )}
+                >
+                  {eventForm.remind ? "Reminder on" : "Reminder off"}
+                </button>
+              </div>
+              <select
+                value={eventForm.reminderMinutes}
+                onChange={(e) => setEventForm((prev) => ({ ...prev, reminderMinutes: Number(e.target.value) }))}
+                disabled={!eventForm.remind}
+                className="h-12 w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 text-sm text-white outline-none disabled:opacity-50"
+              >
+                <option value={5}>5 minutes before</option>
+                <option value={10}>10 minutes before</option>
+                <option value={15}>15 minutes before</option>
+                <option value={30}>30 minutes before</option>
+                <option value={60}>1 hour before</option>
+              </select>
+            </div>
+
+            <label className="mt-3 block">
+              <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-white/45">Notes</div>
+              <textarea
+                value={eventForm.notes}
+                onChange={(e) => setEventForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Add context, location, or prayer focus"
+                className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-[#0B1020]/60 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+              />
+            </label>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={createEvent}
+                className="rounded-2xl bg-[#7C3AED] px-4 py-3 font-medium text-white"
+              >
+                {editingEventId ? "Save event" : "Add event"}
+              </button>
+              <button
+                onClick={resetEventForm}
+                className="rounded-2xl border border-white/10 px-4 py-3 text-[#F8FAFC]"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <button
+              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+              className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
+            >
+              Prev
+            </button>
+            <div className="text-sm font-medium">{formatMonthLabel(calendarMonth)}</div>
+            <button
+              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+              className="rounded-xl border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
+            >
+              Next
+            </button>
+          </div>
+
+          <div className="mb-2 grid grid-cols-7 gap-2 text-center text-xs text-white/40">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, index) => (
+              <div key={`${d}-${index}`}>{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {monthDays.map((day) => {
+              const iso = toISODate(day);
+              const dayEvents = monthEventMap[iso] || [];
+              const hasEvents = dayEvents.length > 0;
+              const selected = iso === selectedCalendarDate;
+              const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+              const isToday = iso === todayISO();
+              const dotTypes = Array.from(
+                new Set(
+                  dayEvents.map((event) => {
+                    if (event.isPlan) return "bible";
+                    return event.type || "event";
+                  })
+                )
+              ).slice(0, 4);
+              const dotClassMap = {
+                bible: "bg-violet-400",
+                prayer: "bg-fuchsia-400",
+                fast: "bg-amber-400",
+                church: "bg-sky-400",
+                event: "bg-emerald-400",
+              };
+
+              return (
+                <button
+                  key={iso}
+                  onClick={() => setSelectedCalendarDate(iso)}
+                  className={cn(
+                    "min-h-[88px] rounded-2xl p-2.5 text-left transition",
+                    selected && "bg-violet-500/30 ring-1 ring-violet-400/40",
+                    !selected && "hover:bg-white/5",
+                    hasEvents && "border border-white/10",
+                    !hasEvents && "border border-transparent",
+                    !isCurrentMonth && "opacity-45"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={cn("text-sm", isToday && "font-semibold text-[#D4A017]")}>{day.getDate()}</span>
+                    {dayEvents.length > 0 ? <span className="text-[10px] text-white/40">{dayEvents.length}</span> : null}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {dotTypes.map((type, index) => (
+                      <span
+                        key={`${iso}-${type}-${index}`}
+                        className={cn("h-2.5 w-2.5 rounded-full", dotClassMap[type] || dotClassMap.event)}
+                      />
                     ))}
                   </div>
-                </>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 p-6 text-white/60">No reading plan selected yet — create a plan or choose one from the list.</div>
-              )}
-            </SectionCard>
+                </button>
+              );
+            })}
           </div>
+        </div>
+      </div>
+    </SectionCard>
+  </div>
+)}
+
+{activeTab === "plans" && (
+  <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+    <div className="space-y-4">
+      <SectionCard className="p-5 sm:p-6">
+        <div className="mb-3 text-lg font-semibold">Planned reading</div>
+
+        <div className="space-y-3">
+          {plans.length === 0 ? (
+            <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm text-white/60">
+              No reading plans yet — create one to start building your daily rhythm.
+            </div>
+          ) : (
+            plans.map((plan) => {
+              const stats = getPlanStats(plan);
+              const isActive = selectedPlan?.id === plan.id;
+
+              return (
+                <div
+                  key={plan.id}
+                  onClick={() => setSelectedPlanId(plan.id)}
+                  className={cn(
+                    "w-full rounded-[24px] border p-4 text-left transition",
+                    isActive
+                      ? "border-white/20 bg-white/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-medium text-white ${plan.color}`}>
+                        {plan.name}
+                      </div>
+
+                      <div className="mt-2 text-sm text-white/55">
+                        {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Pill>{plan.selectedBooks.length} books</Pill>
+                        <Pill>{stats.totalChapters} chapters</Pill>
+                        <Pill>{plan.readingMode === "random" ? "Randomized" : "Consecutive"}</Pill>
+                        <Pill>{formatTime(plan.readingTime || "07:00")}</Pill>
+                        <Pill accent>{stats.percent}% complete</Pill>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          beginEditPlan(plan);
+                        }}
+                        className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePlan(plan.id);
+                        }}
+                        className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </SectionCard>
+    </div>
+
+    <div className="space-y-4">
+      <SectionCard className="p-5 sm:p-6">
+        {selectedPlan ? (
+          <>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-medium text-white ${selectedPlan.color}`}>
+                  {selectedPlan.name}
+                </div>
+                <h2 className="mt-3 text-2xl font-semibold">Plan details</h2>
+                <p className="mt-1 text-sm text-white/60">{selectedPlan.selectedBooks.join(", ")}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Pill>
+                    {selectedPlan.readingMode === "random" ? "Randomized reading order" : "Consecutive reading order"}
+                  </Pill>
+                </div>
+              </div>
+              {planStats && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-right">
+                  <div className="text-sm text-white/60">Progress</div>
+                  <div className="mt-1 text-3xl font-semibold">{planStats.percent}%</div>
+                  <div className="text-sm text-white/60">{planStats.completed} / {planStats.totalChapters} chapters</div>
+                </div>
+              )}
+            </div>
+
+            {editingPlan && editingPlan.id === selectedPlan.id ? (
+              <div className="mb-5 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+                <div className="mb-3 flex items-center gap-2 text-lg font-semibold">
+                  <Pencil className="h-5 w-5" />
+                  Edit plan
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
+                    placeholder="Plan name"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="date"
+                      value={editForm.startDate}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                      className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
+                    />
+                    <input
+                      type="date"
+                      value={editForm.endDate}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                      className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
+                    />
+                  </div>
+                </div>
+                <label className="mt-3 block rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-[#F8FAFC]">
+                  <div className="mb-2">Reading time</div>
+                  <input
+                    type="time"
+                    value={editForm.readingTime}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, readingTime: e.target.value }))}
+                    className="h-10 w-full rounded-xl border border-white/10 bg-[#0B1020]/40 px-3 outline-none"
+                  />
+                </label>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setEditForm((prev) => ({ ...prev, readingMode: "consecutive" }))}
+                    className={cn(
+                      "rounded-2xl border px-4 py-3 text-left transition",
+                      editForm.readingMode === "consecutive"
+                        ? "border-white/30 bg-[#7C3AED] text-white"
+                        : "border-white/10 bg-slate-950/50 text-[#F8FAFC] hover:bg-white/10"
+                    )}
+                  >
+                    <div className="font-medium">Consecutive</div>
+                    <div className="text-xs opacity-75">Read in order</div>
+                  </button>
+                  <button
+                    onClick={() => setEditForm((prev) => ({ ...prev, readingMode: "random" }))}
+                    className={cn(
+                      "rounded-2xl border px-4 py-3 text-left transition",
+                      editForm.readingMode === "random"
+                        ? "border-white/30 bg-[#7C3AED] text-white"
+                        : "border-white/10 bg-slate-950/50 text-[#F8FAFC] hover:bg-white/10"
+                    )}
+                  >
+                    <div className="font-medium">Randomized</div>
+                    <div className="text-xs opacity-75">Shuffle chapters</div>
+                  </button>
+                </div>
+                {editPreview && (
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-[#0B1020]/50 p-4 text-sm text-white/70">
+                    <div className="mb-2 font-medium text-[#F8FAFC]">Updated plan summary</div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div>Total chapters: <span className="text-white">{editPreview.totalChapters}</span></div>
+                      <div>Total days: <span className="text-white">{editPreview.totalDays}</span></div>
+                      <div>Average needed: <span className="text-white">{editPreview.chaptersPerDayExact.toFixed(2)} ch/day</span></div>
+                      <div>Daily load: <span className="text-white">{editPreview.minPerDay === editPreview.maxPerDay ? `${editPreview.maxPerDay} chapters/day` : `${editPreview.minPerDay}-${editPreview.maxPerDay} chapters/day`}</span></div>
+                      <div>Reading time: <span className="text-white">{formatTime(editForm.readingTime)}</span></div>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 flex gap-3">
+                  <button onClick={savePlanEdit} className="rounded-2xl bg-[#7C3AED] px-4 py-3 font-medium text-white">Save changes</button>
+                  <button onClick={cancelPlanEdit} className="rounded-2xl border border-white/10 px-4 py-3 text-[#F8FAFC]">Cancel</button>
+                </div>
+              </div>
+            ) : null}
+
+            {planStats && (
+              <>
+                <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-sm text-white/60">Target pace</div>
+                    <div className="mt-1 text-xl font-semibold">{planStats.chaptersPerDayExact.toFixed(2)}</div>
+                    <div className="text-xs text-white/55">chapters per day</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-sm text-white/60">Planned load</div>
+                    <div className="mt-1 text-xl font-semibold">
+                      {planStats.minPerDay === planStats.maxPerDay ? `${planStats.maxPerDay}` : `${planStats.minPerDay}-${planStats.maxPerDay}`}
+                    </div>
+                    <div className="text-xs text-white/55">chapters per day</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-sm text-white/60">Remaining</div>
+                    <div className="mt-1 text-xl font-semibold">{planStats.remainingChapters}</div>
+                    <div className="text-xs text-white/55">chapters left</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-sm text-white/60">Needed now</div>
+                    <div className="mt-1 text-xl font-semibold">{planStats.neededPerRemainingDay.toFixed(2)}</div>
+                    <div className="text-xs text-white/55">chapters per remaining day</div>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  "mb-5 rounded-2xl border p-4",
+                  planStats.onTrack ? "border-emerald-400/20 bg-emerald-500/10" : "border-amber-400/20 bg-amber-500/10"
+                )}>
+                  <div className="font-medium">
+                    {planStats.onTrack ? "On track to finish on time" : "Current pace is behind the target timeline"}
+                  </div>
+                  <div className="mt-1 text-sm text-white/70">
+                    {planStats.onTrack
+                      ? `Keep averaging about ${planStats.neededPerRemainingDay.toFixed(2)} chapters per remaining day to finish by ${formatDate(selectedPlan.endDate)}.`
+                      : `To finish by ${formatDate(selectedPlan.endDate)}, this plan now needs about ${planStats.neededPerRemainingDay.toFixed(2)} chapters per remaining day.`}
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="max-h-[700px] space-y-3 overflow-auto pr-1">
+              {selectedPlan.assignments.map((day) => (
+                <div key={day.date} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm text-white/60">{formatDate(day.date)}</div>
+                      <div className="mt-1 text-xs text-white/50">Reading time: {formatTime(selectedPlan.readingTime || "07:00")}</div>
+                      <div className="text-lg font-medium">{day.readings.length} chapter{day.readings.length === 1 ? "" : "s"}</div>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {day.readings.map((reading) => {
+                      const done = selectedPlan.completedChapterKeys.includes(reading.key);
+                      return (
+                        <button
+                          key={reading.key}
+                          onClick={() => toggleChapterComplete(selectedPlan.id, reading.key)}
+                          className={cn(
+                            "flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition",
+                            done
+                              ? "border-emerald-400/30 bg-emerald-500/10"
+                              : "border-white/10 bg-[#0B1020]/50 hover:bg-white/5"
+                          )}
+                        >
+                          <div>
+                            <div className="font-medium">{reading.book}</div>
+                            <div className="text-sm text-white/60">Chapter {reading.chapter}</div>
+                          </div>
+                          {done ? <CheckCircle2 className="h-5 w-5 text-emerald-300" /> : <Circle className="h-5 w-5 text-white/35" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 p-6 text-white/60">No reading plan selected yet — create a plan or choose one from the list.</div>
         )}
+      </SectionCard>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );

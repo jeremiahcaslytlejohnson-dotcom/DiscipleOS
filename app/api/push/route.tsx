@@ -1,49 +1,43 @@
 export const runtime = "nodejs";
 
-import webpush from "web-push";
 import { neon } from "@neondatabase/serverless";
 
-const sql = neon(process.env.discipleos_POSTGRES_URL!);
+function getSql() {
+  const url =
+    process.env.DISCIPLEOS_POSTGRES_URL ||
+    process.env.discipleos_POSTGRES_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL;
 
-const VAPID_PUBLIC_KEY =
-  "BFYUizKcRaV50mWxCVk3qdRqkUhyXaB5QXeLJQe56D__bLcJClTiT4DOPw3yE4p5L0EggMdEPkNuxh5TnWqg0W0";
-const VAPID_PRIVATE_KEY =
-  "-_-QRMo1jBMagrIgv66_mVZBR1ywnluN7eZoFQ_GoHg";
+  if (!url) {
+    throw new Error("Missing database URL");
+  }
 
-webpush.setVapidDetails(
-  "mailto:test@example.com",
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+  return neon(url);
+}
 
 export async function POST(req: Request) {
   try {
-    const subscription = await req.json();
+    const sql = getSql();
+    const sub = await req.json();
 
-    if (
-      !subscription ||
-      typeof subscription !== "object" ||
-      typeof subscription.endpoint !== "string" ||
-      typeof subscription.keys?.p256dh !== "string" ||
-      typeof subscription.keys?.auth !== "string"
-    ) {
-      console.error("Invalid subscription payload:", subscription);
-
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid subscription" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return Response.json(
+        { success: false, error: "Invalid subscription" },
+        { status: 400 }
       );
     }
 
     await sql`
-      INSERT INTO push_subscriptions (endpoint, p256dh, auth)
+      INSERT INTO push_subscriptions (
+        endpoint,
+        p256dh,
+        auth
+      )
       VALUES (
-        ${subscription.endpoint},
-        ${subscription.keys.p256dh},
-        ${subscription.keys.auth}
+        ${sub.endpoint},
+        ${sub.keys.p256dh},
+        ${sub.keys.auth}
       )
       ON CONFLICT (endpoint)
       DO UPDATE SET
@@ -52,16 +46,16 @@ export async function POST(req: Request) {
         updated_at = NOW()
     `;
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Push subscription error:", error);
+    return Response.json({ success: true }, { status: 200 });
+  } catch (error: any) {
+    console.error("Push save error:", error);
 
-    return new Response(JSON.stringify({ success: false }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      {
+        success: false,
+        error: error?.message || "Failed to save subscription",
+      },
+      { status: 500 }
+    );
   }
 }

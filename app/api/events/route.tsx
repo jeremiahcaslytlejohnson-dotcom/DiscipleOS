@@ -2,10 +2,51 @@ export const runtime = "nodejs";
 
 import { neon } from "@neondatabase/serverless";
 
-const sql = neon(process.env.discipleos_POSTGRES_URL!);
+function getDatabaseUrl() {
+  return (
+    process.env.DISCIPLEOS_POSTGRES_URL ||
+    process.env.discipleos_POSTGRES_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL ||
+    ""
+  );
+}
+
+function getSql() {
+  const databaseUrl = getDatabaseUrl();
+
+  if (!databaseUrl) {
+    throw new Error(
+      "Missing database URL. Set DISCIPLEOS_POSTGRES_URL, discipleos_POSTGRES_URL, POSTGRES_URL, or DATABASE_URL."
+    );
+  }
+
+  return neon(databaseUrl);
+}
+
+function normalizeDate(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return new Date(value as string | number | Date).toISOString().slice(0, 10);
+}
+
+function normalizeWeekdays(value: unknown) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 export async function GET() {
   try {
+    const sql = getSql();
+
     const rows = await sql`
       SELECT
         id,
@@ -27,41 +68,34 @@ export async function GET() {
       id: row.id,
       title: row.title,
       type: row.type,
-      date:
-        typeof row.date === "string"
-          ? row.date
-          : new Date(row.date).toISOString().slice(0, 10),
-      time: row.time,
+      date: normalizeDate(row.date),
+      time: row.time ?? "",
       notes: row.notes ?? "",
       remind: Boolean(row.remind),
       reminderMinutes: Number(row.reminder_minutes ?? 10),
       repeat: row.repeat ?? "none",
-      repeatWeekdays: Array.isArray(row.repeat_weekdays)
-        ? row.repeat_weekdays
-        : row.repeat_weekdays ?? [],
-      repeatUntil: row.repeat_until
-        ? typeof row.repeat_until === "string"
-          ? row.repeat_until
-          : new Date(row.repeat_until).toISOString().slice(0, 10)
-        : "",
+      repeatWeekdays: normalizeWeekdays(row.repeat_weekdays),
+      repeatUntil: row.repeat_until ? normalizeDate(row.repeat_until) : "",
     }));
 
-    return new Response(JSON.stringify({ success: true, events }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
+    return Response.json({ success: true, events }, { status: 200 });
+  } catch (error: any) {
     console.error("Load events error:", error);
 
-    return new Response(JSON.stringify({ success: false, events: [] }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      {
+        success: false,
+        events: [],
+        error: error?.message || "Failed to load events",
+      },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: Request) {
   try {
+    const sql = getSql();
     const event = await req.json();
 
     if (
@@ -72,12 +106,9 @@ export async function POST(req: Request) {
       typeof event.date !== "string" ||
       typeof event.time !== "string"
     ) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid event payload" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
+      return Response.json(
+        { success: false, error: "Invalid event payload" },
+        { status: 400 }
       );
     }
 
@@ -105,7 +136,7 @@ export async function POST(req: Request) {
         ${Boolean(event.remind)},
         ${Number(event.reminderMinutes ?? 10)},
         ${event.repeat ?? "none"},
-        ${JSON.stringify(event.repeatWeekdays ?? [])}::jsonb,
+        ${JSON.stringify(Array.isArray(event.repeatWeekdays) ? event.repeatWeekdays : [])}::jsonb,
         ${event.repeatUntil || null}
       )
       ON CONFLICT (id)
@@ -123,30 +154,29 @@ export async function POST(req: Request) {
         updated_at = NOW()
     `;
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
+    return Response.json({ success: true }, { status: 200 });
+  } catch (error: any) {
     console.error("Save event error:", error);
 
-    return new Response(JSON.stringify({ success: false }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      {
+        success: false,
+        error: error?.message || "Failed to save event",
+      },
+      { status: 500 }
+    );
   }
 }
+
 export async function DELETE(req: Request) {
   try {
+    const sql = getSql();
     const { id } = await req.json();
 
     if (typeof id !== "string" || !id) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid event id" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
+      return Response.json(
+        { success: false, error: "Invalid event id" },
+        { status: 400 }
       );
     }
 
@@ -155,16 +185,16 @@ export async function DELETE(req: Request) {
       WHERE id = ${id}
     `;
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
+    return Response.json({ success: true }, { status: 200 });
+  } catch (error: any) {
     console.error("Delete event error:", error);
 
-    return new Response(JSON.stringify({ success: false }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      {
+        success: false,
+        error: error?.message || "Failed to delete event",
+      },
+      { status: 500 }
+    );
   }
 }
