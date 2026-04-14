@@ -143,7 +143,7 @@ export async function POST(req: Request) {
       const reminderMinutes = Number(event.reminder_minutes ?? 10);
       const dueTime = subtractMinutes(event.time, reminderMinutes);
 
-      return dueTime === nowHHMM;
+      return dueTime <= nowHHMM;
     });
 
     let sentCount = 0;
