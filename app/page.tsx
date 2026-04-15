@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   BookOpen,
@@ -784,22 +784,36 @@ export default function DiscipleOSApp() {
     }
   }, []);
 
-useEffect(() => {
-  const loadData = async () => {
+  const dataLoadInFlightRef = useRef(false);
+
+  const loadData = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (dataLoadInFlightRef.current) return;
+
+    dataLoadInFlightRef.current = true;
+
     try {
       const saved = localStorage.getItem("discipleos-data");
-      let parsed = null;
 
       if (saved) {
-        parsed = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
         setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
+        setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
       }
 
-      const response = await fetch("/api/events");
+      const response = await fetch("/api/events", {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
       const result = await response.json();
 
       if (response.ok && Array.isArray(result.events)) {
-        setEvents(result.events);
+        setEvents(sortEvents(result.events));
       } else {
         throw new Error("Bad API response");
       }
@@ -811,32 +825,60 @@ useEffect(() => {
         if (saved) {
           const parsed = JSON.parse(saved);
           setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
-          setEvents(Array.isArray(parsed.events) ? parsed.events : []);
+          setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
         }
       } catch (innerError) {
         console.error("Failed to load fallback localStorage data", innerError);
       }
     } finally {
       setHasHydrated(true);
+      dataLoadInFlightRef.current = false;
     }
-  };
+  }, []);
 
-  loadData();
-}, []);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  if (!("serviceWorker" in navigator)) return;
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadData();
+      }
+    };
 
-  navigator.serviceWorker
-    .register("/sw.js")
-    .then((registration) => {
-      console.log("SW registered:", registration.scope);
-    })
-    .catch((error) => {
-      console.error("SW registration failed:", error);
-    });
-}, []);
+    const handleFocus = () => {
+      loadData();
+    };
+
+    const handlePageShow = () => {
+      loadData();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadData]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("SW registered:", registration.scope);
+      })
+      .catch((error) => {
+        console.error("SW registration failed:", error);
+      });
+  }, []);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -1109,19 +1151,7 @@ const createEvent = async () => {
       return;
     }
 
-    setEvents((prev) =>
-      sortEvents(
-        prev.map((event) =>
-          event.id !== editingEventId
-            ? event
-            : {
-                ...event,
-                ...normalizedEvent,
-              }
-        )
-      )
-    );
-
+    await loadData();
     resetEventForm();
     return;
   }
@@ -1149,7 +1179,7 @@ const createEvent = async () => {
     return;
   }
 
-  setEvents((prev) => sortEvents([...prev, newEvent]));
+  await loadData();
   resetEventForm();
 };
 
@@ -1167,7 +1197,7 @@ const deleteEvent = async (eventId: string) => {
     return;
   }
 
-  setEvents((prev) => prev.filter((event) => event.id !== eventId));
+  await loadData();
 
   if (editingEventId === eventId) {
     resetEventForm();
