@@ -133,16 +133,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const dueEvents = events.filter((event: any) => {
-      if (!event.time) return false;
-      if (!eventOccursOnDate(event, today)) return false;
-
-      const reminderMinutes = Number(event.reminder_minutes ?? 10);
-      const dueTime = subtractMinutes(event.time, reminderMinutes);
-
-      const windowStart = subtractMinutes(nowHHMM, 15);
-      return dueTime >= windowStart && dueTime <= nowHHMM;
-    });
+    // TEMP TEST MODE
+    const dueEvents = events;
 
     let sentCount = 0;
 
@@ -172,11 +164,14 @@ export async function POST(req: Request) {
                 event.notes ||
                 `${event.type || "Event"} starts at ${event.time}`,
               url: "/",
+              tag: `discipleos-${String(event.id)}-${today}`,
             })
           );
 
           sentCount++;
         } catch (error: any) {
+          console.error("Push send failed:", error?.message || error);
+
           if (error?.statusCode === 404 || error?.statusCode === 410) {
             await sql`
               DELETE FROM push_subscriptions
@@ -192,30 +187,42 @@ export async function POST(req: Request) {
       `;
     }
 
-       return Response.json({
+    return Response.json({
       success: true,
+      marker: "REMINDER_ROUTE_V3_FORCE_EVENTS",
       today,
       nowHHMM,
       totalEvents: events.length,
       totalSubscriptions: subscriptions.length,
+      dueEventsCount: dueEvents.length,
       dueEvents: dueEvents.map((event: any) => ({
         id: String(event.id),
         title: event.title,
         date: event.date,
         time: event.time,
+        remind: event.remind,
         reminderMinutes: Number(event.reminder_minutes ?? 10),
-        dueTime: subtractMinutes(
-          event.time,
-          Number(event.reminder_minutes ?? 10)
-        ),
-      })),
+        dueTime: event.time
+          ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
+          : null,
+          })),
       sent: sentCount,
     });
   } catch (error: any) {
     console.error("Reminder send error:", error);
 
+       return Response.json({
+      success: true,
+      marker: "SEND_ROUTE_LIVE_CHECK",
+    });
+  } catch (error: any) {
+    console.error("Reminder send error:", error);
+
     return Response.json(
-      { success: false, error: error?.message || "Failed" },
+      {
+        success: false,
+        error: error?.message || "Failed",
+      },
       { status: 500 }
     );
   }
