@@ -140,7 +140,7 @@ export async function POST(req: Request) {
       const reminderMinutes = Number(event.reminder_minutes ?? 10);
       const dueTime = subtractMinutes(event.time, reminderMinutes);
 
-      const windowStart = subtractMinutes(nowHHMM, 2);
+      const windowStart = subtractMinutes(nowHHMM, 15);
       return dueTime >= windowStart && dueTime <= nowHHMM;
     });
 
@@ -192,8 +192,23 @@ export async function POST(req: Request) {
       `;
     }
 
-    return Response.json({
+       return Response.json({
       success: true,
+      today,
+      nowHHMM,
+      totalEvents: events.length,
+      totalSubscriptions: subscriptions.length,
+      dueEvents: dueEvents.map((event: any) => ({
+        id: String(event.id),
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        reminderMinutes: Number(event.reminder_minutes ?? 10),
+        dueTime: subtractMinutes(
+          event.time,
+          Number(event.reminder_minutes ?? 10)
+        ),
+      })),
       sent: sentCount,
     });
   } catch (error: any) {
