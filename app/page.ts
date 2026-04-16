@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import InstallButton from "./install-button";
 import {
   Calendar,
   BookOpen,
@@ -484,6 +485,54 @@ function sortEvents(items: any[]) {
   return [...items].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
 }
 
+function upsertEvent(items: any[], nextEvent: any) {
+  const existingIndex = items.findIndex((item) => item.id === nextEvent.id);
+
+  if (existingIndex === -1) {
+    return sortEvents([...items, nextEvent]);
+  }
+
+  const updated = [...items];
+  updated[existingIndex] = nextEvent;
+  return sortEvents(updated);
+}
+
+function removeEventById(items: any[], eventId: string) {
+  return sortEvents(items.filter((item) => item.id !== eventId));
+}
+
+function getEventTypeLetter(type: string) {
+  switch (type) {
+    case "prayer":
+      return "P";
+    case "fast":
+      return "F";
+    case "church":
+      return "C";
+    case "bible":
+      return "B";
+    case "event":
+    default:
+      return "E";
+  }
+}
+
+function getEventTypeBadgeClass(type: string) {
+  switch (type) {
+    case "prayer":
+      return "border-fuchsia-400/30 bg-fuchsia-500/15 text-fuchsia-100";
+    case "fast":
+      return "border-amber-400/30 bg-amber-500/15 text-amber-100";
+    case "church":
+      return "border-sky-400/30 bg-sky-500/15 text-sky-100";
+    case "bible":
+      return "border-violet-400/30 bg-violet-500/15 text-violet-100";
+    case "event":
+    default:
+      return "border-emerald-400/30 bg-emerald-500/15 text-emerald-100";
+  }
+}
+
 function getWeekdayIndex(dateISO: string) {
   return new Date(`${dateISO}T12:00:00`).getDay();
 }
@@ -785,6 +834,7 @@ export default function DiscipleOSApp() {
   }, []);
 
   const dataLoadInFlightRef = useRef(false);
+  const lastLoadAtRef = useRef(0);
 
   const loadData = useCallback(async () => {
     if (typeof window === "undefined") return;
@@ -812,8 +862,14 @@ export default function DiscipleOSApp() {
 
       const result = await response.json();
 
-      if (response.ok && Array.isArray(result.events)) {
-        setEvents(sortEvents(result.events));
+      const freshEvents = Array.isArray(result)
+        ? result
+        : Array.isArray(result.events)
+          ? result.events
+          : null;
+
+      if (response.ok && freshEvents) {
+        setEvents(sortEvents(freshEvents));
       } else {
         throw new Error("Bad API response");
       }
@@ -832,27 +888,36 @@ export default function DiscipleOSApp() {
       }
     } finally {
       setHasHydrated(true);
+      lastLoadAtRef.current = Date.now();
       dataLoadInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   useEffect(() => {
+    const reloadIfStale = () => {
+      const now = Date.now();
+
+      if (now - lastLoadAtRef.current < 1000) return;
+
+      void loadData();
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        loadData();
+        reloadIfStale();
       }
     };
 
     const handleFocus = () => {
-      loadData();
+      reloadIfStale();
     };
 
     const handlePageShow = () => {
-      loadData();
+      reloadIfStale();
     };
 
     window.addEventListener("focus", handleFocus);
@@ -1138,21 +1203,34 @@ const createEvent = async () => {
       ...normalizedEvent,
     };
 
-    const response = await fetch("/api/events", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(updatedEvent),
-    });
+    const previousEvents = events;
+    setEvents((prev) => upsertEvent(prev, updatedEvent));
 
-    if (!response.ok) {
-      console.error("Failed to save edited event to server");
-      return;
+    try {
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedEvent),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save edited event to server");
+      }
+
+      const result = await response.json();
+      const savedEvent =
+        result?.event && typeof result.event === "object" ? result.event : updatedEvent;
+
+      setEvents((prev) => upsertEvent(prev, savedEvent));
+      resetEventForm();
+      void loadData();
+    } catch (error) {
+      console.error(error);
+      setEvents(previousEvents);
     }
 
-    await loadData();
-    resetEventForm();
     return;
   }
 
@@ -1166,41 +1244,60 @@ const createEvent = async () => {
     ...normalizedEvent,
   };
 
-  const response = await fetch("/api/events", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(newEvent),
-  });
+  const previousEvents = events;
+  setEvents((prev) => upsertEvent(prev, newEvent));
 
-  if (!response.ok) {
-    console.error("Failed to save new event to server");
-    return;
+  try {
+    const response = await fetch("/api/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(newEvent),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save new event to server");
+    }
+
+    const result = await response.json();
+    const savedEvent =
+      result?.event && typeof result.event === "object" ? result.event : newEvent;
+
+    setEvents((prev) => upsertEvent(prev, savedEvent));
+    resetEventForm();
+    void loadData();
+  } catch (error) {
+    console.error(error);
+    setEvents(previousEvents);
   }
-
-  await loadData();
-  resetEventForm();
 };
 
 const deleteEvent = async (eventId: string) => {
-  const response = await fetch("/api/events", {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ id: eventId }),
-  });
+  const previousEvents = events;
+  setEvents((prev) => removeEventById(prev, eventId));
 
-  if (!response.ok) {
-    console.error("Failed to delete event from server");
-    return;
-  }
+  try {
+    const response = await fetch("/api/events", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: eventId }),
+    });
 
-  await loadData();
+    if (!response.ok) {
+      throw new Error("Failed to delete event from server");
+    }
 
-  if (editingEventId === eventId) {
-    resetEventForm();
+    if (editingEventId === eventId) {
+      resetEventForm();
+    }
+
+    void loadData();
+  } catch (error) {
+    console.error(error);
+    setEvents(previousEvents);
   }
 };
 
@@ -1306,7 +1403,7 @@ if (!vapidPublicKey) {
     Create a Plan
   </button>
 
-  {/* InstallButton temporarily disabled for debugging */}
+<InstallButton />
 
   <button
     onClick={enableNotifications}
@@ -2112,7 +2209,7 @@ if (!vapidPublicKey) {
               const selected = iso === selectedCalendarDate;
               const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
               const isToday = iso === todayISO();
-              const dotTypes = Array.from(
+              const badgeTypes = Array.from(
                 new Set(
                   dayEvents.map((event) => {
                     if (event.isPlan) return "bible";
@@ -2120,13 +2217,6 @@ if (!vapidPublicKey) {
                   })
                 )
               ).slice(0, 4);
-              const dotClassMap = {
-                bible: "bg-violet-400",
-                prayer: "bg-fuchsia-400",
-                fast: "bg-amber-400",
-                church: "bg-sky-400",
-                event: "bg-emerald-400",
-              };
 
               return (
                 <button
@@ -2146,13 +2236,18 @@ if (!vapidPublicKey) {
                     {dayEvents.length > 0 ? <span className="text-[10px] text-white/40">{dayEvents.length}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {dotTypes.map((type, index) => (
-                      <span
-                        key={`${iso}-${type}-${index}`}
-                        className={cn("h-2.5 w-2.5 rounded-full", dotClassMap[type] || dotClassMap.event)}
-                      />
-                    ))}
-                  </div>
+  {badgeTypes.map((type, index) => (
+    <span
+      key={`${iso}-${type}-${index}`}
+      className={cn(
+        "inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border px-1 text-[10px] font-semibold leading-none",
+        getEventTypeBadgeClass(type)
+      )}
+    >
+      {getEventTypeLetter(type)}
+    </span>
+  ))}
+</div>
                 </button>
               );
             })}

@@ -1,97 +1,160 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Download, CheckCircle2 } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+  userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
 };
 
-function isBeforeInstallPromptEvent(value: Event): value is BeforeInstallPromptEvent {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "prompt" in value &&
-    typeof (value as BeforeInstallPromptEvent).prompt === "function" &&
-    "userChoice" in value
-  );
+function isIosDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function isStandaloneMode() {
+  if (typeof window === "undefined") return false;
+
+  const mediaStandalone =
+    window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
+
+  const iosStandalone =
+    isIosDevice() &&
+    typeof (window.navigator as Navigator & { standalone?: boolean }).standalone === "boolean"
+      ? Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
+      : false;
+
+  return mediaStandalone || iosStandalone;
 }
 
 export default function InstallButton() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const syncInstalledState = () => {
+      const installed = isStandaloneMode();
+      setIsInstalled(installed);
 
-    setIsSupported(true);
+      if (installed) {
+        setDeferredPrompt(null);
+        setIsInstalling(false);
+      }
+    };
 
-    const isStandalone =
-      window.matchMedia?.("(display-mode: standalone)")?.matches ||
-      // @ts-ignore - iOS Safari
-      window.navigator.standalone === true;
-
-    if (isStandalone) {
-      setIsInstalled(true);
-    }
+    setIsIos(isIosDevice());
+    syncInstalledState();
 
     const handleBeforeInstallPrompt = (event: Event) => {
-      if (!isBeforeInstallPromptEvent(event)) return;
       event.preventDefault();
-      setDeferredPrompt(event);
+      console.log("beforeinstallprompt fired");
+      setDeferredPrompt(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
+      console.log("appinstalled fired");
       setIsInstalled(true);
       setDeferredPrompt(null);
+      setIsInstalling(false);
     };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt as EventListener);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncInstalledState();
+      }
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
+    window.addEventListener("focus", syncInstalledState);
+    window.addEventListener("pageshow", syncInstalledState);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt as EventListener);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+      window.removeEventListener("focus", syncInstalledState);
+      window.removeEventListener("pageshow", syncInstalledState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
-  const handleInstall = async () => {
-    if (!deferredPrompt) return;
+  const label = useMemo(() => {
+    if (isInstalled) return "Installed";
+    if (isInstalling) return "Installing...";
+    return "Install App";
+  }, [isInstalled, isInstalling]);
 
-    try {
-      await deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-    } catch (error) {
-      console.error("Install prompt failed:", error);
-    } finally {
-      setDeferredPrompt(null);
+  const handleInstall = async () => {
+    if (isInstalled || isInstalling) return;
+
+    if (deferredPrompt) {
+      try {
+        setIsInstalling(true);
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+
+        console.log("install outcome:", choice.outcome);
+
+        if (choice.outcome !== "accepted") {
+          setIsInstalling(false);
+        }
+      } catch (error) {
+        console.error("Install prompt failed:", error);
+        setIsInstalling(false);
+      }
+      return;
     }
+
+    if (isIos) {
+      alert('To install DiscipleOS on iPhone or iPad, tap Share, then "Add to Home Screen".');
+      return;
+    }
+
+    alert(
+      "Install is not available yet in this browser state. Open DiscipleOS in Chrome or Edge, make sure HTTPS is enabled, and check that the app manifest and service worker are loading correctly."
+    );
   };
 
-  if (!isSupported) return null;
-
-  if (isInstalled) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/50"
-      >
-        Installed
-      </button>
-    );
-  }
-
-  if (!deferredPrompt) return null;
+  const disabled = isInstalled || isInstalling;
 
   return (
     <button
       type="button"
       onClick={handleInstall}
-      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
+      disabled={disabled}
+      aria-disabled={disabled}
+      title={
+        isInstalled
+          ? "App is already installed"
+          : deferredPrompt
+            ? "Install DiscipleOS"
+            : isIos
+              ? "Show iPhone/iPad install instructions"
+              : "Install may not be available yet in this browser state"
+      }
+      className={[
+        "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
+        isInstalled
+          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+          : disabled
+            ? "border-white/10 bg-white/5 text-white/45"
+            : "border-white/10 bg-white/5 text-[#F8FAFC] hover:bg-white/10 active:scale-[0.98]"
+      ].join(" ")}
     >
-      Install App
+      {isInstalled ? (
+        <CheckCircle2 className="h-4 w-4" />
+      ) : (
+        <Download className="h-4 w-4" />
+      )}
+      {label}
     </button>
   );
 }

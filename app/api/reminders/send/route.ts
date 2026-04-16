@@ -27,18 +27,11 @@ function configureWebPush() {
 }
 
 function todayISO() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return new Date().toISOString().slice(0, 10);
 }
 
 function currentTimeHHMM() {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  return new Date().toTimeString().slice(0, 5);
 }
 
 function getWeekdayIndex(dateISO: string) {
@@ -91,6 +84,10 @@ function subtractMinutes(time: string, minutesToSubtract: number) {
   return `${hh}:${mm}`;
 }
 
+export async function GET(req: Request) {
+  return POST(req);
+}
+
 export async function POST(req: Request) {
   const url = new URL(req.url);
   const secret = url.searchParams.get("secret");
@@ -132,7 +129,7 @@ export async function POST(req: Request) {
       return Response.json({
         success: true,
         sent: 0,
-        message: "No subscriptions to send to",
+        message: "No subscriptions",
       });
     }
 
@@ -143,19 +140,17 @@ export async function POST(req: Request) {
       const reminderMinutes = Number(event.reminder_minutes ?? 10);
       const dueTime = subtractMinutes(event.time, reminderMinutes);
 
-      return dueTime <= nowHHMM;
+      const windowStart = subtractMinutes(nowHHMM, 2);
+      return dueTime >= windowStart && dueTime <= nowHHMM;
     });
 
     let sentCount = 0;
 
     for (const event of dueEvents) {
-      const reminderKey = `${event.id}-${today}`;
-
       const alreadySent = await sql`
-        SELECT id
-        FROM sent_reminders
+        SELECT id FROM sent_reminders
         WHERE event_id = ${String(event.id)}
-          AND sent_at::date = ${today}
+        AND sent_at::date = ${today}
         LIMIT 1
       `;
 
@@ -177,14 +172,11 @@ export async function POST(req: Request) {
                 event.notes ||
                 `${event.type || "Event"} starts at ${event.time}`,
               url: "/",
-              tag: reminderKey,
             })
           );
 
-          sentCount += 1;
+          sentCount++;
         } catch (error: any) {
-          console.error("Push send failed:", error?.message || error);
-
           if (error?.statusCode === 404 || error?.statusCode === 410) {
             await sql`
               DELETE FROM push_subscriptions
@@ -202,18 +194,13 @@ export async function POST(req: Request) {
 
     return Response.json({
       success: true,
-      dueEvents: dueEvents.length,
       sent: sentCount,
-      checkedAt: `${today} ${nowHHMM}`,
     });
   } catch (error: any) {
     console.error("Reminder send error:", error);
 
     return Response.json(
-      {
-        success: false,
-        error: error?.message || "Failed to send reminders",
-      },
+      { success: false, error: error?.message || "Failed" },
       { status: 500 }
     );
   }

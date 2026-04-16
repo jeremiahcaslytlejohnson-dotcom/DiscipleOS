@@ -2,10 +2,12 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "DiscipleOS",
     short_name: "DiscipleOS",
     description: "A system for your daily walk with God.",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     orientation: "portrait",
     background_color: "#09090f",
@@ -15,11 +17,13 @@ export default function manifest(): MetadataRoute.Manifest {
         src: "/icon-192.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "any",
       },
       {
         src: "/icon-512.png",
         sizes: "512x512",
         type: "image/png",
+        purpose: "any",
       },
       {
         src: "/apple-touch-icon.png",

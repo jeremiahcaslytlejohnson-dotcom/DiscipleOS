@@ -1,7 +1,5 @@
-const CACHE_NAME = "discipleos-v2";
-
-const urlsToCache = [
-  "/",
+const CACHE_NAME = "discipleos-static-v3";
+const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
@@ -10,7 +8,7 @@ const urlsToCache = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
@@ -23,6 +21,7 @@ self.addEventListener("activate", (event) => {
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
+          return undefined;
         })
       )
     )
@@ -33,54 +32,75 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+  const url = new URL(event.request.url);
 
-      return fetch(event.request)
+  // Never intercept API requests
+  if (url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // Network-first for document navigations
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => caches.match("/"));
-    })
-  );
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || caches.match("/");
+        })
+    );
+    return;
+  }
+
+  // Cache-first for same-origin static assets only
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+
+        return fetch(event.request).then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        });
+      })
+    );
+  }
 });
-// 🔔 Listen for push events
+
 self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
   let data = {
-    title: "DiscipleOS",
-    body: "You have a new reminder",
+    title: "DiscipleOS Reminder",
+    body: "You have an upcoming reminder.",
+    url: "/",
+    tag: "discipleos-reminder",
   };
 
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch {
-      data.body = event.data.text();
-    }
+  try {
+    data = { ...data, ...event.data.json() };
+  } catch (error) {
+    console.error("Failed to parse push payload:", error);
   }
 
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
+      tag: data.tag || "discipleos-reminder",
+      data: {
+        url: data.url || "/",
+      },
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-    })
-  );
-});
-self.addEventListener("push", (event) => {
-  const data = event.data?.json() || {};
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || "DiscipleOS", {
-      body: data.body || "Reminder",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: data.url || "/" },
     })
   );
 });
@@ -88,14 +108,24 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || "/";
+  const targetUrl = event.notification?.data?.url || "/";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ("focus" in client) return client.focus();
+        try {
+          const clientUrl = new URL(client.url);
+          const desiredUrl = new URL(targetUrl, self.location.origin);
+
+          if (clientUrl.pathname === desiredUrl.pathname) {
+            return client.focus();
+          }
+        } catch (error) {
+          console.error("Failed to compare notification click URL:", error);
+        }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+
+      return clients.openWindow(targetUrl);
     })
   );
 });
