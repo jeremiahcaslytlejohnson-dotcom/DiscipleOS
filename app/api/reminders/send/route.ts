@@ -133,16 +133,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // TEMP TEST MODE
     const dueEvents = events;
 
     let sentCount = 0;
 
     for (const event of dueEvents) {
       const alreadySent = await sql`
-        SELECT id FROM sent_reminders
+        SELECT id
+        FROM sent_reminders
         WHERE event_id = ${String(event.id)}
-        AND sent_at::date = ${today}
+          AND sent_at::date = ${today}
         LIMIT 1
       `;
 
@@ -189,7 +189,7 @@ export async function POST(req: Request) {
 
     return Response.json({
       success: true,
-      marker: "REMINDER_ROUTE_V3_FORCE_EVENTS",
+      marker: "SEND_ROUTE_LIVE_CHECK",
       today,
       nowHHMM,
       totalEvents: events.length,
@@ -205,15 +205,8 @@ export async function POST(req: Request) {
         dueTime: event.time
           ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
           : null,
-          })),
+      })),
       sent: sentCount,
-    });
-  } catch (error: any) {
-    console.error("Reminder send error:", error);
-
-       return Response.json({
-      success: true,
-      marker: "SEND_ROUTE_LIVE_CHECK",
     });
   } catch (error: any) {
     console.error("Reminder send error:", error);
