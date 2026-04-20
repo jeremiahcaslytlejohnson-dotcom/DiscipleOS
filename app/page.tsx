@@ -1184,6 +1184,7 @@ const createEvent = async () => {
     type: eventForm.type,
     date: eventForm.date,
     time: eventForm.time,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     notes: eventForm.notes.trim(),
     remind: eventForm.remind,
     reminderMinutes: Number(eventForm.reminderMinutes || 0),

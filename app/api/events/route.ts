@@ -27,12 +27,13 @@ function getSql() {
 
 function normalizeDate(value: unknown) {
   if (!value) return "";
-  if (typeof value === "string") return value;
+  if (typeof value === "string") return value.slice(0, 10);
   return new Date(value as string | number | Date).toISOString().slice(0, 10);
 }
 
 function normalizeWeekdays(value: unknown) {
   if (Array.isArray(value)) return value;
+
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
@@ -41,6 +42,7 @@ function normalizeWeekdays(value: unknown) {
       return [];
     }
   }
+
   return [];
 }
 
@@ -60,7 +62,8 @@ export async function GET() {
         reminder_minutes,
         repeat,
         repeat_weekdays,
-        repeat_until
+        repeat_until,
+        time_zone
       FROM events
       ORDER BY date ASC, time ASC
     `;
@@ -77,6 +80,7 @@ export async function GET() {
       repeat: row.repeat ?? "none",
       repeatWeekdays: normalizeWeekdays(row.repeat_weekdays),
       repeatUntil: row.repeat_until ? normalizeDate(row.repeat_until) : "",
+      timeZone: row.time_zone ?? "America/New_York",
     }));
 
     return Response.json({ success: true, events }, { status: 200 });
@@ -125,7 +129,8 @@ export async function POST(req: Request) {
         reminder_minutes,
         repeat,
         repeat_weekdays,
-        repeat_until
+        repeat_until,
+        time_zone
       )
       VALUES (
         ${event.id},
@@ -137,8 +142,11 @@ export async function POST(req: Request) {
         ${Boolean(event.remind)},
         ${Number(event.reminderMinutes ?? 10)},
         ${event.repeat ?? "none"},
-        ${JSON.stringify(Array.isArray(event.repeatWeekdays) ? event.repeatWeekdays : [])}::jsonb,
-        ${event.repeatUntil || null}
+        ${JSON.stringify(
+          Array.isArray(event.repeatWeekdays) ? event.repeatWeekdays : []
+        )}::jsonb,
+        ${event.repeatUntil || null},
+        ${event.timeZone || "America/New_York"}
       )
       ON CONFLICT (id)
       DO UPDATE SET
@@ -152,6 +160,7 @@ export async function POST(req: Request) {
         repeat = EXCLUDED.repeat,
         repeat_weekdays = EXCLUDED.repeat_weekdays,
         repeat_until = EXCLUDED.repeat_until,
+        time_zone = EXCLUDED.time_zone,
         updated_at = NOW()
     `;
 

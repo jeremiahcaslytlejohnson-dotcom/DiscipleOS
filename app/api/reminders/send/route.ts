@@ -26,12 +26,28 @@ function configureWebPush() {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+function getEasternNow() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+  );
 }
 
-function currentTimeHHMM() {
-  return new Date().toTimeString().slice(0, 5);
+function getNowInTimeZone(timeZone: string) {
+  const now = new Date(
+    new Date().toLocaleString("en-US", { timeZone })
+  );
+
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+
+  return {
+    today: `${yyyy}-${mm}-${dd}`,
+    nowHHMM: `${hh}:${min}`,
+  };
 }
 
 function getWeekdayIndex(dateISO: string) {
@@ -100,10 +116,7 @@ export async function POST(req: Request) {
     const sql = getSql();
     configureWebPush();
 
-    const today = todayISO();
-    const nowHHMM = currentTimeHHMM();
-
-    const events = await sql`
+   const events = await sql`
       SELECT
         id,
         title,
@@ -115,10 +128,17 @@ export async function POST(req: Request) {
         reminder_minutes,
         repeat,
         repeat_weekdays,
-        repeat_until
+        repeat_until,
+		time_zone
       FROM events
       WHERE remind = true
     `;
+
+ const fallbackTZ = "America/New_York";
+
+	// for now just use first event's timezone or fallback
+	const tz = events[0]?.time_zone || fallbackTZ;
+	const { today, nowHHMM } = getNowInTimeZone(tz);
 
     const subscriptions = await sql`
       SELECT id, endpoint, p256dh, auth
@@ -133,7 +153,16 @@ export async function POST(req: Request) {
       });
     }
 
-    const dueEvents = events;
+    const dueEvents = events.filter((event: any) => {
+  if (!event.time) return false;
+  if (!eventOccursOnDate(event, today)) return false;
+
+  const reminderMinutes = Number(event.reminder_minutes ?? 10);
+  const dueTime = subtractMinutes(event.time, reminderMinutes);
+  const windowStart = subtractMinutes(nowHHMM, 2);
+
+  return dueTime >= windowStart && dueTime <= nowHHMM;
+});
 
     let sentCount = 0;
 
@@ -192,6 +221,7 @@ export async function POST(req: Request) {
       marker: "SEND_ROUTE_LIVE_CHECK",
       today,
       nowHHMM,
+	  timeZoneUsed: tz,
       totalEvents: events.length,
       totalSubscriptions: subscriptions.length,
       dueEventsCount: dueEvents.length,
