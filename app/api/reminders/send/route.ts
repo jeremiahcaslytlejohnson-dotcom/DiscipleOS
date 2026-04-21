@@ -73,13 +73,22 @@ function normalizeWeekdays(value: unknown): number[] {
   return [];
 }
 
+function normalizeDate(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  return new Date(value as string | number | Date).toISOString().slice(0, 10);
+}
+
 function eventOccursOnDate(event: any, dateISO: string) {
+  const eventDate = normalizeDate(event.date);
+  const repeatUntil = normalizeDate(event.repeat_until);
+
   if (!event.repeat || event.repeat === "none") {
-    return event.date === dateISO;
+    return eventDate === dateISO;
   }
 
-  if (dateISO < event.date) return false;
-  if (event.repeat_until && dateISO > event.repeat_until) return false;
+  if (dateISO < eventDate) return false;
+  if (repeatUntil && dateISO > repeatUntil) return false;
 
   if (event.repeat === "daily") return true;
 
@@ -243,29 +252,30 @@ export async function POST(req: Request) {
       `;
     }
 
-    return Response.json({
-  success: true,
-  marker: "SEND_ROUTE_LIVE_CHECK",
-  today,
-  nowHHMM,
-  timeZoneUsed: tz,
-  totalEvents: events.length,
-  totalSubscriptions: subscriptions.length,
-  dueEventsCount: dueEvents.length,
-  dueEvents: dueEvents.map((event: any) => ({
-    id: String(event.id),
-    title: event.title,
-    date: event.date,
-    time: event.time,
-    remind: event.remind,
-    reminderMinutes: Number(event.reminder_minutes ?? 10),
-    dueTime: event.time
-      ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
-      : null,
-  })),
-  eventDiagnostics,
-  sent: sentCount,
-});
+   return Response.json({
+      success: true,
+      marker: "SEND_ROUTE_LIVE_CHECK",
+      today,
+      nowHHMM,
+      timeZoneUsed: tz,
+      totalEvents: events.length,
+      totalSubscriptions: subscriptions.length,
+      dueEventsCount: dueEvents.length,
+      dueEvents: dueEvents.map((event: any) => ({
+        id: String(event.id),
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        remind: event.remind,
+        reminderMinutes: Number(event.reminder_minutes ?? 10),
+        dueTime: event.time
+          ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
+          : null,
+      })),
+      eventDiagnostics,
+      sent: sentCount,
+    });
+	
   } catch (error: any) {
     console.error("Reminder send error:", error);
 
