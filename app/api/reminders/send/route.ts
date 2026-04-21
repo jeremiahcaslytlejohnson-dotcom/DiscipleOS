@@ -26,12 +26,6 @@ function configureWebPush() {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
-function getEasternNow() {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
-  );
-}
-
 function getNowInTimeZone(timeZone: string) {
   const now = new Date(
     new Date().toLocaleString("en-US", { timeZone })
@@ -158,37 +152,6 @@ export async function POST(req: Request) {
       });
     }
 	
-	const eventDiagnostics = events.map((event: any) => {
-	const tz = event.time_zone || fallbackTZ;
-	const { today, nowHHMM } = getNowInTimeZone(tz);
-
-	const hasTime = Boolean(event.time);
-	const occursToday = eventOccursOnDate(event, today);
-	const reminderMinutes = Number(event.reminder_minutes ?? 10);
-	const dueTime = event.time
-    ? subtractMinutes(event.time, reminderMinutes)
-    : null;
-	const windowStart = subtractMinutes(nowHHMM, 2);
-	const inWindow =
-    dueTime !== null ? dueTime >= windowStart && dueTime <= nowHHMM : false;
-
-	  return {
-		id: String(event.id),
-		title: event.title,
-		rawDate: event.date,
-		time: event.time,
-		timeZoneUsed: tz,
-		today,
-		nowHHMM,
-		hasTime,
-		occursToday,
-		reminderMinutes,
-		dueTime,
-		windowStart,
-		inWindow,
-  };
-});
-
 	const dueEvents = events.filter((event: any) => {
 	const tz = event.time_zone || fallbackTZ;
 	const { today, nowHHMM } = getNowInTimeZone(tz);
@@ -258,11 +221,10 @@ export async function POST(req: Request) {
       `;
     }
 
-   return Response.json({
-  success: true,
-  sent: sentCount,
-});
-	
+      return Response.json({
+      success: true,
+      sent: sentCount,
+    });
   } catch (error: any) {
     console.error("Reminder send error:", error);
 
