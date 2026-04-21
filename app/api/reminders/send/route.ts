@@ -152,17 +152,44 @@ export async function POST(req: Request) {
         message: "No subscriptions",
       });
     }
+	
+    const eventDiagnostics = events.map((event: any) => {
+      const hasTime = Boolean(event.time);
+      const occursToday = eventOccursOnDate(event, today);
+      const reminderMinutes = Number(event.reminder_minutes ?? 10);
+      const dueTime = event.time
+        ? subtractMinutes(event.time, reminderMinutes)
+        : null;
+      const windowStart = subtractMinutes(nowHHMM, 2);
+      const inWindow = dueTime !== null
+	  ? dueTime >= windowStart && dueTime <= nowHHMM
+      : false;
+
+      return {
+        id: String(event.id),
+        title: event.title,
+        rawDate: event.date,
+        time: event.time,
+        hasTime,
+        occursToday,
+        reminderMinutes,
+        dueTime,
+        windowStart,
+        nowHHMM,
+        inWindow,
+      };
+    });
 
     const dueEvents = events.filter((event: any) => {
-  if (!event.time) return false;
-  if (!eventOccursOnDate(event, today)) return false;
+      if (!event.time) return false;
+      if (!eventOccursOnDate(event, today)) return false;
 
-  const reminderMinutes = Number(event.reminder_minutes ?? 10);
-  const dueTime = subtractMinutes(event.time, reminderMinutes);
-  const windowStart = subtractMinutes(nowHHMM, 2);
+      const reminderMinutes = Number(event.reminder_minutes ?? 10);
+      const dueTime = subtractMinutes(event.time, reminderMinutes);
+      const windowStart = subtractMinutes(nowHHMM, 2);
 
-  return dueTime >= windowStart && dueTime <= nowHHMM;
-});
+      return dueTime >= windowStart && dueTime <= nowHHMM;
+    });
 
     let sentCount = 0;
 
@@ -231,6 +258,7 @@ export async function POST(req: Request) {
         date: event.date,
         time: event.time,
         remind: event.remind,
+		      eventDiagnostics,
         reminderMinutes: Number(event.reminder_minutes ?? 10),
         dueTime: event.time
           ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
