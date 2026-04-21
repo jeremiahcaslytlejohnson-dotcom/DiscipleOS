@@ -145,10 +145,6 @@ export async function POST(req: Request) {
 
  const fallbackTZ = "America/New_York";
 
-	// for now just use first event's timezone or fallback
-	const tz = events[0]?.time_zone || fallbackTZ;
-	const { today, nowHHMM } = getNowInTimeZone(tz);
-
     const subscriptions = await sql`
       SELECT id, endpoint, p256dh, auth
       FROM push_subscriptions
@@ -162,54 +158,64 @@ export async function POST(req: Request) {
       });
     }
 	
-    const eventDiagnostics = events.map((event: any) => {
-      const hasTime = Boolean(event.time);
-      const occursToday = eventOccursOnDate(event, today);
-      const reminderMinutes = Number(event.reminder_minutes ?? 10);
-      const dueTime = event.time
-        ? subtractMinutes(event.time, reminderMinutes)
-        : null;
-      const windowStart = subtractMinutes(nowHHMM, 2);
-      const inWindow = dueTime !== null
-	  ? dueTime >= windowStart && dueTime <= nowHHMM
-      : false;
+	const eventDiagnostics = events.map((event: any) => {
+	const tz = event.time_zone || fallbackTZ;
+	const { today, nowHHMM } = getNowInTimeZone(tz);
 
-      return {
-        id: String(event.id),
-        title: event.title,
-        rawDate: event.date,
-        time: event.time,
-        hasTime,
-        occursToday,
-        reminderMinutes,
-        dueTime,
-        windowStart,
-        nowHHMM,
-        inWindow,
-      };
-    });
+	const hasTime = Boolean(event.time);
+	const occursToday = eventOccursOnDate(event, today);
+	const reminderMinutes = Number(event.reminder_minutes ?? 10);
+	const dueTime = event.time
+    ? subtractMinutes(event.time, reminderMinutes)
+    : null;
+	const windowStart = subtractMinutes(nowHHMM, 2);
+	const inWindow =
+    dueTime !== null ? dueTime >= windowStart && dueTime <= nowHHMM : false;
 
-    const dueEvents = events.filter((event: any) => {
-      if (!event.time) return false;
-      if (!eventOccursOnDate(event, today)) return false;
+	  return {
+		id: String(event.id),
+		title: event.title,
+		rawDate: event.date,
+		time: event.time,
+		timeZoneUsed: tz,
+		today,
+		nowHHMM,
+		hasTime,
+		occursToday,
+		reminderMinutes,
+		dueTime,
+		windowStart,
+		inWindow,
+  };
+});
 
-      const reminderMinutes = Number(event.reminder_minutes ?? 10);
-      const dueTime = subtractMinutes(event.time, reminderMinutes);
-      const windowStart = subtractMinutes(nowHHMM, 2);
+	const dueEvents = events.filter((event: any) => {
+	const tz = event.time_zone || fallbackTZ;
+	const { today, nowHHMM } = getNowInTimeZone(tz);
 
-      return dueTime >= windowStart && dueTime <= nowHHMM;
-    });
+	if (!event.time) return false;
+	if (!eventOccursOnDate(event, today)) return false;
+
+	const reminderMinutes = Number(event.reminder_minutes ?? 10);
+	const dueTime = subtractMinutes(event.time, reminderMinutes);
+	const windowStart = subtractMinutes(nowHHMM, 2);
+
+	return dueTime >= windowStart && dueTime <= nowHHMM;
+	});
 
     let sentCount = 0;
 
     for (const event of dueEvents) {
-      const alreadySent = await sql`
-        SELECT id
-        FROM sent_reminders
-        WHERE event_id = ${String(event.id)}
-          AND sent_at::date = ${today}
-        LIMIT 1
-      `;
+  const tz = event.time_zone || fallbackTZ;
+  const { today } = getNowInTimeZone(tz);
+
+  const alreadySent = await sql`
+    SELECT id
+    FROM sent_reminders
+    WHERE event_id = ${String(event.id)}
+      AND sent_at::date = ${today}
+    LIMIT 1
+  `;
 
       if (alreadySent.length) continue;
 
