@@ -244,28 +244,28 @@ export async function POST(req: Request) {
     }
 
     return Response.json({
-      success: true,
-      marker: "SEND_ROUTE_LIVE_CHECK",
-      today,
-      nowHHMM,
-	  timeZoneUsed: tz,
-      totalEvents: events.length,
-      totalSubscriptions: subscriptions.length,
-      dueEventsCount: dueEvents.length,
-      dueEvents: dueEvents.map((event: any) => ({
-        id: String(event.id),
-        title: event.title,
-        date: event.date,
-        time: event.time,
-        remind: event.remind,
-		      eventDiagnostics,
-        reminderMinutes: Number(event.reminder_minutes ?? 10),
-        dueTime: event.time
-          ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
-          : null,
-      })),
-      sent: sentCount,
-    });
+  success: true,
+  marker: "SEND_ROUTE_LIVE_CHECK",
+  today,
+  nowHHMM,
+  timeZoneUsed: tz,
+  totalEvents: events.length,
+  totalSubscriptions: subscriptions.length,
+  dueEventsCount: dueEvents.length,
+  dueEvents: dueEvents.map((event: any) => ({
+    id: String(event.id),
+    title: event.title,
+    date: event.date,
+    time: event.time,
+    remind: event.remind,
+    reminderMinutes: Number(event.reminder_minutes ?? 10),
+    dueTime: event.time
+      ? subtractMinutes(event.time, Number(event.reminder_minutes ?? 10))
+      : null,
+  })),
+  eventDiagnostics,
+  sent: sentCount,
+});
   } catch (error: any) {
     console.error("Reminder send error:", error);
 
