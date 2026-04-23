@@ -13,7 +13,15 @@ type BeforeInstallPromptEvent = Event & {
 
 function isIosDevice() {
   if (typeof navigator === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  const ua = navigator.userAgent.toLowerCase();
+  const isIPhone = /iphone/.test(ua);
+  const isIPad = /ipad/.test(ua);
+  const isIPod = /ipod/.test(ua);
+  const isModernIPad =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+
+  return isIPhone || isIPad || isIPod || isModernIPad;
 }
 
 function isStandaloneMode() {
@@ -54,12 +62,10 @@ export default function InstallButton() {
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      console.log("beforeinstallprompt fired");
       setDeferredPrompt(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
-      console.log("appinstalled fired");
       setIsInstalled(true);
       setDeferredPrompt(null);
       setIsInstalling(false);
@@ -101,8 +107,6 @@ export default function InstallButton() {
         await deferredPrompt.prompt();
         const choice = await deferredPrompt.userChoice;
 
-        console.log("install outcome:", choice.outcome);
-
         if (choice.outcome !== "accepted") {
           setIsInstalling(false);
         }
@@ -119,7 +123,7 @@ export default function InstallButton() {
     }
 
     alert(
-      "Install is not available yet in this browser state. Open DiscipleOS in Chrome or Edge, make sure HTTPS is enabled, and check that the app manifest and service worker are loading correctly."
+      "Install isn’t available yet. Try Chrome or Edge, then refresh and try again."
     );
   };
 
