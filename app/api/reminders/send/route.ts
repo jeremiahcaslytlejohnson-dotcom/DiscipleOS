@@ -245,7 +245,7 @@ if (!subscriptions.length && !mobileTokens.length) {
           }
         }
       }
-      for (const sub of subscriptions) {
+           for (const sub of subscriptions) {
         try {
           await webpush.sendNotification(
             {
@@ -265,20 +265,6 @@ if (!subscriptions.length && !mobileTokens.length) {
             })
           );
 
-for (const mobile of mobileTokens) {
-  try {
-    await sendExpoPush(
-      mobile.token,
-      event.title || "DiscipleOS Reminder",
-      event.notes || `${event.type || "Event"} starts at ${event.time}`
-    );
-
-    sentCount++;
-  } catch (error: any) {
-    console.error("Expo push failed:", error?.message || error);
-  }
-}
-
           sentCount++;
         } catch (error: any) {
           console.error("Push send failed:", error?.message || error);
@@ -289,6 +275,20 @@ for (const mobile of mobileTokens) {
               WHERE endpoint = ${sub.endpoint}
             `;
           }
+        }
+      }
+
+      for (const mobile of mobileTokens) {
+        try {
+          await sendExpoPush(
+            mobile.token,
+            event.title || "DiscipleOS Reminder",
+            event.notes || `${event.type || "Event"} starts at ${event.time}`
+          );
+
+          sentCount++;
+        } catch (error: any) {
+          console.error("Expo push failed:", error?.message || error);
         }
       }
       await sql`
