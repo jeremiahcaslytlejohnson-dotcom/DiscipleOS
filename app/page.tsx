@@ -835,7 +835,6 @@ export default function DiscipleOSApp() {
 
   const dataLoadInFlightRef = useRef(false);
   const lastLoadAtRef = useRef(0);
-
   const loadData = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (dataLoadInFlightRef.current) return;
@@ -873,6 +872,21 @@ export default function DiscipleOSApp() {
       } else {
         throw new Error("Bad API response");
       }
+      // Fetch reading plans from backend
+try {
+  const plansRes = await fetch("/api/reading/plans", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const plansData = await plansRes.json();
+
+  if (plansRes.ok && Array.isArray(plansData.plans)) {
+    setPlans(plansData.plans);
+  }
+} catch (err) {
+  console.error("Failed to load reading plans from API", err);
+}      
     } catch (error) {
       console.error("Failed to load DiscipleOS data, falling back to localStorage", error);
 
