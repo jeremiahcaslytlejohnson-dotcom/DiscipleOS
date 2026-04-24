@@ -86,13 +86,34 @@ export async function GET(req: Request) {
       }))
       .filter((event: any) => event.date === today);
 
+const plans = await sql`
+  SELECT *
+  FROM reading_plans
+  ORDER BY created_at DESC
+  LIMIT 1
+`;
+
+let todayReading = null;
+
+if (plans.length > 0) {
+  const plan = plans[0];
+
+  const assignments = Array.isArray(plan.assignments)
+    ? plan.assignments
+    : [];
+
+  todayReading = assignments.find(
+    (a: any) => a.date === today
+  ) || null;
+}
+
     return Response.json({
       success: true,
       today,
       timeZone,
       events,
-      reading: null,
-      readingMessage: "Reading plan sync is not connected yet.",
+      reading: todayReading,
+	  readingMessage: todayReading ? null : "No reading today",
     });
   } catch (error: any) {
     console.error("Mobile today error:", error);
