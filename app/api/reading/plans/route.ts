@@ -17,11 +17,26 @@ function getSql() {
 export async function GET() {
   const sql = getSql();
 
-  const plans = await sql`
+  const rows = await sql`
     SELECT *
     FROM reading_plans
     ORDER BY created_at DESC
   `;
+
+  const plans = rows.map((row: any) => ({
+    id: row.id,
+    name: row.title,
+    title: row.title,
+    startDate: String(row.start_date).slice(0, 10),
+    endDate: String(row.end_date).slice(0, 10),
+    readingMode: row.assignment_mode,
+    assignmentMode: row.assignment_mode,
+    assignments: Array.isArray(row.assignments) ? row.assignments : [],
+    completed: row.completed || {},
+    selectedBooks: [],
+    readingTime: "07:00",
+    color: "from-sky-500 to-indigo-500",
+  }));
 
   return Response.json({ success: true, plans });
 }

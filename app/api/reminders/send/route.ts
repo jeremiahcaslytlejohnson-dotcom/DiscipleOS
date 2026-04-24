@@ -156,7 +156,7 @@ export async function POST(req: Request) {
         repeat,
         repeat_weekdays,
         repeat_until,
-		time_zone
+    time_zone
       FROM events
       WHERE remind = true
     `;
@@ -180,22 +180,22 @@ if (!subscriptions.length && !mobileTokens.length) {
     message: "No subscriptions",
   });
 }
-	
-	
-	
-	const dueEvents = events.filter((event: any) => {
-	const tz = event.time_zone || fallbackTZ;
-	const { today, nowHHMM } = getNowInTimeZone(tz);
+  
+  
+  
+  const dueEvents = events.filter((event: any) => {
+  const tz = event.time_zone || fallbackTZ;
+  const { today, nowHHMM } = getNowInTimeZone(tz);
 
-	if (!event.time) return false;
-	if (!eventOccursOnDate(event, today)) return false;
+  if (!event.time) return false;
+  if (!eventOccursOnDate(event, today)) return false;
 
-	const reminderMinutes = Number(event.reminder_minutes ?? 10);
-	const dueTime = subtractMinutes(event.time, reminderMinutes);
-	const windowStart = subtractMinutes(nowHHMM, 2);
+  const reminderMinutes = Number(event.reminder_minutes ?? 10);
+  const dueTime = subtractMinutes(event.time, reminderMinutes);
+  const windowStart = subtractMinutes(nowHHMM, 2);
 
-	return dueTime >= windowStart && dueTime <= nowHHMM;
-	});
+  return dueTime >= windowStart && dueTime <= nowHHMM;
+  });
 
     let sentCount = 0;
 

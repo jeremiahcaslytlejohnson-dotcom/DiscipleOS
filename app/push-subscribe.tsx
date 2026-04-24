@@ -47,9 +47,9 @@ const testLocalNotification = async () => {
 };
   const subscribe = async () => {
     try {
-		setStatus("Enable clicked");
+    setStatus("Enable clicked");
         console.log("ENABLE CLICKED");
-		
+    
       if (!("serviceWorker" in navigator)) {
         setStatus("Service worker not supported");
         return;
@@ -97,7 +97,7 @@ setStatus("Subscribed and push test sent.");
 >
   Enable Push Notifications
 </button>
-	
+  
     <button
       onClick={testLocalNotification}
       className="mt-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
