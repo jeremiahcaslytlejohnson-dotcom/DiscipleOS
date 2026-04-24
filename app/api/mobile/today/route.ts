@@ -102,9 +102,16 @@ if (plans.length > 0) {
     ? plan.assignments
     : [];
 
-  todayReading = assignments.find(
-    (a: any) => a.date === today
-  ) || null;
+  const assignment =
+    assignments.find((a: any) => a.date === today) || null;
+
+  if (assignment) {
+    todayReading = {
+      ...assignment,
+      planId: plan.id,
+      completed: plan.completed || {},
+    };
+  }
 }
 
     return Response.json({
