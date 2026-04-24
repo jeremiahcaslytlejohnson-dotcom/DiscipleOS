@@ -1037,6 +1037,23 @@ export default function DiscipleOSApp() {
     });
   };
 
+async function saveReadingPlanToServer(plan: any) {
+  await fetch("/api/reading/plans", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: plan.id,
+      title: plan.name,
+      startDate: plan.startDate,
+      endDate: plan.endDate,
+      assignmentMode: plan.readingMode,
+      assignments: plan.assignments,
+    }),
+  });
+}
+
   const createPlan = () => {
     if (!form.name.trim() || form.selectedBooks.length === 0) return;
 
@@ -1051,6 +1068,8 @@ export default function DiscipleOSApp() {
     });
 
     setPlans((prev) => [plan, ...prev]);
+    saveReadingPlanToServer(plan).catch(console.error);
+
     setSelectedPlanId(plan.id);
     setActiveTab("plans");
     setForm((prev) => ({ ...prev, name: "" }));
