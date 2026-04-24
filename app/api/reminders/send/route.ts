@@ -103,6 +103,30 @@ function subtractMinutes(time: string, minutesToSubtract: number) {
   return `${hh}:${mm}`;
 }
 
+async function sendExpoPush(token: string, title: string, body: string) {
+  const response = await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: token,
+      title,
+      body,
+      sound: "default",
+      data: {
+        url: "/",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Expo push failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function GET(req: Request) {
   return POST(req);
 }
@@ -140,17 +164,24 @@ export async function POST(req: Request) {
  const fallbackTZ = "America/New_York";
 
     const subscriptions = await sql`
-      SELECT id, endpoint, p256dh, auth
-      FROM push_subscriptions
-    `;
+  SELECT id, endpoint, p256dh, auth
+  FROM push_subscriptions
+`;
 
-    if (!subscriptions.length) {
-      return Response.json({
-        success: true,
-        sent: 0,
-        message: "No subscriptions",
-      });
-    }
+const mobileTokens = await sql`
+  SELECT token
+  FROM mobile_push_tokens
+`;
+
+if (!subscriptions.length && !mobileTokens.length) {
+  return Response.json({
+    success: true,
+    sent: 0,
+    message: "No subscriptions",
+  });
+}
+	
+	
 	
 	const dueEvents = events.filter((event: any) => {
 	const tz = event.time_zone || fallbackTZ;
@@ -214,7 +245,52 @@ export async function POST(req: Request) {
           }
         }
       }
+      for (const sub of subscriptions) {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: {
+                p256dh: sub.p256dh,
+                auth: sub.auth,
+              },
+            } as any,
+            JSON.stringify({
+              title: event.title || "DiscipleOS Reminder",
+              body:
+                event.notes ||
+                `${event.type || "Event"} starts at ${event.time}`,
+              url: "/",
+              tag: `discipleos-${String(event.id)}-${today}`,
+            })
+          );
 
+for (const mobile of mobileTokens) {
+  try {
+    await sendExpoPush(
+      mobile.token,
+      event.title || "DiscipleOS Reminder",
+      event.notes || `${event.type || "Event"} starts at ${event.time}`
+    );
+
+    sentCount++;
+  } catch (error: any) {
+    console.error("Expo push failed:", error?.message || error);
+  }
+}
+
+          sentCount++;
+        } catch (error: any) {
+          console.error("Push send failed:", error?.message || error);
+
+          if (error?.statusCode === 404 || error?.statusCode === 410) {
+            await sql`
+              DELETE FROM push_subscriptions
+              WHERE endpoint = ${sub.endpoint}
+            `;
+          }
+        }
+      }
       await sql`
         INSERT INTO sent_reminders (event_id, endpoint, sent_at)
         VALUES (${String(event.id)}, ${"broadcast"}, NOW())
