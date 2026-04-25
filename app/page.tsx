@@ -1138,41 +1138,47 @@ async function saveReadingPlanToServer(plan: any) {
     setEditingPlanId(null);
   };
 
-  const toggleChapterComplete = (planId, chapterKey) => {
-    setPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== planId) return plan;
-        const exists = plan.completedChapterKeys.includes(chapterKey);
-        return {
-          ...plan,
-          completedChapterKeys: exists
-            ? plan.completedChapterKeys.filter((k) => k !== chapterKey)
-            : [...plan.completedChapterKeys, chapterKey],
-        };
+    const toggleChapterComplete = async (planId, key, current) => {
+  await fetch("/api/reading/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      planId,
+      key,
+      completed: !current,
+    }),
+  });
+
+  loadData();
+};
+  const markDayPlanComplete = async (planId, dateISO) => {
+  const plan = plans.find((plan) => plan.id === planId);
+  if (!plan) return;
+
+  const assignment = plan.assignments.find((day) => day.date === dateISO);
+  if (!assignment || assignment.readings.length === 0) return;
+
+  const dayKeys = assignment.readings.map((reading) => reading.key);
+  const allDone = dayKeys.every((key) => !!plan.completed?.[key]);
+
+  await Promise.all(
+    dayKeys.map((key) =>
+      fetch("/api/reading/complete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          planId,
+          key,
+          completed: !allDone,
+        }),
       })
-    );
-  };
+    )
+  );
 
-  const markDayPlanComplete = (planId, dateISO) => {
-    setPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== planId) return plan;
-
-        const assignment = plan.assignments.find((day) => day.date === dateISO);
-        if (!assignment || assignment.readings.length === 0) return plan;
-
-        const dayKeys = assignment.readings.map((reading) => reading.key);
-        const allDone = dayKeys.every((key) => plan.completedChapterKeys.includes(key));
-
-        return {
-          ...plan,
-          completedChapterKeys: allDone
-            ? plan.completedChapterKeys.filter((key) => !dayKeys.includes(key))
-            : [...new Set([...plan.completedChapterKeys, ...dayKeys])],
-        };
-      })
-    );
-  };
+  loadData();
+};
 
   const resetEventForm = () => {
     setEventForm({
@@ -1651,11 +1657,13 @@ if (!vapidPublicKey) {
                         </div>
                         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                           {todayReading.readings.map((reading) => {
-                            const done = plan.completedChapterKeys.includes(reading.key);
+                            const done = !!plan.completed?.[reading.key];
                             return (
                               <button
                                 key={reading.key}
-                                onClick={() => toggleChapterComplete(plan.id, reading.key)}
+                                onClick={() =>
+                                    toggleChapterComplete(plan.id, reading.key, !!plan.completed?.[reading.key])
+                                    }
                                 className={cn(
                                   "flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition",
                                   done
