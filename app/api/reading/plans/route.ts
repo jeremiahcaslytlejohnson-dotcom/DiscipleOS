@@ -23,20 +23,34 @@ export async function GET() {
     ORDER BY created_at DESC
   `;
 
-  const plans = rows.map((row: any) => ({
-    id: row.id,
-    name: row.title,
-    title: row.title,
-    startDate: String(row.start_date).slice(0, 10),
-    endDate: String(row.end_date).slice(0, 10),
-    readingMode: row.assignment_mode,
-    assignmentMode: row.assignment_mode,
-    assignments: Array.isArray(row.assignments) ? row.assignments : [],
-    completed: row.completed || {},
-    selectedBooks: [],
-    readingTime: "07:00",
-    color: "from-sky-500 to-indigo-500",
-  }));
+  const plans = rows.map((row: any) => {
+    const assignments = Array.isArray(row.assignments) ? row.assignments : [];
+
+    const selectedBooks = Array.from(
+      new Set(
+        assignments.flatMap((day: any) =>
+          Array.isArray(day.readings)
+            ? day.readings.map((reading: any) => reading.book).filter(Boolean)
+            : []
+        )
+      )
+    );
+
+    return {
+      id: row.id,
+      name: row.title,
+      title: row.title,
+      startDate: String(row.start_date).slice(0, 10),
+      endDate: String(row.end_date).slice(0, 10),
+      readingMode: row.assignment_mode || "consecutive",
+      assignmentMode: row.assignment_mode || "consecutive",
+      assignments,
+      completed: row.completed || {},
+      selectedBooks,
+      readingTime: "07:00",
+      color: "from-sky-500 to-indigo-500",
+    };
+  });
 
   return Response.json({ success: true, plans });
 }
