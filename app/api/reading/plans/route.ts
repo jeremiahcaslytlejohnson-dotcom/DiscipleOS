@@ -46,6 +46,9 @@ export async function GET() {
       assignmentMode: row.assignment_mode || "consecutive",
       assignments,
       completed: row.completed || {},
+      completedChapterKeys: Object.keys(row.completed || {}).filter(
+        (key) => row.completed?.[key]
+        ),
       selectedBooks,
       readingTime: "07:00",
       color: "from-sky-500 to-indigo-500",
