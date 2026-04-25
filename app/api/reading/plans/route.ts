@@ -14,6 +14,12 @@ function getSql() {
   return neon(url);
 }
 
+function normalizeDate(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  return new Date(value as string | number | Date).toISOString().slice(0, 10);
+}
+
 export async function GET() {
   const sql = getSql();
 
@@ -40,8 +46,8 @@ export async function GET() {
       id: row.id,
       name: row.title,
       title: row.title,
-      startDate: String(row.start_date).slice(0, 10),
-      endDate: String(row.end_date).slice(0, 10),
+      startDate: normalizeDate(row.start_date),
+      endDate: normalizeDate(row.end_date),
       readingMode: row.assignment_mode || "consecutive",
       assignmentMode: row.assignment_mode || "consecutive",
       assignments,
