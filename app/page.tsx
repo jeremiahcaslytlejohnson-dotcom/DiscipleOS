@@ -282,9 +282,30 @@ function summarizePlanInput(form: any) {
   };
 }
 
+function getCompletedMap(plan: any) {
+  const completed = plan?.completed;
+
+  if (completed && typeof completed === "object" && !Array.isArray(completed)) {
+    return completed;
+  }
+
+  const legacyKeys = Array.isArray(plan?.completedChapterKeys)
+    ? plan.completedChapterKeys
+    : [];
+
+  return legacyKeys.reduce((map: any, key: string) => {
+    map[key] = true;
+    return map;
+  }, {});
+}
+
 function getPlanStats(plan: any) {
-  const totalChapters = plan.assignments.reduce((sum, day) => sum + day.readings.length, 0);
-  const completed = plan.completedChapterKeys.length;
+  const completedMap = getCompletedMap(plan);
+  const totalChapters = plan.assignments.reduce(
+    (sum: number, day: any) => sum + day.readings.length,
+    0
+  );
+  const completed = Object.keys(completedMap).filter((key) => completedMap[key]).length;
   const percent = totalChapters === 0 ? 0 : Math.round((completed / totalChapters) * 100);
   const totalDays = Math.max(1, plan.assignments.length);
   const chaptersPerDayExact = totalChapters / totalDays;
@@ -293,16 +314,16 @@ function getPlanStats(plan: any) {
   const remainingChapters = Math.max(0, totalChapters - completed);
   const completedDates = new Set();
 
-  plan.assignments.forEach((day) => {
+  plan.assignments.forEach((day: any) => {
     const allDone =
       day.readings.length > 0 &&
-      day.readings.every((reading) => plan.completedChapterKeys.includes(reading.key));
+      day.readings.every((reading: any) => !!completedMap[reading.key]);
     if (allDone) completedDates.add(day.date);
   });
 
   const today = todayISO();
   const remainingDays = plan.assignments.filter(
-    (day) => day.date >= today && !completedDates.has(day.date)
+    (day: any) => day.date >= today && !completedDates.has(day.date)
   ).length;
   const neededPerRemainingDay =
     remainingDays > 0 ? remainingChapters / remainingDays : remainingChapters;
@@ -369,7 +390,6 @@ function createPlanObject({
   color,
   readingMode = "consecutive",
   readingTime = "07:00",
-  completedChapterKeys = [],
 }) {
   const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
@@ -383,7 +403,7 @@ function createPlanObject({
     readingMode,
     readingTime,
     assignments: buildSchedule(selectedBooks, startDate, endDate, readingMode),
-    completedChapterKeys,
+    completed: {},
   };
 }
 
@@ -750,6 +770,7 @@ export default function DiscipleOSApp() {
     const today = todayISO();
     const manual = getEventInstancesForDate(events, today);
     const reading = plans.flatMap((plan) => {
+      const completedMap = getCompletedMap(plan);
       const assignment = plan.assignments.find((day) => day.date === today);
       if (!assignment || assignment.readings.length === 0) return [];
       return assignment.readings.map((readingItem) => ({
@@ -757,15 +778,21 @@ export default function DiscipleOSApp() {
         planId: plan.id,
         planName: plan.name,
         planColor: plan.color,
-        done: plan.completedChapterKeys.includes(readingItem.key),
+        done: !!completedMap[readingItem.key],
       }));
     });
     return { manual, reading };
   }, [events, plans]);
 
   const overallProgress = useMemo(() => {
-    const total = plans.reduce((sum, plan) => sum + getPlanStats(plan).totalChapters, 0);
-    const completed = plans.reduce((sum, plan) => sum + getPlanStats(plan).completed, 0);
+    const total = plans.reduce(
+      (sum: number, plan: any) => sum + getPlanStats(plan).totalChapters,
+      0
+    );
+    const completed = plans.reduce(
+      (sum: number, plan: any) => sum + getPlanStats(plan).completed,
+      0
+    );
     return total === 0 ? 0 : Math.round((completed / total) * 100);
   }, [plans]);
 
@@ -801,30 +828,38 @@ export default function DiscipleOSApp() {
   }, [events, monthDays, plans]);
 
   const dayViewItems = useMemo(() => {
-    const manualItems = getEventInstancesForDate(events, selectedCalendarDate).map((event) => ({ ...event, kind: "event" }));
+  const manualItems = getEventInstancesForDate(events, selectedCalendarDate).map((event) => ({
+    ...event,
+    kind: "event",
+  }));
 
-    const readingItems = plans.flatMap((plan) => {
-      const assignment = plan.assignments.find((day) => day.date === selectedCalendarDate);
-      if (!assignment || assignment.readings.length === 0) return [];
-      return [
-        {
-          id: `dayview-${plan.id}-${selectedCalendarDate}`,
-          kind: "plan",
-          type: "bible",
-          title: plan.name,
-          planId: plan.id,
-          date: selectedCalendarDate,
-          time: plan.readingTime || "07:00",
-          notes: `${assignment.readings.length} chapters assigned`,
-          readings: assignment.readings,
-          completedCount: assignment.readings.filter((reading) => plan.completedChapterKeys.includes(reading.key)).length,
-        },
-      ];
-    });
+  const readingItems = plans.flatMap((plan) => {
+    const completedMap = getCompletedMap(plan);
+    const assignment = plan.assignments.find((day) => day.date === selectedCalendarDate);
+    if (!assignment || assignment.readings.length === 0) return [];
 
-    return [...manualItems, ...readingItems].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
-  }, [events, plans, selectedCalendarDate]);
+    return [
+      {
+        id: `dayview-${plan.id}-${selectedCalendarDate}`,
+        kind: "plan",
+        type: "bible",
+        title: plan.name,
+        planId: plan.id,
+        date: selectedCalendarDate,
+        time: plan.readingTime || "07:00",
+        notes: `${assignment.readings.length} chapters assigned`,
+        readings: assignment.readings,
+        completedCount: assignment.readings.filter(
+          (reading) => !!completedMap[reading.key]
+        ).length,
+      },
+    ];
+  });
 
+  return [...manualItems, ...readingItems].sort((a, b) =>
+    `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`)
+  );
+}, [events, plans, selectedCalendarDate]);
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(Notification.permission);
@@ -1158,8 +1193,9 @@ async function saveReadingPlanToServer(plan: any) {
   const assignment = plan.assignments.find((day) => day.date === dateISO);
   if (!assignment || assignment.readings.length === 0) return;
 
+  const completedMap = getCompletedMap(plan);
   const dayKeys = assignment.readings.map((reading) => reading.key);
-  const allDone = dayKeys.every((key) => !!plan.completed?.[key]);
+  const allDone = dayKeys.every((key) => !!completedMap[key]);
 
   await Promise.all(
     dayKeys.map((key) =>
@@ -1657,12 +1693,13 @@ if (!vapidPublicKey) {
                         </div>
                         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                           {todayReading.readings.map((reading) => {
-                            const done = !!plan.completed?.[reading.key];
+                            const completedMap = getCompletedMap(plan);
+                            const done = !!completedMap[reading.key];
                             return (
                               <button
                                 key={reading.key}
                                 onClick={() =>
-                                    toggleChapterComplete(plan.id, reading.key, !!plan.completed?.[reading.key])
+                                    toggleChapterComplete(plan.id, reading.key, !!getCompletedMap(plan)[reading.key])
                                     }
                                 className={cn(
                                   "flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition",
@@ -2008,7 +2045,8 @@ if (!vapidPublicKey) {
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           {event.readings.map((reading) => {
                             const plan = plans.find((p) => p.id === event.planId);
-                            const done = plan?.completedChapterKeys.includes(reading.key);
+                            const completedMap = getCompletedMap(plan);
+                            const done = !!completedMap[reading.key];
 
                             return (
                               <button
@@ -2539,7 +2577,8 @@ if (!vapidPublicKey) {
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {day.readings.map((reading) => {
-                      const done = selectedPlan.completedChapterKeys.includes(reading.key);
+                      const completedMap = getCompletedMap(selectedPlan);
+                      const done = !!completedMap[reading.key];
                       return (
                         <button
                           key={reading.key}
