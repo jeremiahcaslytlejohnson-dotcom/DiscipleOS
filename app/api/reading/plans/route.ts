@@ -106,3 +106,22 @@ export async function POST(req: Request) {
 
   return Response.json({ success: true });
 }
+
+export async function DELETE(req: Request) {
+  const sql = getSql();
+  const body = await req.json();
+
+  if (!body?.id) {
+    return Response.json(
+      { success: false, error: "Missing plan id" },
+      { status: 400 }
+    );
+  }
+
+  await sql`
+    DELETE FROM reading_plans
+    WHERE id = ${body.id}
+  `;
+
+  return Response.json({ success: true });
+}
