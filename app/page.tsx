@@ -980,6 +980,18 @@ try {
     };
   }, [loadData]);
 
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const interval = setInterval(() => {
+    if (document.visibilityState === "visible") {
+      void loadData();
+    }
+  }, 5000); // every 5 seconds
+
+  return () => clearInterval(interval);
+}, [loadData]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
