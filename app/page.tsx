@@ -877,7 +877,6 @@ export default function DiscipleOSApp() {
   console.log("FORCING RESET of stuck load lock");
   dataLoadInFlightRef.current = false;
 }
-}
     dataLoadInFlightRef.current = true;
 
     try {
