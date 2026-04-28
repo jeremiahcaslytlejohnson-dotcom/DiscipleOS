@@ -909,10 +909,14 @@ export default function DiscipleOSApp() {
       }
       // Fetch reading plans from backend
 try {
-  const plansRes = await fetch("/api/reading/plans", {
-    method: "GET",
-    cache: "no-store",
-  });
+  const plansRes = await fetch(`/api/reading/plans?ts=${Date.now()}`, {
+  method: "GET",
+  cache: "no-store",
+  headers: {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  },
+});
 
   const plansData = await plansRes.json();
 
@@ -1295,7 +1299,7 @@ const createEvent = async () => {
     setEvents((prev) => upsertEvent(prev, updatedEvent));
 
     try {
-      const response = await fetch("/api/events", {
+      const response = await fetch(`/api/events?ts=${Date.now()}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
