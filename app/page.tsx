@@ -1482,6 +1482,10 @@ if (!vapidPublicKey) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.22),_transparent_28%),radial-gradient(circle_at_right,_rgba(45,212,191,0.12),_transparent_24%),linear-gradient(180deg,_#09090f_0%,_#0f172a_100%)] text-white">
+      <div style={{ fontSize: 12, opacity: 0.6, padding: 8 }}>
+      Last sync: {lastSyncLabel || "not yet"}
+    </div>
+      
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <SectionCard className="mb-5 overflow-hidden">
           <div className="relative p-5 sm:p-7">
