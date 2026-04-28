@@ -873,11 +873,7 @@ export default function DiscipleOSApp() {
   const lastLoadAtRef = useRef(0);
   const loadData = useCallback(async () => {
     if (typeof window === "undefined") return;
-    if (dataLoadInFlightRef.current) {
-  console.log("FORCING RESET of stuck load lock");
-  dataLoadInFlightRef.current = false;
-}
-    dataLoadInFlightRef.current = true;
+  console.log("LOAD DATA RUNNING");
 
     try {
       const saved = localStorage.getItem("discipleos-data");
@@ -945,7 +941,6 @@ try {
     } finally {
       setHasHydrated(true);
       lastLoadAtRef.current = Date.now();
-      dataLoadInFlightRef.current = false;
     }
   }, []);
 
