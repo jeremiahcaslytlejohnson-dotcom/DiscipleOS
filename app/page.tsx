@@ -921,7 +921,7 @@ try {
 
   if (plansRes.ok && Array.isArray(plansData.plans)) {
   console.log("PLANS FROM API:", plansData.plans);
-  setPlans(plansData.plans);
+  setPlans([...plansData.plans]);
 }
 } catch (err) {
   console.error("Failed to load reading plans from API", err);
