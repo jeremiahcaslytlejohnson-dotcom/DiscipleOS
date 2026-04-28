@@ -874,8 +874,9 @@ export default function DiscipleOSApp() {
   const loadData = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (dataLoadInFlightRef.current) {
-  console.log("SKIPPED LOAD (in flight)");
-  return;
+  console.log("FORCING RESET of stuck load lock");
+  dataLoadInFlightRef.current = false;
+}
 }
     dataLoadInFlightRef.current = true;
 
