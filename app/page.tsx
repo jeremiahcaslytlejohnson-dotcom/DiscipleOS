@@ -950,7 +950,7 @@ try {
     const reloadIfStale = () => {
       const now = Date.now();
 
-      if (now - lastLoadAtRef.current < 1000) return;
+     if (now - lastLoadAtRef.current < 250) return;
 
       void loadData();
     };
