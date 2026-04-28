@@ -674,6 +674,7 @@ export default function DiscipleOSApp() {
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
   const [notificationPermission, setNotificationPermission] = useState("unknown");
+  const [lastSyncLabel, setLastSyncLabel] = useState("");
   const sentNotificationsRef = useRef(new Set());
 
   const [form, setForm] = useState({
@@ -872,8 +873,10 @@ export default function DiscipleOSApp() {
   const lastLoadAtRef = useRef(0);
   const loadData = useCallback(async () => {
     if (typeof window === "undefined") return;
-    if (dataLoadInFlightRef.current) return;
-
+    if (dataLoadInFlightRef.current) {
+  console.log("SKIPPED LOAD (in flight)");
+  return;
+}
     dataLoadInFlightRef.current = true;
 
     try {
@@ -1060,6 +1063,19 @@ useEffect(() => {
     const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
   }, [events, notificationPermission]);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const interval = setInterval(() => {
+    const stamp = new Date().toLocaleTimeString();
+    console.log("AUTO SYNC TICK:", stamp);
+    setLastSyncLabel(stamp);
+    void loadData();
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [loadData]);
 
   const togglePreset = (preset) => {
     setForm((prev) => {
@@ -1483,6 +1499,9 @@ if (!vapidPublicKey) {
   <span className="text-violet-300 tracking-tight">DISCIPLE</span><span className="text-[#D4A017] tracking-tight -ml-[2px]">OS</span>
 </h1>
                   <div className="mt-4 text-lg italic text-[#D4A017]">Discipline that moves mountains.</div>
+                </div>
+                <div className="mt-2 text-xs text-white/40">
+                    Last sync: {lastSyncLabel || "not yet"}
                 </div>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 sm:text-base">
                   A system for your daily walk with God.
