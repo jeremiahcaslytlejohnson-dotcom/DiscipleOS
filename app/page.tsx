@@ -1147,11 +1147,24 @@ async function saveReadingPlanToServer(plan: any) {
     setForm((prev) => ({ ...prev, name: "" }));
   };
 
-  const deletePlan = (planId) => {
-    setPlans((prev) => prev.filter((p) => p.id !== planId));
-    if (selectedPlanId === planId) setSelectedPlanId(null);
-    if (editingPlanId === planId) setEditingPlanId(null);
-  };
+ const deletePlan = async (planId: string) => {
+  // optimistic UI update
+  setPlans((prev) => prev.filter((p) => p.id !== planId));
+  if (selectedPlanId === planId) setSelectedPlanId(null);
+  if (editingPlanId === planId) setEditingPlanId(null);
+
+  try {
+    await fetch("/api/reading/plans", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: planId }),
+    });
+  } catch (err) {
+    console.error("Failed to delete plan:", err);
+  }
+};
 
   const beginEditPlan = (plan) => {
     setEditingPlanId(plan.id);
