@@ -951,33 +951,18 @@ try {
     void loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    const reloadIfStale = () => {
-      const now = Date.now();
+ useEffect(() => {
+  if (typeof window === "undefined") return;
 
-     if (now - lastLoadAtRef.current < 250) return;
+  const interval = setInterval(() => {
+    const stamp = new Date().toLocaleTimeString();
+    console.log("AUTO SYNC TICK:", stamp);
+    setLastSyncLabel(stamp);
+    void loadData();
+  }, 5000);
 
-      void loadData();
-    };
-
-    const handleFocus = () => {
-      reloadIfStale();
-    };
-
-    const handlePageShow = () => {
-      reloadIfStale();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pageshow", handlePageShow);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pageshow", handlePageShow);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [loadData]);
+  return () => clearInterval(interval);
+}, [loadData]);
 
 useEffect(() => {
   if (typeof window === "undefined") return;
