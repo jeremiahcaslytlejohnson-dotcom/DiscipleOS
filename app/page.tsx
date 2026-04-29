@@ -930,12 +930,7 @@ try {
       console.error("Failed to load DiscipleOS data, falling back to localStorage", error);
 
       try {
-        const saved = localStorage.getItem("discipleos-data");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
-          setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
-        }
+       
       } catch (innerError) {
         console.error("Failed to load fallback localStorage data", innerError);
       }
