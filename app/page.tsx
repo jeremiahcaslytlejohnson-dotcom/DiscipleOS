@@ -879,10 +879,11 @@ export default function DiscipleOSApp() {
       const saved = localStorage.getItem("discipleos-data");
 
       if (saved) {
-        const parsed = JSON.parse(saved);
-        setPlans(Array.isArray(parsed.plans) ? parsed.plans : []);
-        setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
-      }
+  const parsed = JSON.parse(saved);
+
+  // ONLY restore events locally
+  setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
+}
 
       const response = await fetch("/api/events", {
         method: "GET",
@@ -921,7 +922,13 @@ try {
 
   if (plansRes.ok && Array.isArray(plansData.plans)) {
   console.log("PLANS FROM API:", plansData.plans);
-  setPlans([...plansData.plans]);
+  setPlans(
+  plansData.plans.map((p) => ({
+    ...p,
+    completed: { ...(p.completed || {}) },
+    assignments: Array.isArray(p.assignments) ? [...p.assignments] : [],
+  }))
+);
 }
 } catch (err) {
   console.error("Failed to load reading plans from API", err);
@@ -951,12 +958,6 @@ try {
      if (now - lastLoadAtRef.current < 250) return;
 
       void loadData();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        reloadIfStale();
-      }
     };
 
     const handleFocus = () => {
@@ -1005,16 +1006,14 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    if (!hasHydrated) return;
-    try {
-      localStorage.setItem(
-        "discipleos-data",
-        JSON.stringify({ plans, events })
-      );
-    } catch (error) {
-      console.error("Failed to save DiscipleOS data to localStorage", error);
-    }
-  }, [plans, events, hasHydrated]);
+  if (!hasHydrated) return;
+
+  // Only persist EVENTS locally
+  localStorage.setItem(
+    "discipleos-data",
+    JSON.stringify({ events })
+  );
+}, [events, hasHydrated]);
 
   useEffect(() => {
     setEventForm((prev) => ({ ...prev, date: selectedCalendarDate }));
