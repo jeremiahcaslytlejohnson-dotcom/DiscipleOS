@@ -666,17 +666,75 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+const STORAGE_KEY = "discipleos-data";
+
+function loadLocalDiscipleData() {
+  if (typeof window === "undefined") {
+    return { events: [], plans: [] };
+  }
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return { events: [], plans: [] };
+
+    const parsed = JSON.parse(saved);
+
+    return {
+      events: Array.isArray(parsed.events) ? sortEvents(parsed.events) : [],
+      plans: Array.isArray(parsed.plans)
+        ? parsed.plans.map((p) => ({
+            ...p,
+            completed: { ...(p.completed || {}) },
+            assignments: Array.isArray(p.assignments) ? [...p.assignments] : [],
+          }))
+        : [],
+    };
+  } catch {
+    return { events: [], plans: [] };
+  }
+}
+
+async function savePlanToServer(plan: any) {
+  console.log("SENDING PLAN TO SERVER", plan);
+
+  try {
+    const response = await fetch("/api/reading/plans", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(plan),
+    });
+
+    const text = await response.text();
+
+    console.log("PLAN SERVER RESPONSE", {
+      status: response.status,
+      ok: response.ok,
+      text,
+    });
+
+    if (!response.ok) {
+      throw new Error(text || "Failed to save plan to server");
+    }
+  } catch (error) {
+    console.error("Plan server save failed; local copy kept", error);
+  }
+}
+
 export default function DiscipleOSApp() {
   const [plans, setPlans] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [hasHydrated, setHasHydrated] = useState(false);
+const [events, setEvents] = useState([]);
+const [hasHydrated, setHasHydrated] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
   const [notificationPermission, setNotificationPermission] = useState("unknown");
   const [lastSyncLabel, setLastSyncLabel] = useState("");
   const sentNotificationsRef = useRef(new Set());
-
+  const hasLoadedLocalDataRef = useRef(false);
+  const didHydrateRef = useRef(false);
+  
   const [form, setForm] = useState({
     name: "",
     preset: "custom",
@@ -869,113 +927,6 @@ export default function DiscipleOSApp() {
     }
   }, []);
 
-  const dataLoadInFlightRef = useRef(false);
-  const lastLoadAtRef = useRef(0);
-  const loadData = useCallback(async () => {
-    if (typeof window === "undefined") return;
-  console.log("LOAD DATA RUNNING");
-
-    try {
-      const saved = localStorage.getItem("discipleos-data");
-
-      if (saved) {
-  const parsed = JSON.parse(saved);
-
-  // ONLY restore events locally
-  setEvents(Array.isArray(parsed.events) ? sortEvents(parsed.events) : []);
-}
-
-      const response = await fetch("/api/events", {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-      });
-
-      const result = await response.json();
-
-      const freshEvents = Array.isArray(result)
-        ? result
-        : Array.isArray(result.events)
-          ? result.events
-          : null;
-
-      if (response.ok && freshEvents) {
-        setEvents(sortEvents(freshEvents));
-      } else {
-        throw new Error("Bad API response");
-      }
-      // Fetch reading plans from backend
-try {
-  const plansRes = await fetch(`/api/reading/plans?ts=${Date.now()}`, {
-  method: "GET",
-  cache: "no-store",
-  headers: {
-    "Cache-Control": "no-cache",
-    Pragma: "no-cache",
-  },
-});
-
-  const plansData = await plansRes.json();
-
-  if (plansRes.ok && Array.isArray(plansData.plans)) {
-  console.log("PLANS FROM API:", plansData.plans);
-  setPlans(
-  plansData.plans.map((p) => ({
-    ...p,
-    completed: { ...(p.completed || {}) },
-    assignments: Array.isArray(p.assignments) ? [...p.assignments] : [],
-  }))
-);
-}
-} catch (err) {
-  console.error("Failed to load reading plans from API", err);
-}      
-    } catch (error) {
-      console.error("Failed to load DiscipleOS data, falling back to localStorage", error);
-
-      try {
-       
-      } catch (innerError) {
-        console.error("Failed to load fallback localStorage data", innerError);
-      }
-    } finally {
-      setHasHydrated(true);
-      lastLoadAtRef.current = Date.now();
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
- useEffect(() => {
-  if (typeof window === "undefined") return;
-
-  const interval = setInterval(() => {
-    const stamp = new Date().toLocaleTimeString();
-    console.log("AUTO SYNC TICK:", stamp);
-    setLastSyncLabel(stamp);
-    void loadData();
-  }, 5000);
-
-  return () => clearInterval(interval);
-}, [loadData]);
-
-useEffect(() => {
-  if (typeof window === "undefined") return;
-
-  const interval = setInterval(() => {
-    if (document.visibilityState === "visible") {
-      void loadData();
-    }
-  }, 5000); // every 5 seconds
-
-  return () => clearInterval(interval);
-}, [loadData]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
@@ -989,16 +940,6 @@ useEffect(() => {
         console.error("SW registration failed:", error);
       });
   }, []);
-
-  useEffect(() => {
-  if (!hasHydrated) return;
-
-  // Only persist EVENTS locally
-  localStorage.setItem(
-    "discipleos-data",
-    JSON.stringify({ events })
-  );
-}, [events, hasHydrated]);
 
   useEffect(() => {
     setEventForm((prev) => ({ ...prev, date: selectedCalendarDate }));
@@ -1038,19 +979,6 @@ useEffect(() => {
     const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
   }, [events, notificationPermission]);
-
-useEffect(() => {
-  if (typeof window === "undefined") return;
-
-  const interval = setInterval(() => {
-    const stamp = new Date().toLocaleTimeString();
-    console.log("AUTO SYNC TICK:", stamp);
-    setLastSyncLabel(stamp);
-    void loadData();
-  }, 5000);
-
-  return () => clearInterval(interval);
-}, [loadData]);
 
   const togglePreset = (preset) => {
     setForm((prev) => {
@@ -1094,21 +1022,79 @@ useEffect(() => {
   };
 
 async function saveReadingPlanToServer(plan: any) {
-  await fetch("/api/reading/plans", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      id: plan.id,
-      title: plan.name,
-      startDate: plan.startDate,
-      endDate: plan.endDate,
-      assignmentMode: plan.readingMode,
-      assignments: plan.assignments,
-    }),
-  });
+  // Local-only launch mode:
+  // Plans are saved through the localStorage useEffect.
+  return;
 }
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  if (!hasHydrated) return;
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      events,
+      plans,
+    })
+  );
+
+  console.log("SAVED LOCAL DISCIPLE DATA", {
+    events: events.length,
+    plans: plans.length,
+  });
+}, [events, plans, hasHydrated]);
+
+
+
+useEffect(() => {
+  async function loadData() {
+    if (typeof window === "undefined") return;
+
+    // 1. Load LOCAL first (this is your source of truth right now)
+    const localData = loadLocalDiscipleData();
+
+    setEvents(localData.events);
+    setPlans(localData.plans);
+
+    console.log("HYDRATED LOCAL DISCIPLE DATA", {
+      events: localData.events.length,
+      plans: localData.plans.length,
+    });
+
+    // 2. Try API (non-blocking, won't break app)
+    try {
+      const res = await fetch(`/api/reading/plans?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+
+      const text = await res.text();
+
+      if (res.ok && text) {
+        const data = JSON.parse(text);
+        if (Array.isArray(data.plans)) {
+          setPlans(data.plans);
+          console.log("PLANS LOADED FROM DB", data.plans.length);
+        }
+      } else {
+        console.error("READING PLANS API FAILED", {
+          status: res.status,
+          body: text,
+        });
+      }
+    } catch (err) {
+      console.error("Reading plans fetch crashed", err);
+    }
+
+    hasLoadedLocalDataRef.current = true;
+    didHydrateRef.current = true;
+    setHasHydrated(true);
+
+    console.log("HYDRATION COMPLETE");
+  }
+
+  loadData();
+}, []);
 
   const createPlan = () => {
     if (!form.name.trim() || form.selectedBooks.length === 0) return;
@@ -1123,32 +1109,16 @@ async function saveReadingPlanToServer(plan: any) {
       readingTime: form.readingTime,
     });
 
-    setPlans((prev) => [plan, ...prev]);
-    saveReadingPlanToServer(plan).catch(console.error);
+    console.log("PLAN OBJECT CREATED", plan);
 
+    setPlans((prev) => [plan, ...prev]);
+    // Local-only launch mode: localStorage effect handles persistence.
+    console.log("CALLING savePlanToServer NOW", plan.id);
+    savePlanToServer(plan);
     setSelectedPlanId(plan.id);
     setActiveTab("plans");
     setForm((prev) => ({ ...prev, name: "" }));
   };
-
- const deletePlan = async (planId: string) => {
-  // optimistic UI update
-  setPlans((prev) => prev.filter((p) => p.id !== planId));
-  if (selectedPlanId === planId) setSelectedPlanId(null);
-  if (editingPlanId === planId) setEditingPlanId(null);
-
-  try {
-    await fetch("/api/reading/plans", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id: planId }),
-    });
-  } catch (err) {
-    console.error("Failed to delete plan:", err);
-  }
-};
 
   const beginEditPlan = (plan) => {
     setEditingPlanId(plan.id);
@@ -1193,47 +1163,48 @@ async function saveReadingPlanToServer(plan: any) {
     setEditingPlanId(null);
   };
 
-    const toggleChapterComplete = async (planId, key, current) => {
-  await fetch("/api/reading/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      planId,
-      key,
-      completed: !current,
-    }),
-  });
+ const toggleChapterComplete = (planId, key) => {
+  setPlans((prevPlans) =>
+    prevPlans.map((plan) => {
+      if (plan.id !== planId) return plan;
 
-  loadData();
-};
-  const markDayPlanComplete = async (planId, dateISO) => {
-  const plan = plans.find((plan) => plan.id === planId);
-  if (!plan) return;
+      const completedMap = getCompletedMap(plan);
 
-  const assignment = plan.assignments.find((day) => day.date === dateISO);
-  if (!assignment || assignment.readings.length === 0) return;
-
-  const completedMap = getCompletedMap(plan);
-  const dayKeys = assignment.readings.map((reading) => reading.key);
-  const allDone = dayKeys.every((key) => !!completedMap[key]);
-
-  await Promise.all(
-    dayKeys.map((key) =>
-      fetch("/api/reading/complete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      return {
+        ...plan,
+        completed: {
+          ...completedMap,
+          [key]: !completedMap[key],
         },
-        body: JSON.stringify({
-          planId,
-          key,
-          completed: !allDone,
-        }),
-      })
-    )
+      };
+    })
   );
+};
 
-  loadData();
+const markDayPlanComplete = (planId, dateISO) => {
+  setPlans((prevPlans) =>
+    prevPlans.map((plan) => {
+      if (plan.id !== planId) return plan;
+
+      const assignment = plan.assignments.find((day) => day.date === dateISO);
+      if (!assignment || assignment.readings.length === 0) return plan;
+
+      const completedMap = getCompletedMap(plan);
+      const dayKeys = assignment.readings.map((r) => r.key);
+      const allDone = dayKeys.every((key) => !!completedMap[key]);
+
+      const nextCompleted = { ...completedMap };
+
+      dayKeys.forEach((key) => {
+        nextCompleted[key] = !allDone;
+      });
+
+      return {
+        ...plan,
+        completed: nextCompleted,
+      };
+    })
+  );
 };
 
   const resetEventForm = () => {
@@ -1321,7 +1292,6 @@ const createEvent = async () => {
 
       setEvents((prev) => upsertEvent(prev, savedEvent));
       resetEventForm();
-      void loadData();
     } catch (error) {
       console.error(error);
       setEvents(previousEvents);
@@ -1362,8 +1332,7 @@ const createEvent = async () => {
 
     setEvents((prev) => upsertEvent(prev, savedEvent));
     resetEventForm();
-    void loadData();
-  } catch (error) {
+    } catch (error) {
     console.error(error);
     setEvents(previousEvents);
   }
@@ -1371,6 +1340,7 @@ const createEvent = async () => {
 
 const deleteEvent = async (eventId: string) => {
   const previousEvents = events;
+
   setEvents((prev) => removeEventById(prev, eventId));
 
   try {
@@ -1389,11 +1359,44 @@ const deleteEvent = async (eventId: string) => {
     if (editingEventId === eventId) {
       resetEventForm();
     }
-
-    void loadData();
   } catch (error) {
     console.error(error);
     setEvents(previousEvents);
+  }
+};
+
+const deletePlan = async (planId: string) => {
+  const previousPlans = plans;
+
+  setPlans((prev) => prev.filter((p) => p.id !== planId));
+
+  if (selectedPlanId === planId) setSelectedPlanId(null);
+  if (editingPlanId === planId) setEditingPlanId(null);
+
+  try {
+    const response = await fetch("/api/reading/plans", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: planId }),
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error("DELETE PLAN API FAILED", {
+        status: response.status,
+        body: text,
+      });
+
+      throw new Error("Failed to delete plan from server");
+    }
+
+    console.log("PLAN DELETED FROM SERVER", planId);
+  } catch (error) {
+    console.error(error);
+    setPlans(previousPlans);
   }
 };
 
@@ -2078,7 +2081,7 @@ if (!vapidPublicKey) {
                             return (
                               <button
                                 key={reading.key}
-                                onClick={() => toggleChapterComplete(event.planId, reading.key)}
+                                onClick={() => toggleChapterComplete(plan.id, reading.key)}
                                 className={cn(
                                   "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
                                   done

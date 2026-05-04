@@ -1,127 +1,122 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 import { neon } from "@neondatabase/serverless";
 
-function getSql() {
-  const url =
+export const dynamic = "force-dynamic";
+
+function getDatabaseUrl() {
+  return (
     process.env.DISCIPLEOS_POSTGRES_URL ||
     process.env.discipleos_POSTGRES_URL ||
     process.env.POSTGRES_URL ||
-    process.env.DATABASE_URL;
-
-  if (!url) throw new Error("Missing database URL");
-  return neon(url);
+    process.env.DATABASE_URL
+  );
 }
 
-function normalizeDate(value: unknown) {
-  if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
-  return new Date(value as string | number | Date).toISOString().slice(0, 10);
+function getSql() {
+  const databaseUrl = getDatabaseUrl();
+
+  if (!databaseUrl) {
+    throw new Error("No database connection string was provided to neon()");
+  }
+
+  return neon(databaseUrl);
 }
 
 export async function GET() {
-  const sql = getSql();
+  try {
+    const sql = getSql();
+    
+    const rows = await sql`
+      SELECT data
+      FROM reading_plans
+      ORDER BY updated_at DESC
+    `;
 
-  const rows = await sql`
-    SELECT *
-    FROM reading_plans
-    ORDER BY created_at DESC
-  `;
+    const plans = rows.map((row: any) => row.data);
 
-  const plans = rows.map((row: any) => {
-    const assignments = Array.isArray(row.assignments) ? row.assignments : [];
+    return Response.json({ success: true, plans });
+  } catch (error) {
+    console.error("GET /api/reading/plans failed:", error);
 
-    const selectedBooks = Array.from(
-      new Set(
-        assignments.flatMap((day: any) =>
-          Array.isArray(day.readings)
-            ? day.readings.map((reading: any) => reading.book).filter(Boolean)
-            : []
-        )
-      )
-    );
-
-    return {
-      id: row.id,
-      name: row.title,
-      title: row.title,
-      startDate: normalizeDate(row.start_date),
-      endDate: normalizeDate(row.end_date),
-      readingMode: row.assignment_mode || "consecutive",
-      assignmentMode: row.assignment_mode || "consecutive",
-      assignments,
-      completed: row.completed || {},
-      completedChapterKeys: Object.keys(row.completed || {}).filter(
-        (key) => row.completed?.[key]
-        ),
-      selectedBooks,
-      readingTime: "07:00",
-      color: "from-sky-500 to-indigo-500",
-    };
-  });
-
-  return Response.json({ success: true, plans });
-}
-
-export async function POST(req: Request) {
-  const sql = getSql();
-  const body = await req.json();
-
-  const {
-    id,
-    title,
-    startDate,
-    endDate,
-    assignmentMode,
-    assignments,
-  } = body;
-
-  await sql`
-    INSERT INTO reading_plans (
-      id,
-      title,
-      start_date,
-      end_date,
-      assignment_mode,
-      assignments
-    )
-    VALUES (
-      ${id},
-      ${title},
-      ${startDate},
-      ${endDate},
-      ${assignmentMode},
-      ${JSON.stringify(assignments)}
-    )
-    ON CONFLICT (id)
-    DO UPDATE SET
-      title = EXCLUDED.title,
-      start_date = EXCLUDED.start_date,
-      end_date = EXCLUDED.end_date,
-      assignment_mode = EXCLUDED.assignment_mode,
-      assignments = EXCLUDED.assignments,
-      updated_at = NOW()
-  `;
-
-  return Response.json({ success: true });
-}
-
-export async function DELETE(req: Request) {
-  const sql = getSql();
-  const body = await req.json();
-
-  if (!body?.id) {
     return Response.json(
-      { success: false, error: "Missing plan id" },
-      { status: 400 }
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
     );
   }
+}
 
-  await sql`
-    DELETE FROM reading_plans
-    WHERE id = ${body.id}
-  `;
+export async function POST(request: Request) {
+  try {
+    const sql = getSql();
+    
+    const plan = await request.json();
 
-  return Response.json({ success: true });
+    if (!plan?.id) {
+      return Response.json(
+        { success: false, error: "Missing plan id" },
+        { status: 400 }
+      );
+    }
+
+    await sql`
+      INSERT INTO reading_plans (id, data, updated_at)
+      VALUES (${plan.id}, ${JSON.stringify(plan)}::jsonb, NOW())
+      ON CONFLICT (id)
+      DO UPDATE SET
+        data = EXCLUDED.data,
+        updated_at = NOW()
+    `;
+
+    return Response.json({ success: true, plan });
+  } catch (error) {
+    console.error("POST /api/reading/plans failed:", error);
+
+    return Response.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const sql = getSql();
+    
+    const body = await request.json();
+    const id = body?.id;
+
+    if (!id) {
+      return Response.json(
+        { success: false, error: "Missing plan id" },
+        { status: 400 }
+      );
+    }
+
+const result = await sql`
+  DELETE FROM reading_plans
+  WHERE id = ${id}
+  RETURNING id
+`;
+
+return Response.json({
+  success: result.length > 0,
+  id,
+  deletedCount: result.length,
+});
+  } catch (error) {
+    console.error("DELETE /api/reading/plans failed:", error);
+
+    return Response.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
 }
