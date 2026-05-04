@@ -695,7 +695,6 @@ function loadLocalDiscipleData() {
 }
 
 async function savePlanToServer(plan: any) {
-  console.log("SENDING PLAN TO SERVER", plan);
 
   try {
     const response = await fetch("/api/reading/plans", {
@@ -707,12 +706,6 @@ async function savePlanToServer(plan: any) {
     });
 
     const text = await response.text();
-
-    console.log("PLAN SERVER RESPONSE", {
-      status: response.status,
-      ok: response.ok,
-      text,
-    });
 
     if (!response.ok) {
       throw new Error(text || "Failed to save plan to server");
@@ -934,7 +927,6 @@ const [hasHydrated, setHasHydrated] = useState(false);
     navigator.serviceWorker
       .register("/sw.js")
       .then((registration) => {
-        console.log("SW registered:", registration.scope);
       })
       .catch((error) => {
         console.error("SW registration failed:", error);
@@ -1039,13 +1031,7 @@ useEffect(() => {
     })
   );
 
-  console.log("SAVED LOCAL DISCIPLE DATA", {
-    events: events.length,
-    plans: plans.length,
-  });
 }, [events, plans, hasHydrated]);
-
-
 
 useEffect(() => {
   async function loadData() {
@@ -1056,11 +1042,6 @@ useEffect(() => {
 
     setEvents(localData.events);
     setPlans(localData.plans);
-
-    console.log("HYDRATED LOCAL DISCIPLE DATA", {
-      events: localData.events.length,
-      plans: localData.plans.length,
-    });
 
     // 2. Try API (non-blocking, won't break app)
     try {
@@ -1074,7 +1055,6 @@ useEffect(() => {
         const data = JSON.parse(text);
         if (Array.isArray(data.plans)) {
           setPlans(data.plans);
-          console.log("PLANS LOADED FROM DB", data.plans.length);
         }
       } else {
         console.error("READING PLANS API FAILED", {
@@ -1090,7 +1070,6 @@ useEffect(() => {
     didHydrateRef.current = true;
     setHasHydrated(true);
 
-    console.log("HYDRATION COMPLETE");
   }
 
   loadData();
@@ -1109,11 +1088,9 @@ useEffect(() => {
       readingTime: form.readingTime,
     });
 
-    console.log("PLAN OBJECT CREATED", plan);
 
     setPlans((prev) => [plan, ...prev]);
     // Local-only launch mode: localStorage effect handles persistence.
-    console.log("CALLING savePlanToServer NOW", plan.id);
     savePlanToServer(plan);
     setSelectedPlanId(plan.id);
     setActiveTab("plans");
@@ -1393,7 +1370,6 @@ const deletePlan = async (planId: string) => {
       throw new Error("Failed to delete plan from server");
     }
 
-    console.log("PLAN DELETED FROM SERVER", planId);
   } catch (error) {
     console.error(error);
     setPlans(previousPlans);
@@ -1440,8 +1416,6 @@ if (!vapidPublicKey) {
       applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
     });
 
-    console.log("NEW SUB ENDPOINT:", subscription.endpoint);
-
     const response = await fetch("/api/push", {
       method: "POST",
       headers: {
@@ -1451,7 +1425,6 @@ if (!vapidPublicKey) {
     });
 
     const result = await response.json();
-    console.log("SAVE PUSH RESULT:", result);
 
     if (!response.ok) {
       alert("Subscription save failed.");
