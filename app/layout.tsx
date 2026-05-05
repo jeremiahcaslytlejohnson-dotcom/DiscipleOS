@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
   title: "DiscipleOS",
@@ -26,7 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-[#09090f] text-white">{children}</body>
+    <body className="bg-[#09090f] text-white">
+  {children}
+  <Analytics />
+</body>
     </html>
   );
 }
