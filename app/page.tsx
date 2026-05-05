@@ -2,7 +2,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import InstallButton from "./install-button";
+import dynamic from "next/dynamic";
+
+const InstallButton = dynamic(() => import("./install-button"), { ssr: false });
 import {
   Calendar,
   BookOpen,
@@ -97,6 +99,46 @@ const BIBLE_BOOKS = [
   { name: "Jude", testament: "NT", chapters: 1 },
   { name: "Revelation", testament: "NT", chapters: 22 },
 ];
+
+const PRESET_30_DAY_PLAN = {
+  id: "plan-30day-consistency-reset",
+  name: "30-Day Consistency Reset",
+  description: "New Testament + Proverbs + Psalms daily structure to build consistency.",
+  readings: [
+    { day: 1, items: ["Matthew 1-2", "Proverbs 1", "Psalm 1"] },
+    { day: 2, items: ["Matthew 3-4", "Proverbs 2", "Psalm 2"] },
+    { day: 3, items: ["Matthew 5-6", "Proverbs 3", "Psalm 3"] },
+    { day: 4, items: ["Matthew 7-8", "Proverbs 4", "Psalm 4"] },
+    { day: 5, items: ["Matthew 9-10", "Proverbs 5", "Psalm 5"] },
+    { day: 6, items: ["Matthew 11-12", "Proverbs 6", "Psalm 6"] },
+    { day: 7, items: ["Matthew 13", "Proverbs 7", "Psalm 7"] },
+    { day: 8, items: ["Matthew 14-15", "Proverbs 8", "Psalm 8"] },
+    { day: 9, items: ["Matthew 16-17", "Proverbs 9", "Psalm 9"] },
+    { day: 10, items: ["Matthew 18-19", "Proverbs 10", "Psalm 10"] },
+
+    { day: 11, items: ["Matthew 20-21", "Proverbs 11", "Psalm 11"] },
+    { day: 12, items: ["Matthew 22-23", "Proverbs 12", "Psalm 12"] },
+    { day: 13, items: ["Matthew 24-25", "Proverbs 13", "Psalm 13"] },
+    { day: 14, items: ["Matthew 26", "Proverbs 14", "Psalm 14"] },
+    { day: 15, items: ["Matthew 27-28", "Proverbs 15", "Psalm 15"] },
+    { day: 16, items: ["Acts 1-2", "Proverbs 16", "Psalm 16"] },
+    { day: 17, items: ["Acts 3-4", "Proverbs 17", "Psalm 17"] },
+    { day: 18, items: ["Acts 5-6", "Proverbs 18", "Psalm 18"] },
+    { day: 19, items: ["Acts 7", "Proverbs 19", "Psalm 19"] },
+    { day: 20, items: ["Acts 8-9", "Proverbs 20", "Psalm 20"] },
+
+    { day: 21, items: ["Romans 1-2", "Proverbs 21", "Psalm 21"] },
+    { day: 22, items: ["Romans 3-4", "Proverbs 22", "Psalm 22"] },
+    { day: 23, items: ["Romans 5-6", "Proverbs 23", "Psalm 23"] },
+    { day: 24, items: ["Romans 7-8", "Proverbs 24", "Psalm 24"] },
+    { day: 25, items: ["Romans 9-10", "Proverbs 25", "Psalm 25"] },
+    { day: 26, items: ["Romans 11-12", "Proverbs 26", "Psalm 26"] },
+    { day: 27, items: ["Romans 13-14", "Proverbs 27", "Psalm 27"] },
+    { day: 28, items: ["Romans 15-16", "Proverbs 28", "Psalm 28"] },
+    { day: 29, items: ["James 1-3", "Proverbs 29", "Psalm 29"] },
+    { day: 30, items: ["James 4-5", "Proverbs 30", "Psalm 30"] }
+  ]
+};
 
 const PRESETS = {
   psalmsProverbs: ["Psalms", "Proverbs"],
@@ -779,6 +821,11 @@ const [hasHydrated, setHasHydrated] = useState(false);
     [plans, editingPlanId]
   );
 
+  const presetLoaded = useMemo(
+    () => plans.some((p) => p.id === PRESET_30_DAY_PLAN.id),
+    [plans]
+  );
+
   const upcomingEvents = useMemo(() => sortEvents(events), [events]);
   const weekdayOptions = useMemo(
     () => [
@@ -945,13 +992,18 @@ const [hasHydrated, setHasHydrated] = useState(false);
 
       events.forEach((event) => {
         if (!event.remind || !event.time) return;
+        
         const today = todayISO();
         if (!eventOccursOnDate(event, today)) return;
 
         const [hours, minutes] = event.time.split(":").map(Number);
-        const eventDate = new Date(`${today}T00:00:00`);
+
+        const eventDate = new Date();
         eventDate.setHours(hours || 0, minutes || 0, 0, 0);
-        const reminderTime = new Date(eventDate.getTime() - Number(event.reminderMinutes || 0) * 60000);
+
+        const reminderTime = new Date(
+          eventDate.getTime() - Number(event.reminderMinutes || 0) * 60000
+);
         const key = `${event.id}-${today}-${event.time}-${event.reminderMinutes}`;
 
         if (
@@ -960,8 +1012,11 @@ const [hasHydrated, setHasHydrated] = useState(false);
           !sentNotificationsRef.current.has(key)
         ) {
           new Notification(event.title, {
-            body: event.notes || `${event.type} starts at ${event.time}`,
-          });
+            body:
+              event.notes ||
+              `${event.type} starts at ${formatTime(event.time)}`,          
+              });
+              
           sentNotificationsRef.current.add(key);
         }
       });
@@ -1376,17 +1431,53 @@ const deletePlan = async (planId: string) => {
   }
 };
 
+const loadPresetPlan = () => {
+  const planData = PRESET_30_DAY_PLAN;
+
+  if (plans.some((p) => p.id === planData.id)) {
+    setLastSyncLabel("30-Day Reset already loaded");
+    return;
+  }
+
+  const start = todayISO();
+
+  const assignments = planData.readings.map((day, index) => ({
+    date: addDays(start, index),
+    readings: day.items.map((item, i) => ({
+      key: `${day.day}-${i}`,
+      label: item,
+    })),
+  }));
+
+  const newPlan = {
+    id: planData.id,
+    name: planData.name,
+    selectedBooks: [],
+    startDate: start,
+    endDate: addDays(start, planData.readings.length - 1),
+    readingTime: "07:00",
+    readingMode: "preset",
+    color: "from-blue-400 to-indigo-500",
+    assignments,
+    completed: {},
+  };
+
+  setPlans((prev) => [newPlan, ...prev]);
+  savePlanToServer(newPlan);
+  setSelectedPlanId(newPlan.id);
+  setActiveTab("plans");
+  setLastSyncLabel("30-Day Reset loaded");
+};
+
 const enableNotifications = async () => {
   try {
     if (typeof window === "undefined" || !("Notification" in window)) {
       setNotificationPermission("unsupported");
-      alert("Notifications are unsupported on this device/browser.");
       return;
     }
 
     if (!("serviceWorker" in navigator)) {
       setNotificationPermission("unsupported");
-      alert("Service workers are unsupported on this device/browser.");
       return;
     }
 
@@ -1394,8 +1485,7 @@ const enableNotifications = async () => {
     setNotificationPermission(permission);
 
     if (permission !== "granted") {
-      alert("Notification permission was not granted.");
-      return;
+    return;
     }
 
     const registration = await navigator.serviceWorker.ready;
@@ -1407,7 +1497,6 @@ const enableNotifications = async () => {
 
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 if (!vapidPublicKey) {
-  alert("Missing VAPID public key");
   return;
 }
 
@@ -1427,14 +1516,11 @@ if (!vapidPublicKey) {
     const result = await response.json();
 
     if (!response.ok) {
-      alert("Subscription save failed.");
       return;
     }
 
-    alert("Notifications enabled and subscription saved.");
   } catch (error) {
     console.error("Enable notifications failed:", error);
-    alert("Enable notifications failed. Check console.");
   }
 };
   const tabs = [
@@ -1482,6 +1568,17 @@ if (!vapidPublicKey) {
     Create a Plan
   </button>
 
+<button
+  onClick={loadPresetPlan}
+  disabled={presetLoaded}
+  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+    presetLoaded
+      ? "cursor-not-allowed border border-green-500/30 bg-green-600/20 text-green-300"
+      : "border border-[#D4A017]/30 bg-[#D4A017]/15 text-[#F8FAFC] hover:bg-[#D4A017]/25"
+  }`}
+>
+  {presetLoaded ? "30-Day Plan Loaded" : "Load 30-Day Reset"}
+</button>
 <InstallButton />
 
   <button
@@ -1497,6 +1594,7 @@ if (!vapidPublicKey) {
           ? "Notifications unavailable"
           : "Enable reminders"}
   </button>
+  
 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
@@ -1712,8 +1810,10 @@ if (!vapidPublicKey) {
                                 )}
                               >
                                 <div>
-                                  <div className="font-medium">{reading.book}</div>
-                                  <div className="text-sm text-white/55">Chapter {reading.chapter}</div>
+                                  <div className="font-medium">{reading.label || reading.book}</div>
+                                  {reading.chapter ? (
+                                    <div className="text-sm text-white/55">Chapter {reading.chapter}</div>
+                                  ) : null}
                                 </div>
                                 {done ? (
                                   <CheckCircle2 className="h-5 w-5 text-emerald-300" />
@@ -2062,7 +2162,7 @@ if (!vapidPublicKey) {
                                     : "border-white/10 bg-white/5 hover:bg-white/10"
                                 )}
                               >
-                                <span>{reading.book} {reading.chapter}</span>
+                                <span>{reading.label || `${reading.book} ${reading.chapter}`}</span>
                                 {done ? (
                                   <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                                 ) : (
@@ -2594,8 +2694,10 @@ if (!vapidPublicKey) {
                           )}
                         >
                           <div>
-                            <div className="font-medium">{reading.book}</div>
-                            <div className="text-sm text-white/60">Chapter {reading.chapter}</div>
+                            <div className="font-medium">{reading.label || reading.book}</div>
+                            {reading.chapter ? (
+                              <div className="text-sm text-white/60">Chapter {reading.chapter}</div>
+                            ) : null}
                           </div>
                           {done ? <CheckCircle2 className="h-5 w-5 text-emerald-300" /> : <Circle className="h-5 w-5 text-white/35" />}
                         </button>
