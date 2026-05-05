@@ -1436,6 +1436,14 @@ const loadPresetPlan = () => {
 
   if (plans.some((p) => p.id === planData.id)) {
     setLastSyncLabel("30-Day Reset already loaded");
+    fetch("/api/track", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    event: "started_plan_30_day",
+    plan: "30-Day Consistency Reset",
+  }),
+}).catch(() => {});
     return;
   }
 
@@ -1579,6 +1587,7 @@ if (!vapidPublicKey) {
 >
   {presetLoaded ? "30-Day Plan Loaded" : "Load 30-Day Reset"}
 </button>
+
 <InstallButton />
 
   <button
