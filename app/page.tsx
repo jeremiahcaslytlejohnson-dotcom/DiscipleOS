@@ -1333,11 +1333,19 @@ const createEvent = async () => {
         throw new Error("Failed to save edited event to server");
       }
 
-      const result = await response.json();
-      const savedEvent =
-        result?.event && typeof result.event === "object" ? result.event : updatedEvent;
+const text = await response.text();
 
-      setEvents((prev) => upsertEvent(prev, savedEvent));
+let result = null;
+try {
+  result = text ? JSON.parse(text) : null;
+} catch {
+  console.error("Bad /api/events response:", text);
+}
+
+const savedEvent =
+  result?.event && typeof result.event === "object" ? result.event : newEvent;
+
+setEvents((prev) => upsertEvent(prev, savedEvent));
       resetEventForm();
     } catch (error) {
       console.error(error);
