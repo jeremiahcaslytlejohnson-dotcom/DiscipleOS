@@ -758,9 +758,24 @@ async function savePlanToServer(plan: any) {
 }
 
 export default function DiscipleOSApp() {
+  const getDiscipleUserId = () => {
+    if (typeof window === "undefined") return "server";
+
+    const existing = localStorage.getItem("discipleos-user-id");
+    if (existing) return existing;
+
+    const nextId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`;
+
+    localStorage.setItem("discipleos-user-id", nextId);
+    return nextId;
+  };
+
   const [plans, setPlans] = useState([]);
-const [events, setEvents] = useState([]);
-const [hasHydrated, setHasHydrated] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
@@ -1436,14 +1451,17 @@ const loadPresetPlan = () => {
 
   if (plans.some((p) => p.id === planData.id)) {
     setLastSyncLabel("30-Day Reset already loaded");
+
     fetch("/api/track", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    event: "started_plan_30_day",
-    plan: "30-Day Consistency Reset",
-  }),
-}).catch(() => {});
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "clicked_existing_30_day_plan",
+        userId: getDiscipleUserId(),
+        plan: "30-Day Consistency Reset",
+      }),
+    }).catch(() => {});
+
     return;
   }
 
@@ -1471,10 +1489,21 @@ const loadPresetPlan = () => {
   };
 
   setPlans((prev) => [newPlan, ...prev]);
-  savePlanToServer(newPlan);
-  setSelectedPlanId(newPlan.id);
-  setActiveTab("plans");
-  setLastSyncLabel("30-Day Reset loaded");
+savePlanToServer(newPlan);
+setSelectedPlanId(newPlan.id);
+setActiveTab("plans");
+setLastSyncLabel("30-Day Reset loaded");
+
+// ✅ TRACK FIRST-TIME START
+fetch("/api/track", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    event: "started_plan_30_day",
+    userId: getDiscipleUserId(),
+    plan: "30-Day Consistency Reset",
+  }),
+}).catch(() => {});
 };
 
 const enableNotifications = async () => {
