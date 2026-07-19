@@ -1798,7 +1798,7 @@ if (!vapidPublicKey) {
           </div>
         </SectionCard>
 
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.key;
@@ -1807,7 +1807,7 @@ if (!vapidPublicKey) {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
+                  "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
                   active
                     ? "border-[#7C3AED]/40 bg-[#7C3AED]/20 text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]"
                     : "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/10 hover:text-white"
