@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: DiscipleOS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: events
+    description: Calendar events
+  - name: reading
+    description: Bible reading plans
+  - name: push
+    description: Push notifications
+  - name: track
+    description: Analytics tracking
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,173 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List all events
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+                required: [success, events]
+    post:
+      operationId: upsertEvent
+      tags: [events]
+      summary: Create or update an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  event:
+                    $ref: "#/components/schemas/Event"
+                required: [success, event]
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event by id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteById"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /reading/plans:
+    get:
+      operationId: listReadingPlans
+      tags: [reading]
+      summary: List all reading plans
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  plans:
+                    type: array
+                    items: {}
+                required: [success, plans]
+    post:
+      operationId: upsertReadingPlan
+      tags: [reading]
+      summary: Create or update a reading plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingPlanInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    delete:
+      operationId: deleteReadingPlan
+      tags: [reading]
+      summary: Delete a reading plan by id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteById"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /reading/complete:
+    post:
+      operationId: markReadingComplete
+      tags: [reading]
+      summary: Mark a reading chapter as complete or incomplete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingCompleteInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /push:
+    post:
+      operationId: subscribePush
+      tags: [push]
+      summary: Save a web push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscriptionInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /track:
+    post:
+      operationId: trackEvent
+      tags: [track]
+      summary: Track an analytics event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackEventInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 components:
   schemas:
     HealthStatus:
@@ -31,6 +205,115 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required: [success]
+    DeleteById:
+      type: object
+      properties:
+        id:
+          type: string
+      required: [id]
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        notes:
+          type: string
+        remind:
+          type: boolean
+        reminderMinutes:
+          type: integer
+        repeat:
+          type: string
+        repeatWeekdays:
+          type: array
+          items:
+            type: integer
+        repeatUntil:
+          type: string
+        timeZone:
+          type: string
+      required: [id, title, type, date, time]
+    EventInput:
+      type: object
+      properties:
+        id:
+          type: ["string", "null"]
+        title:
+          type: string
+        type:
+          type: string
+        date:
+          type: string
+        time:
+          type: string
+        notes:
+          type: string
+        remind:
+          type: boolean
+        reminderMinutes:
+          type: integer
+        repeat:
+          type: string
+        repeatWeekdays:
+          type: array
+          items:
+            type: integer
+        repeatUntil:
+          type: ["string", "null"]
+        timeZone:
+          type: string
+      required: [title, type, date, time]
+    ReadingPlanInput:
+      type: object
+      properties:
+        id:
+          type: string
+      required: [id]
+      additionalProperties: true
+    ReadingCompleteInput:
+      type: object
+      properties:
+        planId:
+          type: string
+        key:
+          type: string
+        completed:
+          type: boolean
+      required: [planId, key, completed]
+    PushSubscriptionInput:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required: [p256dh, auth]
+      required: [endpoint, keys]
+    TrackEventInput:
+      type: object
+      properties:
+        event:
+          type: string
+        userId:
+          type: ["string", "null"]
+      additionalProperties: true

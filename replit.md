@@ -1,44 +1,59 @@
-# [Project name]
+# DiscipleOS
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A system for your daily walk with God — a PWA for Bible reading plans, spiritual event scheduling, and daily discipline tracking.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Workflows manage both services automatically; use the Replit preview pane to view the app
+- `pnpm --filter @workspace/api-server run dev` — run the API server manually
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — Postgres connection string (auto-provisioned)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- Frontend: React + Vite (`artifacts/discipleos/`) at path `/`
+- API: Express 5 (`artifacts/api-server/`) at path `/api`
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- API codegen: Orval (from OpenAPI spec in `lib/api-spec/openapi.yaml`)
+- CSS: Tailwind v4, dark theme (`#09090f` background)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- Main app UI: `artifacts/discipleos/src/pages/Home.tsx` (single-page React component)
+- PWA install button: `artifacts/discipleos/src/install-button.tsx`
+- Push subscribe: `artifacts/discipleos/src/push-subscribe.tsx`
+- Service worker: `artifacts/discipleos/public/sw.js`
+- DB schema: `lib/db/src/schema/` (events, reading_plans, push_subscriptions)
+- API routes: `artifacts/api-server/src/routes/` (events, reading, push, track)
+- OpenAPI spec: `lib/api-spec/openapi.yaml`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Single-page app: entire UI lives in `Home.tsx` (~2700 lines) with tab-based navigation (Today, Calendar, Plans, Create Plan)
+- Push notifications use VAPID — set `VITE_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` env vars to enable
+- Reading plans and events are stored in Postgres; the frontend also uses localStorage as a fast-read cache
+- Service worker (`sw.js`) enables PWA install and offline support in production
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Today tab**: Dashboard with verse of the day, today's readings and schedule, quick stats
+- **Calendar tab**: Add/edit/delete spiritual events (prayer, fasting, church, custom) with reminders and repeat options
+- **Plans tab**: View active Bible reading plans with progress tracking and per-chapter completion
+- **Create Plan tab**: Build custom reading plans by book, date range, and reading mode (consecutive/random)
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+_Populate as you build._
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `VITE_VAPID_PUBLIC_KEY` must be set for push notification subscribe to work (the app degrades gracefully without it)
+- The `Home.tsx` component is a single large file by design (ported from the original Next.js app)
+- Do NOT run `pnpm dev` at workspace root — use the artifact workflows
 
 ## Pointers
 

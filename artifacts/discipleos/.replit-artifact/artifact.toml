@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "DiscipleOS"
+version = "1.0.0"
+id = "artifacts/discipleos"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20963
+
+[services.development]
+run = "pnpm --filter @workspace/discipleos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/discipleos", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/discipleos/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20963"
+BASE_PATH = "/"
