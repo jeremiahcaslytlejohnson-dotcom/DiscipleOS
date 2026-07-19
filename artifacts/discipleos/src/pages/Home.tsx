@@ -1771,17 +1771,20 @@ if (!vapidPublicKey) {
                   </button>
                 </div>
               </div>
-              <div className="flex gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                 {[
                   { label: "Active plans", value: plans.length },
                   { label: "Overall progress", value: `${overallProgress}%` },
                   { label: "Today's reading", value: todayFocusItems.reading.length },
                   { label: "Today's events", value: todayFocusItems.manual.length },
                   { label: "Active reminders", value: reminderEnabledCount },
-                ].map(({ label, value }) => (
-                  <SectionCard key={label} className="shrink-0 w-28 p-4 flex flex-col items-center justify-center text-center">
-                    <div className="text-[11px] leading-4 text-white/55 text-center">{label}</div>
-                    <div className="mt-2 text-2xl font-semibold leading-none text-center">{value}</div>
+                ].map(({ label, value }, i, arr) => (
+                  <SectionCard
+                    key={label}
+                    className={`p-4 flex flex-col items-center justify-center text-center${i === arr.length - 1 && arr.length % 2 !== 0 ? " col-span-2 xl:col-span-1" : ""}`}
+                  >
+                    <div className="text-[11px] leading-4 text-white/55">{label}</div>
+                    <div className="mt-2 text-2xl font-semibold leading-none">{value}</div>
                   </SectionCard>
                 ))}
               </div>
