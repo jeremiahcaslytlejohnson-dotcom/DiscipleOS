@@ -2777,19 +2777,25 @@ if (!vapidPublicKey) {
                     className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
                     placeholder="Plan name"
                   />
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="date"
-                      value={editForm.startDate}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                      className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
-                    />
-                    <input
-                      type="date"
-                      value={editForm.endDate}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                      className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
-                    />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="mb-1 text-xs text-white/50">Start date</div>
+                      <input
+                        type="date"
+                        value={editForm.startDate}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-white/50">End date</div>
+                      <input
+                        type="date"
+                        value={editForm.endDate}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
                 {/* Pace mode */}
@@ -2912,7 +2918,7 @@ if (!vapidPublicKey) {
                     </div>
                   </div>
                 )}
-                <div className="mt-4 flex gap-3">
+                <div className="mt-4 grid grid-cols-2 gap-3">
                   <button onClick={savePlanEdit} className="rounded-2xl bg-[#7C3AED] px-4 py-3 font-medium text-white">Save changes</button>
                   <button onClick={cancelPlanEdit} className="rounded-2xl border border-white/10 px-4 py-3 text-[#F8FAFC]">Cancel</button>
                 </div>
