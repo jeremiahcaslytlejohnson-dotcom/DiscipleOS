@@ -145,7 +145,7 @@ export default function InstallButton() {
               : "Install may not be available yet in this browser state"
       }
       className={[
-        "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
+        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm transition w-full",
         isInstalled
           ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
           : disabled

@@ -1734,43 +1734,42 @@ if (!vapidPublicKey) {
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 sm:text-base">
                   A system for your daily walk with God.
                 </p>
-                <div className="flex flex-wrap items-center gap-3">
-  <button
-    onClick={() => setActiveTab("build")}
-    className="rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-medium text-white transition hover:scale-[0.99] active:scale-[0.98]"
-  >
-    Create a Plan
-  </button>
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+                  <button
+                    onClick={() => setActiveTab("build")}
+                    className="justify-center rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-medium text-white transition hover:scale-[0.99] active:scale-[0.98] inline-flex items-center"
+                  >
+                    Create a Plan
+                  </button>
 
-<button
-  onClick={loadPresetPlan}
-  disabled={presetLoaded}
-  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-    presetLoaded
-      ? "cursor-not-allowed border border-green-500/30 bg-green-600/20 text-green-300"
-      : "border border-[#D4A017]/30 bg-[#D4A017]/15 text-[#F8FAFC] hover:bg-[#D4A017]/25"
-  }`}
->
-  {presetLoaded ? "30-Day Plan Loaded" : "Load 30-Day Reset"}
-</button>
+                  <button
+                    onClick={loadPresetPlan}
+                    disabled={presetLoaded}
+                    className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      presetLoaded
+                        ? "cursor-not-allowed border border-green-500/30 bg-green-600/20 text-green-300"
+                        : "border border-[#D4A017]/30 bg-[#D4A017]/15 text-[#F8FAFC] hover:bg-[#D4A017]/25"
+                    }`}
+                  >
+                    {presetLoaded ? "30-Day Plan Loaded" : "Load 30-Day Reset"}
+                  </button>
 
-<InstallButton />
+                  <InstallButton />
 
-  <button
-    onClick={enableNotifications}
-    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
-  >
-    <Bell className="h-4 w-4" />
-    {notificationPermission === "granted"
-      ? "Notifications enabled"
-      : notificationPermission === "denied"
-        ? "Notifications blocked"
-        : notificationPermission === "unsupported"
-          ? "Notifications unavailable"
-          : "Enable reminders"}
-  </button>
-  
-</div>
+                  <button
+                    onClick={enableNotifications}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {notificationPermission === "granted"
+                      ? "Notifications enabled"
+                      : notificationPermission === "denied"
+                        ? "Notifications blocked"
+                        : notificationPermission === "unsupported"
+                          ? "Notifications unavailable"
+                          : "Enable reminders"}
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-3 xl:grid-cols-5">
                 <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
