@@ -1,5 +1,11 @@
 // @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  estimateChapterMinutes,
+  estimateDayMinutes,
+  estimateBooksMinutes,
+  formatMinutes,
+} from "../bible-data";
 import InstallButton from "../install-button";
 import {
   Calendar,
@@ -293,23 +299,75 @@ function buildSchedule(
   return assignments;
 }
 
+// Time-based scheduler: fills each day up to dailyMinutes using real verse counts.
+// Never splits a chapter; if one chapter exceeds the budget it gets its own day.
+function buildTimeBasedSchedule(
+  selectedBooks: string[],
+  startDate: string,
+  dailyMinutes: number,
+  readingMode = "consecutive"
+) {
+  const rawChapters = expandChapters(selectedBooks);
+  const chapters =
+    readingMode === "random"
+      ? seededShuffle(rawChapters, `${selectedBooks.join("|")}-${startDate}-time`)
+      : rawChapters;
+
+  const assignments: any[] = [];
+  let dayReadings: any[] = [];
+  let dayMins = 0;
+
+  for (const ch of chapters) {
+    const chMins = estimateChapterMinutes(ch.book, ch.chapter);
+    // Start a new day if adding this chapter would push past 125% of budget
+    // (the 25% buffer prevents tiny leftover chapters from sitting alone)
+    if (dayReadings.length > 0 && dayMins + chMins > dailyMinutes * 1.25) {
+      assignments.push({ date: addDays(startDate, assignments.length), readings: dayReadings });
+      dayReadings = [ch];
+      dayMins = chMins;
+    } else {
+      dayReadings.push(ch);
+      dayMins += chMins;
+    }
+  }
+  if (dayReadings.length > 0) {
+    assignments.push({ date: addDays(startDate, assignments.length), readings: dayReadings });
+  }
+  return assignments;
+}
+
 function calculateDaysForTargetPace(totalChapters: number, targetChaptersPerDay = 2.5) {
   if (!totalChapters || targetChaptersPerDay <= 0) return 1;
   return Math.max(1, Math.ceil(totalChapters / targetChaptersPerDay));
 }
 
-function calculateAutoEndDate(selectedBooks: string[], startDate: string, targetChaptersPerDay = 2.5) {
+function calculateAutoEndDate(
+  selectedBooks: string[],
+  startDate: string,
+  targetChaptersPerDay = 2.5,
+  paceMode = "chapters",
+  dailyMinutes = 20
+) {
+  if (paceMode === "time") {
+    const totalMins = estimateBooksMinutes(selectedBooks);
+    if (!totalMins) return startDate;
+    const days = Math.max(1, Math.ceil(totalMins / dailyMinutes));
+    return addDays(startDate, days - 1);
+  }
   const totalChapters = expandChapters(selectedBooks).length;
   const totalDays = calculateDaysForTargetPace(totalChapters, targetChaptersPerDay);
   return addDays(startDate, totalDays - 1);
 }
 
 function summarizePlanInput(form: any) {
-  const totalChapters = expandChapters(form.selectedBooks).length;
+  const chapters = expandChapters(form.selectedBooks);
+  const totalChapters = chapters.length;
   const totalDays = Math.max(1, diffDaysInclusive(form.startDate, form.endDate));
   const chaptersPerDayExact = totalChapters / totalDays;
   const minPerDay = totalChapters === 0 ? 0 : Math.floor(chaptersPerDayExact);
   const maxPerDay = totalChapters === 0 ? 0 : Math.ceil(chaptersPerDayExact);
+  const totalMinutes = estimateBooksMinutes(form.selectedBooks);
+  const minsPerDay = totalDays > 0 ? Math.round(totalMinutes / totalDays) : 0;
 
   return {
     totalChapters,
@@ -317,6 +375,8 @@ function summarizePlanInput(form: any) {
     chaptersPerDayExact,
     minPerDay,
     maxPerDay,
+    totalMinutes,
+    minsPerDay,
     finishable: totalChapters > 0 && totalDays > 0,
   };
 }
@@ -462,19 +522,33 @@ function createPlanObject({
   color,
   readingMode = "consecutive",
   readingTime = "07:00",
+  paceMode = "chapters",
+  dailyMinutes = 20,
 }) {
   const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+
+  const assignments =
+    paceMode === "time"
+      ? buildTimeBasedSchedule(selectedBooks, startDate, dailyMinutes, readingMode)
+      : buildSchedule(selectedBooks, startDate, endDate, readingMode);
+
+  const actualEndDate =
+    paceMode === "time" && assignments.length > 0
+      ? assignments[assignments.length - 1].date
+      : endDate;
 
   return {
     id,
     name,
     selectedBooks,
     startDate,
-    endDate,
+    endDate: actualEndDate,
     color,
     readingMode,
     readingTime,
-    assignments: buildSchedule(selectedBooks, startDate, endDate, readingMode),
+    paceMode,
+    dailyMinutes,
+    assignments,
     completed: {},
   };
 }
@@ -826,6 +900,8 @@ export default function DiscipleOSApp() {
     readingTime: "07:00",
     autoSchedule: true,
     targetChaptersPerDay: 2.5,
+    paceMode: "time",
+    dailyMinutes: 20,
   });
 
   const [eventForm, setEventForm] = useState({
@@ -1092,7 +1168,7 @@ export default function DiscipleOSApp() {
         preset,
         selectedBooks: presetBooks,
         endDate: prev.autoSchedule
-          ? calculateAutoEndDate(presetBooks, prev.startDate, prev.targetChaptersPerDay)
+          ? calculateAutoEndDate(presetBooks, prev.startDate, prev.targetChaptersPerDay, prev.paceMode, prev.dailyMinutes)
           : prev.endDate,
       };
     });
@@ -1110,7 +1186,7 @@ export default function DiscipleOSApp() {
         preset: "custom",
         selectedBooks: nextSelectedBooks,
         endDate: prev.autoSchedule
-          ? calculateAutoEndDate(nextSelectedBooks, prev.startDate, prev.targetChaptersPerDay)
+          ? calculateAutoEndDate(nextSelectedBooks, prev.startDate, prev.targetChaptersPerDay, prev.paceMode, prev.dailyMinutes)
           : prev.endDate,
       };
     });
@@ -1189,6 +1265,8 @@ useEffect(() => {
       color: form.color,
       readingMode: form.readingMode,
       readingTime: form.readingTime,
+      paceMode: form.paceMode,
+      dailyMinutes: form.dailyMinutes,
     });
 
 
@@ -1891,7 +1969,10 @@ if (!vapidPublicKey) {
                                 <div>
                                   <div className="font-medium">{reading.label || reading.book}</div>
                                   {reading.chapter ? (
-                                    <div className="text-sm text-white/55">Chapter {reading.chapter}</div>
+                                    <div className="text-sm text-white/55">
+                                      Chapter {reading.chapter}
+                                      <span className="ml-2 text-white/35">~{estimateChapterMinutes(reading.book, reading.chapter)}m</span>
+                                    </div>
                                   ) : null}
                                 </div>
                                 {done ? (
@@ -1960,7 +2041,7 @@ if (!vapidPublicKey) {
                           ...prev,
                           startDate: e.target.value,
                           endDate: prev.autoSchedule
-                            ? calculateAutoEndDate(prev.selectedBooks, e.target.value, prev.targetChaptersPerDay)
+                            ? calculateAutoEndDate(prev.selectedBooks, e.target.value, prev.targetChaptersPerDay, prev.paceMode, prev.dailyMinutes)
                             : prev.endDate,
                         }))
                       }
@@ -1982,56 +2063,105 @@ if (!vapidPublicKey) {
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-[#F8FAFC]">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium">Auto schedule range</div>
-                      <div className="mt-1 text-xs text-white/55">Set the finish date automatically based on selected books and your target pace.</div>
-                    </div>
-                    <button
-                      onClick={() =>
-                        setForm((prev) => {
-                          const nextAuto = !prev.autoSchedule;
-                          return {
+                  <div className="mb-3 font-medium">Daily reading budget</div>
+                  <div className="mb-3 flex gap-2">
+                    {["time", "chapters"].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() =>
+                          setForm((prev) => ({
                             ...prev,
-                            autoSchedule: nextAuto,
-                            endDate: nextAuto
-                              ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, prev.targetChaptersPerDay)
+                            paceMode: mode,
+                            endDate: prev.autoSchedule
+                              ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, prev.targetChaptersPerDay, mode, prev.dailyMinutes)
                               : prev.endDate,
-                          };
-                        })
-                      }
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs transition",
-                        form.autoSchedule
-                          ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
-                          : "border-white/10 bg-white/5 text-white/70"
-                      )}
-                    >
-                      {form.autoSchedule ? "Auto on" : "Auto off"}
-                    </button>
+                          }))
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs transition",
+                          form.paceMode === mode
+                            ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
+                            : "border-white/10 bg-white/5 text-white/70"
+                        )}
+                      >
+                        {mode === "time" ? "By time" : "By chapters"}
+                      </button>
+                    ))}
                   </div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <label className="text-xs text-white/55">Target pace</label>
-                    <input
-                      type="number"
-                      min="0.5"
-                      max="20"
-                      step="0.5"
-                      value={form.targetChaptersPerDay}
-                      onChange={(e) => {
-                        const nextTarget = Number(e.target.value) || 2.5;
-                        setForm((prev) => ({
-                          ...prev,
-                          targetChaptersPerDay: nextTarget,
-                          endDate: prev.autoSchedule
-                            ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, nextTarget)
-                            : prev.endDate,
-                        }));
-                      }}
-                      className="h-10 w-24 rounded-xl border border-white/10 bg-[#0B1020]/40 px-3 outline-none"
-                    />
-                    <span className="text-xs text-white/55">chapters/day</span>
-                  </div>
+
+                  {form.paceMode === "time" ? (
+                    <div>
+                      <div className="mb-2 text-xs text-white/55">How many minutes can you read each day?</div>
+                      <div className="flex flex-wrap gap-2">
+                        {[10, 15, 20, 30, 45, 60].map((mins) => (
+                          <button
+                            key={mins}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                dailyMinutes: mins,
+                                endDate: prev.autoSchedule
+                                  ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, prev.targetChaptersPerDay, "time", mins)
+                                  : prev.endDate,
+                              }))
+                            }
+                            className={cn(
+                              "rounded-xl border px-3 py-2 text-sm transition",
+                              form.dailyMinutes === mins
+                                ? "border-violet-400/30 bg-violet-500/20 text-violet-100"
+                                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                            )}
+                          >
+                            {mins}m
+                          </button>
+                        ))}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="5"
+                            max="240"
+                            step="5"
+                            placeholder="Custom"
+                            value={[10,15,20,30,45,60].includes(form.dailyMinutes) ? "" : form.dailyMinutes}
+                            onChange={(e) => {
+                              const mins = Math.max(5, Number(e.target.value) || 20);
+                              setForm((prev) => ({
+                                ...prev,
+                                dailyMinutes: mins,
+                                endDate: prev.autoSchedule
+                                  ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, prev.targetChaptersPerDay, "time", mins)
+                                  : prev.endDate,
+                              }));
+                            }}
+                            className="h-9 w-20 rounded-xl border border-white/10 bg-[#0B1020]/40 px-2 text-sm outline-none placeholder:text-white/30"
+                          />
+                          <span className="text-xs text-white/40">min</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-white/55">Chapters per day</label>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="20"
+                        step="0.5"
+                        value={form.targetChaptersPerDay}
+                        onChange={(e) => {
+                          const nextTarget = Number(e.target.value) || 2.5;
+                          setForm((prev) => ({
+                            ...prev,
+                            targetChaptersPerDay: nextTarget,
+                            endDate: prev.autoSchedule
+                              ? calculateAutoEndDate(prev.selectedBooks, prev.startDate, nextTarget, "chapters", prev.dailyMinutes)
+                              : prev.endDate,
+                          }));
+                        }}
+                        className="h-10 w-24 rounded-xl border border-white/10 bg-[#0B1020]/40 px-3 outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <label className="rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-[#F8FAFC]">
@@ -2123,22 +2253,22 @@ if (!vapidPublicKey) {
                     <div className="mt-2 text-2xl font-semibold">{planPreview.totalChapters}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                    <div className="text-xs text-white/55">Total days</div>
+                    <div className="text-xs text-white/55">Total reading time</div>
+                    <div className="mt-2 text-2xl font-semibold">{formatMinutes(planPreview.totalMinutes)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                    <div className="text-xs text-white/55">Plan length</div>
                     <div className="mt-2 text-2xl font-semibold">{planPreview.totalDays}</div>
+                    <div className="text-xs text-white/50">days</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                    <div className="text-xs text-white/55">Average needed</div>
-                    <div className="mt-2 text-2xl font-semibold">{planPreview.chaptersPerDayExact.toFixed(2)}</div>
-                    <div className="text-xs text-white/50">chapters per day</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                    <div className="text-xs text-white/55">Daily load</div>
-                    <div className="mt-2 text-2xl font-semibold">
+                    <div className="text-xs text-white/55">Daily reading time</div>
+                    <div className="mt-2 text-2xl font-semibold">~{formatMinutes(planPreview.minsPerDay)}</div>
+                    <div className="text-xs text-white/50">
                       {planPreview.minPerDay === planPreview.maxPerDay
-                        ? `${planPreview.maxPerDay}`
-                        : `${planPreview.minPerDay}-${planPreview.maxPerDay}`}
+                        ? `${planPreview.maxPerDay} ch/day`
+                        : `${planPreview.minPerDay}–${planPreview.maxPerDay} ch/day`}
                     </div>
-                    <div className="text-xs text-white/50">chapters per day</div>
                   </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-[#94A3B8]">
