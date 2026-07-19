@@ -924,6 +924,9 @@ export default function DiscipleOSApp() {
     endDate: todayISO(),
     readingMode: "consecutive",
     readingTime: "07:00",
+    paceMode: "chapters",
+    dailyMinutes: 20,
+    targetChaptersPerDay: 2.5,
   });
 
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -982,10 +985,15 @@ export default function DiscipleOSApp() {
   const planPreview = useMemo(() => summarizePlanInput(form), [form]);
   const editPreview = useMemo(() => {
     if (!editingPlan) return null;
+    const endDate = editForm.paceMode === "time"
+      ? calculateAutoEndDate(editingPlan.selectedBooks, editForm.startDate, editForm.targetChaptersPerDay, "time", editForm.dailyMinutes)
+      : editForm.endDate;
     return summarizePlanInput({
       selectedBooks: editingPlan.selectedBooks,
       startDate: editForm.startDate,
-      endDate: editForm.endDate,
+      endDate,
+      paceMode: editForm.paceMode,
+      dailyMinutes: editForm.dailyMinutes,
     });
   }, [editingPlan, editForm]);
 
@@ -1282,12 +1290,19 @@ useEffect(() => {
     setEditingPlanId(plan.id);
     setSelectedPlanId(plan.id);
     setActiveTab("plans");
+    const paceMode = plan.paceMode || "chapters";
+    const totalChapters = expandChapters(plan.selectedBooks).length;
+    const totalDays = Math.max(1, diffDaysInclusive(plan.startDate, plan.endDate));
+    const derivedChaptersPerDay = totalChapters > 0 ? parseFloat((totalChapters / totalDays).toFixed(1)) : 2.5;
     setEditForm({
       name: plan.name,
       startDate: plan.startDate,
       endDate: plan.endDate,
-      readingMode: plan.readingMode,
+      readingMode: plan.readingMode || "consecutive",
       readingTime: plan.readingTime || "07:00",
+      paceMode,
+      dailyMinutes: plan.dailyMinutes || 20,
+      targetChaptersPerDay: derivedChaptersPerDay,
     });
   };
 
@@ -1297,19 +1312,26 @@ useEffect(() => {
     setPlans((prev) =>
       prev.map((plan) => {
         if (plan.id !== editingPlan.id) return plan;
+
+        const isTimeBased = editForm.paceMode === "time";
+        const assignments = isTimeBased
+          ? buildTimeBasedSchedule(plan.selectedBooks, editForm.startDate, editForm.dailyMinutes, editForm.readingMode)
+          : buildSchedule(plan.selectedBooks, editForm.startDate, editForm.endDate, editForm.readingMode);
+
+        const actualEndDate = isTimeBased && assignments.length > 0
+          ? assignments[assignments.length - 1].date
+          : editForm.endDate;
+
         return {
           ...plan,
           name: editForm.name.trim() || plan.name,
           startDate: editForm.startDate,
-          endDate: editForm.endDate,
+          endDate: actualEndDate,
           readingMode: editForm.readingMode,
           readingTime: editForm.readingTime,
-          assignments: buildSchedule(
-            plan.selectedBooks,
-            editForm.startDate,
-            editForm.endDate,
-            editForm.readingMode
-          ),
+          paceMode: editForm.paceMode,
+          dailyMinutes: editForm.dailyMinutes,
+          assignments,
         };
       })
     );
@@ -2780,6 +2802,80 @@ if (!vapidPublicKey) {
                     />
                   </div>
                 </div>
+                {/* Pace mode */}
+                <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-sm text-[#F8FAFC]">
+                  <div className="mb-2 font-medium">Daily reading budget</div>
+                  <div className="mb-3 flex gap-2">
+                    {["time", "chapters"].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setEditForm((prev) => ({ ...prev, paceMode: mode }))}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs transition",
+                          editForm.paceMode === mode
+                            ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
+                            : "border-white/10 bg-white/5 text-white/70"
+                        )}
+                      >
+                        {mode === "time" ? "By time" : "By chapters"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {editForm.paceMode === "time" ? (
+                    <div>
+                      <div className="mb-2 text-xs text-white/55">Minutes per day</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {[10, 15, 20, 30, 45, 60].map((mins) => (
+                          <button
+                            key={mins}
+                            onClick={() => setEditForm((prev) => ({ ...prev, dailyMinutes: mins }))}
+                            className={cn(
+                              "rounded-xl border px-3 py-2 text-sm transition",
+                              editForm.dailyMinutes === mins
+                                ? "border-violet-400/30 bg-violet-500/20 text-violet-100"
+                                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                            )}
+                          >
+                            {mins}m
+                          </button>
+                        ))}
+                        {/* +/- stepper for fine-tuning */}
+                        <div className="ml-1 flex items-center gap-1 rounded-xl border border-white/10 bg-white/5">
+                          <button
+                            onClick={() => setEditForm((prev) => ({ ...prev, dailyMinutes: Math.max(5, prev.dailyMinutes - 5) }))}
+                            className="px-2 py-1.5 text-white/70 hover:text-white"
+                          >−</button>
+                          <span className="min-w-[3rem] text-center text-sm">{editForm.dailyMinutes}m</span>
+                          <button
+                            onClick={() => setEditForm((prev) => ({ ...prev, dailyMinutes: Math.min(240, prev.dailyMinutes + 5) }))}
+                            className="px-2 py-1.5 text-white/70 hover:text-white"
+                          >+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="mb-2 text-xs text-white/55">Chapters per day</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5">
+                          <button
+                            onClick={() => setEditForm((prev) => ({ ...prev, targetChaptersPerDay: Math.max(0.5, parseFloat((prev.targetChaptersPerDay - 0.5).toFixed(1))) }))}
+                            className="px-2 py-1.5 text-white/70 hover:text-white"
+                          >−</button>
+                          <span className="min-w-[3.5rem] text-center text-sm">{editForm.targetChaptersPerDay} ch</span>
+                          <button
+                            onClick={() => setEditForm((prev) => ({ ...prev, targetChaptersPerDay: Math.min(20, parseFloat((prev.targetChaptersPerDay + 0.5).toFixed(1))) }))}
+                            className="px-2 py-1.5 text-white/70 hover:text-white"
+                          >+</button>
+                        </div>
+                        <span className="text-xs text-white/40">per day</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Alarm time */}
                 <label className="mt-3 block rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-[#F8FAFC]">
                   <div className="mb-2">Reading time</div>
                   <input
@@ -2820,10 +2916,9 @@ if (!vapidPublicKey) {
                     <div className="mb-2 font-medium text-[#F8FAFC]">Updated plan summary</div>
                     <div className="grid gap-2 md:grid-cols-2">
                       <div>Total chapters: <span className="text-white">{editPreview.totalChapters}</span></div>
-                      <div>Total days: <span className="text-white">{editPreview.totalDays}</span></div>
-                      <div>Average needed: <span className="text-white">{editPreview.chaptersPerDayExact.toFixed(2)} ch/day</span></div>
-                      <div>Daily load: <span className="text-white">{editPreview.minPerDay === editPreview.maxPerDay ? `${editPreview.maxPerDay} chapters/day` : `${editPreview.minPerDay}-${editPreview.maxPerDay} chapters/day`}</span></div>
-                      <div>Reading time: <span className="text-white">{formatTime(editForm.readingTime)}</span></div>
+                      <div>Total reading time: <span className="text-white">{formatMinutes(editPreview.totalMinutes)}</span></div>
+                      <div>Plan length: <span className="text-white">{editPreview.totalDays} days</span></div>
+                      <div>Daily: <span className="text-white">~{formatMinutes(editPreview.minsPerDay)} · {editPreview.minPerDay === editPreview.maxPerDay ? `${editPreview.maxPerDay} ch` : `${editPreview.minPerDay}–${editPreview.maxPerDay} ch`}</span></div>
                     </div>
                   </div>
                 )}
