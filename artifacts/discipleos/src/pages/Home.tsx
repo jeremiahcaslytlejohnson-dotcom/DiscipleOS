@@ -1760,7 +1760,7 @@ if (!vapidPublicKey) {
                     onClick={enableNotifications}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
                   >
-                    <Bell className="h-4 w-4 shrink-0" />
+                    <Bell size={16} style={{ minWidth: 16, minHeight: 16 }} />
                     {notificationPermission === "granted"
                       ? "Notifications enabled"
                       : notificationPermission === "denied"
