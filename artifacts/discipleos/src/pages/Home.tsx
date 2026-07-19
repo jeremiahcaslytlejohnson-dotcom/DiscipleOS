@@ -2820,8 +2820,8 @@ if (!vapidPublicKey) {
 
                   {editForm.paceMode === "time" ? (
                     <div>
-                      <div className="mb-2 text-xs text-white/55">Minutes per day</div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="mb-2 text-xs text-white/55">How many minutes can you read each day?</div>
+                      <div className="flex flex-wrap gap-2">
                         {[10, 15, 20, 30, 45, 60].map((mins) => (
                           <button
                             key={mins}
@@ -2836,37 +2836,36 @@ if (!vapidPublicKey) {
                             {mins}m
                           </button>
                         ))}
-                        {/* +/- stepper for fine-tuning */}
-                        <div className="ml-1 flex items-center gap-1 rounded-xl border border-white/10 bg-white/5">
-                          <button
-                            onClick={() => setEditForm((prev) => ({ ...prev, dailyMinutes: Math.max(5, prev.dailyMinutes - 5) }))}
-                            className="px-2 py-1.5 text-white/70 hover:text-white"
-                          >−</button>
-                          <span className="min-w-[3rem] text-center text-sm">{editForm.dailyMinutes}m</span>
-                          <button
-                            onClick={() => setEditForm((prev) => ({ ...prev, dailyMinutes: Math.min(240, prev.dailyMinutes + 5) }))}
-                            className="px-2 py-1.5 text-white/70 hover:text-white"
-                          >+</button>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="5"
+                            max="240"
+                            step="5"
+                            placeholder="Custom"
+                            value={[10,15,20,30,45,60].includes(editForm.dailyMinutes) ? "" : editForm.dailyMinutes}
+                            onChange={(e) => {
+                              const mins = Math.max(5, Number(e.target.value) || 20);
+                              setEditForm((prev) => ({ ...prev, dailyMinutes: mins }));
+                            }}
+                            className="h-9 w-20 rounded-xl border border-white/10 bg-[#0B1020]/40 px-2 text-sm outline-none placeholder:text-white/30"
+                          />
+                          <span className="text-xs text-white/40">min</span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div>
-                      <div className="mb-2 text-xs text-white/55">Chapters per day</div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5">
-                          <button
-                            onClick={() => setEditForm((prev) => ({ ...prev, targetChaptersPerDay: Math.max(0.5, parseFloat((prev.targetChaptersPerDay - 0.5).toFixed(1))) }))}
-                            className="px-2 py-1.5 text-white/70 hover:text-white"
-                          >−</button>
-                          <span className="min-w-[3.5rem] text-center text-sm">{editForm.targetChaptersPerDay} ch</span>
-                          <button
-                            onClick={() => setEditForm((prev) => ({ ...prev, targetChaptersPerDay: Math.min(20, parseFloat((prev.targetChaptersPerDay + 0.5).toFixed(1))) }))}
-                            className="px-2 py-1.5 text-white/70 hover:text-white"
-                          >+</button>
-                        </div>
-                        <span className="text-xs text-white/40">per day</span>
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-white/55">Chapters per day</label>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="20"
+                        step="0.5"
+                        value={editForm.targetChaptersPerDay}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, targetChaptersPerDay: Number(e.target.value) || 2.5 }))}
+                        className="h-10 w-24 rounded-xl border border-white/10 bg-[#0B1020]/40 px-3 outline-none"
+                      />
                     </div>
                   )}
                 </div>
