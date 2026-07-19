@@ -143,34 +143,35 @@ const PRESETS = {
   wholeBible: BIBLE_BOOKS.map((b) => b.name),
 };
 
-const VERSES_OF_THE_DAY = [
+// Fallback verses used when the API and localStorage cache are both unavailable
+const VERSES_FALLBACK = [
   {
     reference: "Lamentations 3:22-23",
-    text: "Because of the Lord’s great love we are not consumed, for his compassions never fail. They are new every morning; great is your faithfulness.",
+    text: "Because of the LORD's great love we are not consumed, for his compassions never fail. They are new every morning; great is your faithfulness.",
   },
   {
     reference: "Psalm 119:105",
-    text: "Your word is a lamp for my feet, a light on my path.",
+    text: "Thy word is a lamp unto my feet, and a light unto my path.",
   },
   {
-    reference: "Joshua 1:8",
-    text: "Keep this Book of the Law always on your lips; meditate on it day and night, so that you may be careful to do everything written in it.",
+    reference: "Joshua 1:9",
+    text: "Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.",
   },
   {
     reference: "Matthew 6:33",
-    text: "But seek first his kingdom and his righteousness, and all these things will be given to you as well.",
+    text: "But seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you.",
   },
   {
     reference: "Philippians 4:6-7",
-    text: "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God.",
+    text: "Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God. And the peace of God, which passeth all understanding, shall keep your hearts and minds through Christ Jesus.",
   },
   {
     reference: "Isaiah 40:31",
-    text: "But those who hope in the Lord will renew their strength. They will soar on wings like eagles.",
+    text: "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint.",
   },
   {
     reference: "Proverbs 3:5-6",
-    text: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
+    text: "Trust in the LORD with all thine heart; and lean not unto thine own understanding. In all thy ways acknowledge him, and he shall direct thy paths.",
   },
 ];
 
@@ -414,10 +415,43 @@ function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function getVerseOfTheDay() {
+function getFallbackVerse() {
   const today = new Date();
-  const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
-  return VERSES_OF_THE_DAY[dayOfYear % VERSES_OF_THE_DAY.length];
+  const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+  return VERSES_FALLBACK[dayOfYear % VERSES_FALLBACK.length];
+}
+
+const VERSE_CACHE_KEY = "discipleos_verse_cache";
+
+async function fetchVerseOfTheDay(): Promise<{ reference: string; text: string }> {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Check localStorage first
+  try {
+    const raw = localStorage.getItem(VERSE_CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached.date === todayStr && cached.verse?.text) {
+        return cached.verse;
+      }
+    }
+  } catch {}
+
+  // Fetch from API
+  try {
+    const res = await fetch(`/api/verse`);
+    if (res.ok) {
+      const verse = await res.json();
+      if (verse?.text) {
+        try {
+          localStorage.setItem(VERSE_CACHE_KEY, JSON.stringify({ date: todayStr, verse }));
+        } catch {}
+        return verse;
+      }
+    }
+  } catch {}
+
+  return getFallbackVerse();
 }
 
 function createPlanObject({
@@ -851,7 +885,10 @@ export default function DiscipleOSApp() {
     []
   );
   const monthDays = useMemo(() => getMonthGrid(calendarMonth), [calendarMonth]);
-  const verseOfTheDay = useMemo(() => getVerseOfTheDay(), []);
+  const [verseOfTheDay, setVerseOfTheDay] = useState(() => getFallbackVerse());
+  useEffect(() => {
+    fetchVerseOfTheDay().then(setVerseOfTheDay);
+  }, []);
   const reminderEnabledCount = useMemo(() => events.filter((event) => event.remind).length, [events]);
 
   const todaysPlans = useMemo(() => {
