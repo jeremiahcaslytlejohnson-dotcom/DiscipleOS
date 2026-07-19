@@ -1710,10 +1710,6 @@ if (!vapidPublicKey) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.22),_transparent_28%),radial-gradient(circle_at_right,_rgba(45,212,191,0.12),_transparent_24%),linear-gradient(180deg,_#09090f_0%,_#0f172a_100%)] text-white">
-      <div style={{ fontSize: 12, opacity: 0.6, padding: 8 }}>
-      Last sync: {lastSyncLabel || "not yet"}
-    </div>
-      
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <SectionCard className="mb-5 overflow-hidden">
           <div className="relative p-5 sm:p-7">
@@ -1776,7 +1772,7 @@ if (!vapidPublicKey) {
   
 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="grid grid-cols-3 gap-3 xl:grid-cols-5">
                 <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
                   <div className="text-xs text-white/55 text-center">Active plans</div>
                   <div className="mt-2 text-2xl font-semibold text-center">{plans.length}</div>
@@ -1802,7 +1798,7 @@ if (!vapidPublicKey) {
           </div>
         </SectionCard>
 
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.key;
@@ -1811,7 +1807,7 @@ if (!vapidPublicKey) {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
+                  "inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
                   active
                     ? "border-[#7C3AED]/40 bg-[#7C3AED]/20 text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]"
                     : "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/10 hover:text-white"
