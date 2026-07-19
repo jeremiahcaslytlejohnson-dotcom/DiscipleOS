@@ -1760,7 +1760,7 @@ if (!vapidPublicKey) {
                     onClick={enableNotifications}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#F8FAFC] hover:bg-white/10"
                   >
-                    <Bell className="h-4 w-4" />
+                    <Bell className="h-4 w-4 shrink-0" />
                     {notificationPermission === "granted"
                       ? "Notifications enabled"
                       : notificationPermission === "denied"
@@ -1771,27 +1771,19 @@ if (!vapidPublicKey) {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 xl:grid-cols-5">
-                <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-xs text-white/55 text-center">Active plans</div>
-                  <div className="mt-2 text-2xl font-semibold text-center">{plans.length}</div>
-                </SectionCard>
-                <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-[11px] leading-4 text-white/55 text-center">Overall progress</div>
-                  <div className="mt-2 break-words text-2xl font-semibold leading-none text-center">{overallProgress}%</div>
-                </SectionCard>
-                <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-[11px] leading-4 text-white/55 text-center">Today’s reading</div>
-                  <div className="mt-2 break-words text-2xl font-semibold leading-none text-center">{todayFocusItems.reading.length}</div>
-                </SectionCard>
-                <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-[11px] leading-4 text-white/55 text-center">Today’s events</div>
-                  <div className="mt-2 break-words text-2xl font-semibold leading-none text-center">{todayFocusItems.manual.length}</div>
-                </SectionCard>
-                <SectionCard className="min-w-0 p-4 flex flex-col items-center justify-center text-center">
-                  <div className="text-[11px] leading-4 text-white/55 text-center">Active reminders</div>
-                  <div className="mt-2 break-words text-2xl font-semibold leading-none text-center">{reminderEnabledCount}</div>
-                </SectionCard>
+              <div className="flex gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {[
+                  { label: "Active plans", value: plans.length },
+                  { label: "Overall progress", value: `${overallProgress}%` },
+                  { label: "Today's reading", value: todayFocusItems.reading.length },
+                  { label: "Today's events", value: todayFocusItems.manual.length },
+                  { label: "Active reminders", value: reminderEnabledCount },
+                ].map(({ label, value }) => (
+                  <SectionCard key={label} className="shrink-0 w-28 p-4 flex flex-col items-center justify-center text-center">
+                    <div className="text-[11px] leading-4 text-white/55 text-center">{label}</div>
+                    <div className="mt-2 text-2xl font-semibold leading-none text-center">{value}</div>
+                  </SectionCard>
+                ))}
               </div>
             </div>
           </div>
