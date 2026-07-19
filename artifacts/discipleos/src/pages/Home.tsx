@@ -1798,30 +1798,26 @@ if (!vapidPublicKey) {
           </div>
         </SectionCard>
 
-        <div className="relative mb-5">
-          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
-                    active
-                      ? "border-[#7C3AED]/40 bg-[#7C3AED]/20 text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]"
-                      : "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-          {/* Fade hint — tells users the row is scrollable */}
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#09090f] to-transparent sm:hidden" />
+        <div className="mb-5 flex flex-wrap gap-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition",
+                  active
+                    ? "border-[#7C3AED]/40 bg-[#7C3AED]/20 text-white shadow-[0_0_20px_rgba(124,58,237,0.35)]"
+                    : "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/10 hover:text-white"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {activeTab === "today" && (
