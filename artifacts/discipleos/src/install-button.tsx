@@ -32,7 +32,7 @@ function isStandaloneMode() {
 
   const iosStandalone =
     isIosDevice() &&
-    typeof (window.navigator as Navigator & { standalone?: boolean }).standalone === "boolean"
+      typeof (window.navigator as Navigator & { standalone?: boolean }).standalone === "boolean"
       ? Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
       : false;
 
@@ -145,12 +145,12 @@ export default function InstallButton() {
               : "Install may not be available yet in this browser state"
       }
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm transition w-full",
+        "inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm transition-[background-color,border-color,transform] active:translate-y-px",
         isInstalled
           ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
           : disabled
             ? "border-white/10 bg-white/5 text-white/45"
-            : "border-white/10 bg-white/5 text-[#F8FAFC] hover:bg-white/10 active:scale-[0.98]"
+            : "border-white/10 bg-white/5 text-[#F8FAFC] hover:bg-white/10",
       ].join(" ")}
     >
       {isInstalled ? (

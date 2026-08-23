@@ -1,0 +1,5 @@
+{
+  "/api/reading/plans/route": "app/api/reading/plans/route.js",
+  "/manifest.webmanifest/route": "app/manifest.webmanifest/route.js",
+  "/page": "app/page.js"
+}

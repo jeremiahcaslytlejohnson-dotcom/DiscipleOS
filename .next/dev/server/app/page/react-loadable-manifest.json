@@ -1,0 +1,9 @@
+{
+  "[project]/app/install-button.tsx [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/app/install-button.tsx [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/_05khhvt._.js",
+      "static/chunks/app_install-button_tsx_11xepj0._.js"
+    ]
+  }
+}

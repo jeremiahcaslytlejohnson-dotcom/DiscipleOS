@@ -16,3 +16,73 @@ body {
 * {
   box-sizing: border-box;
 }
+.discipleos-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: #090d12;
+}
+.discipleos-shell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 0;
+
+  width: min(calc(100% - 2rem), 80rem);
+  height: 760px;
+  transform: translateX(-50%);
+  pointer-events: none;
+
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(9, 13, 18, 0.08) 0%,
+      rgba(9, 13, 18, 0.55) 58%,
+      #090d12 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(9, 13, 18, 0.88) 0%,
+      rgba(9, 13, 18, 0.2) 60%,
+      rgba(9, 13, 18, 0.32) 100%
+    ),
+    url("/discipline-that-moves-mountains.png");
+
+  background-size: cover, cover, cover;
+  background-position: center top, center top, center top;
+  background-repeat: no-repeat;
+}
+
+@media (min-width: 640px) {
+  .discipleos-shell::before {
+    width: min(calc(100% - 3rem), 80rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .discipleos-shell::before {
+    width: min(calc(100% - 4rem), 80rem);
+  }
+}
+
+.discipleos-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .discipleos-shell::before {
+    height: 700px;
+
+    background-size:
+      cover,
+      cover,
+      auto 700px;
+
+    background-position:
+      center top,
+      center top,
+      65% top;
+  }
+}
