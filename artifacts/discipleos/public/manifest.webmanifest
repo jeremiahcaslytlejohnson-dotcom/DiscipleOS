@@ -2,8 +2,11 @@
   "name": "DiscipleOS",
   "short_name": "DiscipleOS",
   "description": "A system for your daily walk with God.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#09090f",
   "theme_color": "#09090f",
   "icons": [

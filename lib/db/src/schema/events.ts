@@ -2,6 +2,7 @@ import { pgTable, text, boolean, integer, jsonb, timestamp } from "drizzle-orm/p
 
 export const eventsTable = pgTable("events", {
   id: text("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   title: text("title").notNull(),
   type: text("type").notNull(),
   date: text("date").notNull(),
@@ -13,5 +14,6 @@ export const eventsTable = pgTable("events", {
   repeatWeekdays: jsonb("repeat_weekdays").notNull().default([]),
   repeatUntil: text("repeat_until"),
   timeZone: text("time_zone").notNull().default("America/New_York"),
+  countsTowardRhythm: boolean("counts_toward_rhythm").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -9,6 +9,8 @@
 export interface EventInput {
   /** @nullable */
   id?: string | null;
+  /** @nullable */
+  replacesEventId?: string | null;
   title: string;
   type: string;
   date: string;
@@ -21,4 +23,5 @@ export interface EventInput {
   /** @nullable */
   repeatUntil?: string | null;
   timeZone?: string;
+  countsTowardRhythm?: boolean;
 }

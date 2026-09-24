@@ -8,5 +8,6 @@
 
 export interface ReadingPlanInput {
   id: string;
+  templateKey?: string;
   [key: string]: unknown;
  }

@@ -18,6 +18,10 @@ tags:
     description: Push notifications
   - name: track
     description: Analytics tracking
+  - name: rhythm
+    description: Mountain Rhythm progress
+  - name: settings
+    description: Account reading defaults
 paths:
   /healthz:
     get:
@@ -31,6 +35,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get account reading defaults
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update account reading defaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
   /events:
     get:
       operationId: listEvents
@@ -162,6 +195,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+  /events/complete:
+    post:
+      operationId: markEventComplete
+      tags: [events]
+      summary: Mark one event occurrence complete or incomplete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventCompleteInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventCompleteResponse"
+  /rhythm/score:
+    get:
+      operationId: getMountainRhythmScore
+      tags: [rhythm]
+      summary: Get the current user's seven-day Mountain Rhythm score
+      parameters:
+        - name: timeZone
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MountainRhythmResponse"
   /push:
     post:
       operationId: subscribePush
@@ -247,11 +316,15 @@ components:
           type: string
         timeZone:
           type: string
+        countsTowardRhythm:
+          type: boolean
       required: [id, title, type, date, time]
     EventInput:
       type: object
       properties:
         id:
+          type: ["string", "null"]
+        replacesEventId:
           type: ["string", "null"]
         title:
           type: string
@@ -277,11 +350,15 @@ components:
           type: ["string", "null"]
         timeZone:
           type: string
+        countsTowardRhythm:
+          type: boolean
       required: [title, type, date, time]
     ReadingPlanInput:
       type: object
       properties:
         id:
+          type: string
+        templateKey:
           type: string
       required: [id]
       additionalProperties: true
@@ -295,6 +372,69 @@ components:
         completed:
           type: boolean
       required: [planId, key, completed]
+    EventCompleteInput:
+      type: object
+      properties:
+        eventId:
+          type: string
+        occurrenceDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        completed:
+          type: boolean
+      required: [eventId, occurrenceDate, completed]
+    EventCompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        eventId:
+          type: string
+        occurrenceDate:
+          type: string
+        completed:
+          type: boolean
+      required: [success, eventId, occurrenceDate, completed]
+    MountainRhythmResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        accessTier:
+          type: string
+          enum: [basic, full]
+        level:
+          type: string
+        percentage:
+          type: integer
+        completed:
+          type: integer
+        planned:
+          type: integer
+        windowStart:
+          type: string
+        windowEnd:
+          type: string
+        message:
+          type: string
+        copy:
+          type: string
+        categories:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              completed:
+                type: integer
+              planned:
+                type: integer
+            required: [completed, planned]
+        commitments:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [success, accessTier, level, percentage, completed, planned, windowStart, windowEnd, copy, categories, commitments]
     PushSubscriptionInput:
       type: object
       properties:
@@ -317,3 +457,32 @@ components:
         userId:
           type: ["string", "null"]
       additionalProperties: true
+    SettingsInput:
+      type: object
+      properties:
+        paceMode:
+          type: string
+          enum: [relaxed, standard, fast, custom]
+        customMinutesPerChapter:
+          type: integer
+          minimum: 1
+          maximum: 60
+        dailyReadingBudget:
+          type: integer
+          minimum: 5
+          maximum: 240
+        preferredReadingTime:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+        readingOrder:
+          type: string
+          enum: [consecutive, randomized]
+      required: [paceMode, customMinutesPerChapter, dailyReadingBudget, preferredReadingTime, readingOrder]
+    SettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        settings:
+          $ref: "#/components/schemas/SettingsInput"
+      required: [success, settings]

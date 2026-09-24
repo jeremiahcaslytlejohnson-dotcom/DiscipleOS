@@ -19,4 +19,5 @@ export interface Event {
   repeatWeekdays?: number[];
   repeatUntil?: string;
   timeZone?: string;
+  countsTowardRhythm?: boolean;
 }

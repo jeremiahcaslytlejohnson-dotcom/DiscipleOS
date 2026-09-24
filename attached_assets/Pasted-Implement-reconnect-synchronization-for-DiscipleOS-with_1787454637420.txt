@@ -1,0 +1,68 @@
+Implement reconnect synchronization for DiscipleOS without changing the current persistence architecture, UI, or session model.
+
+Current state:
+
+* Postgres-backed persistent sessions are working.
+* `SESSION_SECRET` is stable.
+* Server restart persistence has passed.
+* localStorage is the offline fallback.
+* API mutations use optimistic UI updates and localStorage write-through.
+* Existing auth/isolation and restart tests are passing.
+
+Goal:
+When the app starts offline or loses API connectivity, it should automatically reconcile with the server when connectivity returns, without requiring a manual browser refresh and without risking data loss.
+
+Requirements:
+
+1. Add reconnect triggers for:
+
+   * `window` `online` event
+   * browser/tab returning to focus
+   * `visibilitychange` when the document becomes visible
+
+2. Reuse one centralized synchronization function rather than duplicating the existing mount hydration logic.
+
+3. Preserve the existing defensive hydration rule:
+
+   * Established session + server data, including intentionally empty arrays → server may be authoritative.
+   * Unestablished session + empty server results → must not wipe non-empty localStorage.
+   * API/network failure → retain current UI and localStorage state.
+
+4. Do not allow reconnect synchronization to overwrite newer local changes with stale server data.
+
+5. If local data changed while offline, reconcile those changes back to the server before accepting older server state. Do not silently discard either side.
+
+6. Prevent duplicate syncs caused by focus, visibility, and online events firing close together. Use a simple in-flight guard or debounce.
+
+7. Do not create a polling loop. Synchronization should be event-driven.
+
+8. Do not change:
+
+   * session ownership model
+   * Postgres session store
+   * current UI design
+   * reading-plan scheduling logic
+   * notification architecture
+   * PWA behavior
+
+Add regression tests covering at least:
+
+* start offline with local data → API returns later → data remains
+* go offline → create/edit/delete local data → reconnect → changes reach server
+* reconnect when server and localStorage already match → no duplication
+* established server intentionally empty → valid empty state is preserved
+* unestablished empty server cannot wipe non-empty local data
+* repeated `online`/focus/visibility events do not create duplicate records or conflicting writes
+* cross-user isolation remains intact
+
+Run the full test suite after implementation.
+
+Report:
+
+* synchronization strategy used
+* conflict/reconciliation rule
+* files changed
+* new tests added
+* complete test results
+
+Do not make unrelated fixes or cleanup changes.

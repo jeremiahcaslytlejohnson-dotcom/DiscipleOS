@@ -1,0 +1,21 @@
+- [DiscipleOS stack](discipleos-stack.md) — Next.js → Vite+React port; dark-only theme uses direct hex/opacity classes, not HSL CSS vars; all API routes use Neon→Drizzle+pg via @workspace/db.
+- [Push notifications](push-notifications.md) — VAPID web-push; endpoint ownership must be serialized before cleanup; sent_reminders are recorded only after successful delivery.
+- [Session persistence](session-persistence.md) — Sessions backed by Postgres via connect-pg-simple; sessionEstablished flag drives hydration trust; defensive loadData() in Home.tsx.
+- [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
+- [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.
+- [Mountain Rhythm](mountain-rhythm.md) — ascent follows only a selected 7-, 20-, or 40-day climb; events stay separate and earned days remain permanent.
+- [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
+- [Browser smoke tests](browser-smoke-tests.md) — Playwright needs Chromium plus Nix-declared GLib/graphics libraries in this workspace.
+- [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.
+- [Mobile menu positioning](mobile-menu-positioning.md) — viewport-centered mobile panels need an untransformed fixed wrapper; keep the bottom selector independently fixed.
+- [Visual contract probes](visual-contract-probes.md) — assert shared surface roles in the rendered tab state; flattened layouts may intentionally have no item cards.
+- [Splash-aware visual verification](splash-aware-visual-verification.md) — immediate preview screenshots can capture the launch splash; wait for post-splash DOM state before judging the app surface.
+- [Responsive disclosure probes](responsive-disclosure-probes.md) — keep mobile-only collapsed content out of geometry probes, while exposing the complete form from the tablet breakpoint upward.
+- [Account reading settings](account-settings.md) — store defaults separately and apply them only when starting a new ordinary reading plan.
+- [First-party auth boundary](first-party-auth-boundary.md) — passwordless email-code auth uses Postgres-backed httpOnly sessions; anonymous app-state sessions remain separate.
+- [Browser auth API fixture](browser-auth-api-fixture.md) — real email-code browser tests need Vite’s configured proxy to the local API service and a reserved non-production test domain.
+- [Cross-tab auth sync](auth-cross-tab-sync.md) — logout broadcasts identity invalidation, cancels stale sync/replay, and persists local-only state until explicit sign-in.
+- [Playwright seeded state](playwright-seeded-state.md) — init scripts rerun on reload; preserve existing storage when a browser test verifies reload persistence.
+- [Calendar form handlers](calendar-form-handlers.md) — optional arguments on form reset helpers must be passed through zero-argument React click wrappers.
+- [Calendar visual test selectors](calendar-visual-test-selectors.md) — reserve the `calendar-day-*` test-id prefix for actual date cells, not list containers.
+- [Feedback operations](feedback-operations.md) — feedback is permanent in Postgres; owner access is server-gated and notification failures never roll back saved rows.

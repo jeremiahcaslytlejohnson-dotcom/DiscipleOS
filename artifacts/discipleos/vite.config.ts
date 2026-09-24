@@ -5,33 +5,23 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
+// PORT is only consumed by the dev-server and preview-server blocks below.
+// `vite build` never reads those blocks, so PORT is not required during a
+// production build. Default to 5173 (Vite's own default) so the config loads
+// cleanly in any environment that does not set PORT.
 const rawPort = process.env.PORT;
+const port = rawPort ? Number(rawPort) : 5173;
 
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
+// BASE_PATH sets the asset URL prefix. Default to "/" when not provided (the
+// correct value for a root-mounted production build).
+const basePath = process.env.BASE_PATH || '/';
+const apiServerUrl = process.env.API_SERVER_URL;
 
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    tailwindcss(),
+    tailwindcss({ optimize: false }),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
@@ -69,6 +59,16 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
+    ...(apiServerUrl
+      ? {
+          proxy: {
+            '/api': {
+              target: apiServerUrl,
+              changeOrigin: false,
+            },
+          },
+        }
+      : {}),
     fs: {
       strict: true,
     },

@@ -2,7 +2,7 @@
  * Verse counts per chapter for all 66 books of the Protestant Bible (KJV).
  * Index 0 = chapter 1. Used to estimate reading time at devotional pace.
  */
-export const VERSE_COUNTS: Record<string, number[]> = {
+const RAW_VERSE_COUNTS: Record<string, number[]> = {
   // ── Old Testament ──────────────────────────────────────────────────────────
   Genesis:          [31,25,24,26,32,22,24,22,29,32,32,20,18,24,21,16,27,33,38,18,34,24,20,67,34,35,46,22,35,43,55,32,20,31,29,43,36,30,23,43,57,38,34,34,28,34,31,22,33,26],
   Exodus:           [22,25,22,31,23,30,25,32,35,29,10,51,22,31,27,36,16,27,25,26,36,31,33,18,40,37,21,43,46,38,18,35,23,35,35,38,29,31,43,38],
@@ -74,14 +74,42 @@ export const VERSE_COUNTS: Record<string, number[]> = {
   Revelation:       [20,29,22,11,14,17,17,13,21,11,19,17,18,20,8,21,18,24,21,15,27,21],
 };
 
+const CANONICAL_PSALM_VERSE_COUNTS = [
+  6, 12, 8, 8, 12, 10, 17, 9, 20, 18, 7, 8, 6, 7, 5, 11, 15, 50, 14, 9,
+  13, 31, 6, 10, 22, 12, 14, 9, 11, 12, 24, 11, 22, 22, 28, 12, 40, 22,
+  13, 17, 13, 11, 5, 26, 17, 11, 9, 14, 20, 23, 19, 9, 6, 7, 23, 13, 11,
+  11, 17, 12, 8, 12, 11, 10, 13, 20, 7, 35, 36, 5, 24, 20, 28, 23, 10,
+  12, 20, 72, 13, 19, 16, 8, 18, 12, 13, 17, 7, 18, 52, 17, 16, 15, 5,
+  23, 11, 13, 12, 9, 9, 5, 8, 28, 22, 35, 45, 48, 43, 13, 31, 7, 10, 10,
+  9, 8, 18, 19, 2, 29, 176, 7, 8, 9, 4, 8, 5, 6, 5, 6, 8, 8, 3, 18, 3,
+  3, 21, 26, 9, 8, 24, 13, 10, 7, 12, 15, 21, 10, 20, 14, 9, 6,
+] as const;
+
+export const VERSE_COUNTS: Record<string, number[]> = {
+  ...RAW_VERSE_COUNTS,
+  Psalms: [...CANONICAL_PSALM_VERSE_COUNTS],
+};
+
 // Devotional reading pace: ~1 verse per 8 seconds (≈200 wpm, ~26 words/verse)
 const SECONDS_PER_VERSE = 8;
+const WORDS_PER_VERSE = 26;
 const BIBLE_AVG_VERSES_PER_CHAPTER = 26;
+const BIBLE_CHAPTER_COUNTS: Record<string, number> = {
+  "2 Kings": 25,
+  Psalms: 150,
+};
 
 /** Estimated reading minutes for one chapter (1-based chapter number) */
 export function estimateChapterMinutes(book: string, chapter: number): number {
   const verses = VERSE_COUNTS[book]?.[chapter - 1] ?? BIBLE_AVG_VERSES_PER_CHAPTER;
   return Math.max(1, Math.round((verses * SECONDS_PER_VERSE) / 60));
+}
+
+/** Estimate one chapter at a reader-specific words-per-minute pace. */
+export function estimateChapterMinutesAtWpm(book: string, chapter: number, wordsPerMinute = 200): number {
+  if (wordsPerMinute === 200) return estimateChapterMinutes(book, chapter);
+  const verses = VERSE_COUNTS[book]?.[chapter - 1] ?? BIBLE_AVG_VERSES_PER_CHAPTER;
+  return Math.max(1, Math.round((verses * WORDS_PER_VERSE) / Math.max(40, wordsPerMinute)));
 }
 
 /** Estimated reading minutes for a list of chapter readings */
@@ -94,7 +122,9 @@ export function estimateBooksMinutes(selectedBooks: string[]): number {
   return selectedBooks.reduce((sum, bookName) => {
     const counts = VERSE_COUNTS[bookName];
     if (!counts) return sum + BIBLE_AVG_VERSES_PER_CHAPTER * 3;
-    const totalVerses = counts.reduce((a, b) => a + b, 0);
+    const totalVerses = counts
+      .slice(0, BIBLE_CHAPTER_COUNTS[bookName] ?? counts.length)
+      .reduce((a, b) => a + b, 0);
     return sum + Math.round((totalVerses * SECONDS_PER_VERSE) / 60);
   }, 0);
 }

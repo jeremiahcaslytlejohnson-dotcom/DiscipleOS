@@ -21,13 +21,19 @@ import type {
 
 import type {
   DeleteById,
+  EventCompleteInput,
+  EventCompleteResponse,
   EventInput,
+  GetMountainRhythmScoreParams,
   HealthStatus,
   ListEvents200,
   ListReadingPlans200,
+  MountainRhythmResponse,
   PushSubscriptionInput,
   ReadingCompleteInput,
   ReadingPlanInput,
+  SettingsInput,
+  SettingsResponse,
   SuccessResponse,
   TrackEventInput,
   UpsertEvent200
@@ -136,6 +142,154 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getGetSettingsUrl = () => {
+
+
+
+
+  return `/api/settings`
+}
+
+/**
+ * @summary Get account reading defaults
+ */
+export const getSettings = async ( options?: RequestInit): Promise<SettingsResponse> => {
+
+  return customFetch<SettingsResponse>(getGetSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSettingsQueryKey = () => {
+    return [
+    `/api/settings`
+    ] as const;
+    }
+
+
+export const getGetSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSettings>>> = ({ signal }) => getSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSettings>>>
+export type GetSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get account reading defaults
+ */
+
+export function useGetSettings<TData = Awaited<ReturnType<typeof getSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSettingsUrl = () => {
+
+
+
+
+  return `/api/settings`
+}
+
+/**
+ * @summary Update account reading defaults
+ */
+export const updateSettings = async (settingsInput: SettingsInput, options?: RequestInit): Promise<SettingsResponse> => {
+
+  return customFetch<SettingsResponse>(getUpdateSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(settingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext> => {
+
+const mutationKey = ['updateSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSettings>>, {data: BodyType<SettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateSettings>>>
+    export type UpdateSettingsMutationBody = BodyType<SettingsInput>
+    export type UpdateSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update account reading defaults
+ */
+export const useUpdateSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettings>>, TError,{data: BodyType<SettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSettings>>,
+        TError,
+        {data: BodyType<SettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSettingsMutationOptions(options));
+    }
 
 export const getListEventsUrl = () => {
 
@@ -645,6 +799,161 @@ export const useMarkReadingComplete = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getMarkReadingCompleteMutationOptions(options));
     }
+
+export const getMarkEventCompleteUrl = () => {
+
+
+
+
+  return `/api/events/complete`
+}
+
+/**
+ * @summary Mark one event occurrence complete or incomplete
+ */
+export const markEventComplete = async (eventCompleteInput: EventCompleteInput, options?: RequestInit): Promise<EventCompleteResponse> => {
+
+  return customFetch<EventCompleteResponse>(getMarkEventCompleteUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(eventCompleteInput)
+  }
+);}
+
+
+
+
+
+export const getMarkEventCompleteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markEventComplete>>, TError,{data: BodyType<EventCompleteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markEventComplete>>, TError,{data: BodyType<EventCompleteInput>}, TContext> => {
+
+const mutationKey = ['markEventComplete'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markEventComplete>>, {data: BodyType<EventCompleteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  markEventComplete(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkEventCompleteMutationResult = NonNullable<Awaited<ReturnType<typeof markEventComplete>>>
+    export type MarkEventCompleteMutationBody = BodyType<EventCompleteInput>
+    export type MarkEventCompleteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark one event occurrence complete or incomplete
+ */
+export const useMarkEventComplete = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markEventComplete>>, TError,{data: BodyType<EventCompleteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markEventComplete>>,
+        TError,
+        {data: BodyType<EventCompleteInput>},
+        TContext
+      > => {
+      return useMutation(getMarkEventCompleteMutationOptions(options));
+    }
+
+export const getGetMountainRhythmScoreUrl = (params?: GetMountainRhythmScoreParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/rhythm/score?${stringifiedParams}` : `/api/rhythm/score`
+}
+
+/**
+ * @summary Get the current user's seven-day Mountain Rhythm score
+ */
+export const getMountainRhythmScore = async (params?: GetMountainRhythmScoreParams, options?: RequestInit): Promise<MountainRhythmResponse> => {
+
+  return customFetch<MountainRhythmResponse>(getGetMountainRhythmScoreUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMountainRhythmScoreQueryKey = (params?: GetMountainRhythmScoreParams,) => {
+    return [
+    `/api/rhythm/score`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMountainRhythmScoreQueryOptions = <TData = Awaited<ReturnType<typeof getMountainRhythmScore>>, TError = ErrorType<unknown>>(params?: GetMountainRhythmScoreParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMountainRhythmScore>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMountainRhythmScoreQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMountainRhythmScore>>> = ({ signal }) => getMountainRhythmScore(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMountainRhythmScore>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMountainRhythmScoreQueryResult = NonNullable<Awaited<ReturnType<typeof getMountainRhythmScore>>>
+export type GetMountainRhythmScoreQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the current user's seven-day Mountain Rhythm score
+ */
+
+export function useGetMountainRhythmScore<TData = Awaited<ReturnType<typeof getMountainRhythmScore>>, TError = ErrorType<unknown>>(
+ params?: GetMountainRhythmScoreParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMountainRhythmScore>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMountainRhythmScoreQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSubscribePushUrl = () => {
 

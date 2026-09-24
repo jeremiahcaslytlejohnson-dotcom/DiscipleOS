@@ -1,6 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "DiscipleOS"
+description = "DiscipleOS is a daily discipleship companion web app for Christians. It provides Bible reading plans, habit tracking, event scheduling, and push notifications to help users maintain a consistent daily walk with God."
 version = "1.0.0"
 id = "artifacts/discipleos"
 router = "path"

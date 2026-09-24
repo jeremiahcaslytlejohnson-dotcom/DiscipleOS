@@ -17,6 +17,68 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get account reading defaults
+ */
+export const getSettingsResponseSettingsCustomMinutesPerChapterMax = 60;
+
+export const getSettingsResponseSettingsDailyReadingBudgetMin = 5;
+export const getSettingsResponseSettingsDailyReadingBudgetMax = 240;
+
+export const getSettingsResponseSettingsPreferredReadingTimeRegExp = new RegExp('^\\d{2}:\\d{2}$');
+
+
+export const GetSettingsResponse = zod.object({
+  "success": zod.boolean(),
+  "settings": zod.object({
+  "paceMode": zod.enum(['relaxed', 'standard', 'fast', 'custom']),
+  "customMinutesPerChapter": zod.number().min(1).max(getSettingsResponseSettingsCustomMinutesPerChapterMax),
+  "dailyReadingBudget": zod.number().min(getSettingsResponseSettingsDailyReadingBudgetMin).max(getSettingsResponseSettingsDailyReadingBudgetMax),
+  "preferredReadingTime": zod.string().regex(getSettingsResponseSettingsPreferredReadingTimeRegExp),
+  "readingOrder": zod.enum(['consecutive', 'randomized'])
+})
+})
+
+
+/**
+ * @summary Update account reading defaults
+ */
+export const updateSettingsBodyCustomMinutesPerChapterMax = 60;
+
+export const updateSettingsBodyDailyReadingBudgetMin = 5;
+export const updateSettingsBodyDailyReadingBudgetMax = 240;
+
+export const updateSettingsBodyPreferredReadingTimeRegExp = new RegExp('^\\d{2}:\\d{2}$');
+
+
+export const UpdateSettingsBody = zod.object({
+  "paceMode": zod.enum(['relaxed', 'standard', 'fast', 'custom']),
+  "customMinutesPerChapter": zod.number().min(1).max(updateSettingsBodyCustomMinutesPerChapterMax),
+  "dailyReadingBudget": zod.number().min(updateSettingsBodyDailyReadingBudgetMin).max(updateSettingsBodyDailyReadingBudgetMax),
+  "preferredReadingTime": zod.string().regex(updateSettingsBodyPreferredReadingTimeRegExp),
+  "readingOrder": zod.enum(['consecutive', 'randomized'])
+})
+
+export const updateSettingsResponseSettingsCustomMinutesPerChapterMax = 60;
+
+export const updateSettingsResponseSettingsDailyReadingBudgetMin = 5;
+export const updateSettingsResponseSettingsDailyReadingBudgetMax = 240;
+
+export const updateSettingsResponseSettingsPreferredReadingTimeRegExp = new RegExp('^\\d{2}:\\d{2}$');
+
+
+export const UpdateSettingsResponse = zod.object({
+  "success": zod.boolean(),
+  "settings": zod.object({
+  "paceMode": zod.enum(['relaxed', 'standard', 'fast', 'custom']),
+  "customMinutesPerChapter": zod.number().min(1).max(updateSettingsResponseSettingsCustomMinutesPerChapterMax),
+  "dailyReadingBudget": zod.number().min(updateSettingsResponseSettingsDailyReadingBudgetMin).max(updateSettingsResponseSettingsDailyReadingBudgetMax),
+  "preferredReadingTime": zod.string().regex(updateSettingsResponseSettingsPreferredReadingTimeRegExp),
+  "readingOrder": zod.enum(['consecutive', 'randomized'])
+})
+})
+
+
+/**
  * @summary List all events
  */
 export const ListEventsResponse = zod.object({
@@ -33,7 +95,8 @@ export const ListEventsResponse = zod.object({
   "repeat": zod.string().optional(),
   "repeatWeekdays": zod.array(zod.number()).optional(),
   "repeatUntil": zod.string().optional(),
-  "timeZone": zod.string().optional()
+  "timeZone": zod.string().optional(),
+  "countsTowardRhythm": zod.boolean().optional()
 }))
 })
 
@@ -43,6 +106,7 @@ export const ListEventsResponse = zod.object({
  */
 export const UpsertEventBody = zod.object({
   "id": zod.string().nullish(),
+  "replacesEventId": zod.string().nullish(),
   "title": zod.string(),
   "type": zod.string(),
   "date": zod.string(),
@@ -53,7 +117,8 @@ export const UpsertEventBody = zod.object({
   "repeat": zod.string().optional(),
   "repeatWeekdays": zod.array(zod.number()).optional(),
   "repeatUntil": zod.string().nullish(),
-  "timeZone": zod.string().optional()
+  "timeZone": zod.string().optional(),
+  "countsTowardRhythm": zod.boolean().optional()
 })
 
 export const UpsertEventResponse = zod.object({
@@ -70,7 +135,8 @@ export const UpsertEventResponse = zod.object({
   "repeat": zod.string().optional(),
   "repeatWeekdays": zod.array(zod.number()).optional(),
   "repeatUntil": zod.string().optional(),
-  "timeZone": zod.string().optional()
+  "timeZone": zod.string().optional(),
+  "countsTowardRhythm": zod.boolean().optional()
 })
 })
 
@@ -100,7 +166,8 @@ export const ListReadingPlansResponse = zod.object({
  * @summary Create or update a reading plan
  */
 export const UpsertReadingPlanBody = zod.object({
-  "id": zod.string()
+  "id": zod.string(),
+  "templateKey": zod.string().optional()
 })
 
 export const UpsertReadingPlanResponse = zod.object({
@@ -131,6 +198,52 @@ export const MarkReadingCompleteBody = zod.object({
 
 export const MarkReadingCompleteResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * @summary Mark one event occurrence complete or incomplete
+ */
+export const markEventCompleteBodyOccurrenceDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const MarkEventCompleteBody = zod.object({
+  "eventId": zod.string(),
+  "occurrenceDate": zod.string().regex(markEventCompleteBodyOccurrenceDateRegExp),
+  "completed": zod.boolean()
+})
+
+export const MarkEventCompleteResponse = zod.object({
+  "success": zod.boolean(),
+  "eventId": zod.string(),
+  "occurrenceDate": zod.string(),
+  "completed": zod.boolean()
+})
+
+
+/**
+ * @summary Get the current user's seven-day Mountain Rhythm score
+ */
+export const GetMountainRhythmScoreQueryParams = zod.object({
+  "timeZone": zod.coerce.string().optional()
+})
+
+export const GetMountainRhythmScoreResponse = zod.object({
+  "success": zod.boolean(),
+  "accessTier": zod.enum(['basic', 'full']),
+  "level": zod.string(),
+  "percentage": zod.number(),
+  "completed": zod.number(),
+  "planned": zod.number(),
+  "windowStart": zod.string(),
+  "windowEnd": zod.string(),
+  "message": zod.string().optional(),
+  "copy": zod.string(),
+  "categories": zod.record(zod.string(), zod.object({
+  "completed": zod.number(),
+  "planned": zod.number()
+})),
+  "commitments": zod.array(zod.record(zod.string(), zod.unknown()))
 })
 
 

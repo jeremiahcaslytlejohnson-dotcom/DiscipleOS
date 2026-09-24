@@ -30,11 +30,14 @@ export interface Event {
   repeatWeekdays?: number[];
   repeatUntil?: string;
   timeZone?: string;
+  countsTowardRhythm?: boolean;
 }
 
 export interface EventInput {
   /** @nullable */
   id?: string | null;
+  /** @nullable */
+  replacesEventId?: string | null;
   title: string;
   type: string;
   date: string;
@@ -47,10 +50,12 @@ export interface EventInput {
   /** @nullable */
   repeatUntil?: string | null;
   timeZone?: string;
+  countsTowardRhythm?: boolean;
 }
 
 export interface ReadingPlanInput {
   id: string;
+  templateKey?: string;
   [key: string]: unknown;
  }
 
@@ -58,6 +63,50 @@ export interface ReadingCompleteInput {
   planId: string;
   key: string;
   completed: boolean;
+}
+
+export interface EventCompleteInput {
+  eventId: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  occurrenceDate: string;
+  completed: boolean;
+}
+
+export interface EventCompleteResponse {
+  success: boolean;
+  eventId: string;
+  occurrenceDate: string;
+  completed: boolean;
+}
+
+export type MountainRhythmResponseAccessTier = typeof MountainRhythmResponseAccessTier[keyof typeof MountainRhythmResponseAccessTier];
+
+
+export const MountainRhythmResponseAccessTier = {
+  basic: 'basic',
+  full: 'full',
+} as const;
+
+export type MountainRhythmResponseCategories = {[key: string]: {
+  completed: number;
+  planned: number;
+}};
+
+export type MountainRhythmResponseCommitmentsItem = { [key: string]: unknown };
+
+export interface MountainRhythmResponse {
+  success: boolean;
+  accessTier: MountainRhythmResponseAccessTier;
+  level: string;
+  percentage: number;
+  completed: number;
+  planned: number;
+  windowStart: string;
+  windowEnd: string;
+  message?: string;
+  copy: string;
+  categories: MountainRhythmResponseCategories;
+  commitments: MountainRhythmResponseCommitmentsItem[];
 }
 
 export type PushSubscriptionInputKeys = {
@@ -77,6 +126,46 @@ export interface TrackEventInput {
   [key: string]: unknown;
  }
 
+export type SettingsInputPaceMode = typeof SettingsInputPaceMode[keyof typeof SettingsInputPaceMode];
+
+
+export const SettingsInputPaceMode = {
+  relaxed: 'relaxed',
+  standard: 'standard',
+  fast: 'fast',
+  custom: 'custom',
+} as const;
+
+export type SettingsInputReadingOrder = typeof SettingsInputReadingOrder[keyof typeof SettingsInputReadingOrder];
+
+
+export const SettingsInputReadingOrder = {
+  consecutive: 'consecutive',
+  randomized: 'randomized',
+} as const;
+
+export interface SettingsInput {
+  paceMode: SettingsInputPaceMode;
+  /**
+     * @minimum 1
+     * @maximum 60
+     */
+  customMinutesPerChapter: number;
+  /**
+     * @minimum 5
+     * @maximum 240
+     */
+  dailyReadingBudget: number;
+  /** @pattern ^\d{2}:\d{2}$ */
+  preferredReadingTime: string;
+  readingOrder: SettingsInputReadingOrder;
+}
+
+export interface SettingsResponse {
+  success: boolean;
+  settings: SettingsInput;
+}
+
 export type ListEvents200 = {
   success: boolean;
   events: Event[];
@@ -90,5 +179,9 @@ export type UpsertEvent200 = {
 export type ListReadingPlans200 = {
   success: boolean;
   plans: unknown[];
+};
+
+export type GetMountainRhythmScoreParams = {
+timeZone?: string;
 };
 

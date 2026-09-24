@@ -1,0 +1,58 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "oaKkOXnjkT6cYLwAyD7GA"
+uri = "file://artifacts/discipleos/screenshots/planned-reading-card-320.png"
+type = "image"
+title = "Planned reading card — 320px"
+description = "Local-only seeded ordinary reading plan rendered in the Plans view at 320px."
+logical_id = "acec0677-9674-4bc5-9886-979c36cd6d30"
+content_hash = "sha256:67d9d86ddee49bc3b50ba5cb5f1da5854661296a2cba211e900ec112f503c424"
+size = 298675
+mtime_ms = 1788148982599
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:766dec0f-0a48-43be-8d86-75fb0579a172/acec0677-9674-4bc5-9886-979c36cd6d30/edeaf877-5937-4110-a276-0963a6d2138f"
+storage_version_token = "1788149014139603"
+content_type = "image/png"
+
+[[outputs]]
+id = "0NbDedWKjV5ZrGJYkquCW"
+uri = "file://artifacts/discipleos/screenshots/planned-reading-card-360.png"
+type = "image"
+title = "Planned reading card — 360px"
+description = "Local-only seeded ordinary reading plan rendered in the Plans view at 360px."
+logical_id = "66c6a577-053f-42c0-af5a-06904157893e"
+content_hash = "sha256:243f3626080a703d084da7001bc59380db32fc56c1a1d8a853d347c295b026bf"
+size = 319364
+mtime_ms = 1788148984744
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:766dec0f-0a48-43be-8d86-75fb0579a172/66c6a577-053f-42c0-af5a-06904157893e/5e01f4f9-f977-44fa-8c47-2863656aeeb4"
+storage_version_token = "1788149014683611"
+content_type = "image/png"
+
+[[outputs]]
+id = "Qhc3pLfscfROMrr8YR5RW"
+uri = "file://artifacts/discipleos/screenshots/planned-reading-card-390.png"
+type = "image"
+title = "Planned reading card — 390px"
+description = "Local-only seeded ordinary reading plan rendered in the Plans view at 390px."
+logical_id = "39bdf600-4a43-4160-bd14-81b035a0b3df"
+content_hash = "sha256:6ce309d5e34abc64f16e94b192181f261b482cecab28b9dc89a208aa757f99fe"
+size = 335357
+mtime_ms = 1788148986851
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:766dec0f-0a48-43be-8d86-75fb0579a172/39bdf600-4a43-4160-bd14-81b035a0b3df/eaf1b30d-bb39-499f-bf81-48cf24565e89"
+storage_version_token = "1788149015226453"
+content_type = "image/png"
+
+[[outputs]]
+id = "wPgC0pOm3l2WRHS26ndZm"
+uri = "file://artifacts/discipleos/screenshots/planned-reading-card-430.png"
+type = "image"
+title = "Planned reading card — 430px"
+description = "Local-only seeded ordinary reading plan rendered in the Plans view at 430px."
+logical_id = "bac93414-e83e-4507-ac75-fcaa8e6483d3"
+content_hash = "sha256:fe9ee9af2e9783dbccc5b99d71d39756029aea257d8a3452c7ab7be4992b0ed5"
+size = 357262
+mtime_ms = 1788148988987
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:766dec0f-0a48-43be-8d86-75fb0579a172/bac93414-e83e-4507-ac75-fcaa8e6483d3/5f8e95d8-fc02-402c-9f85-daa1d1bfcd98"
+storage_version_token = "1788149015763343"
+content_type = "image/png"

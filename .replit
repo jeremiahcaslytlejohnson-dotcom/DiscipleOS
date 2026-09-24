@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-20", "web", "bash", "python-base-3.13", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -7,6 +7,13 @@ deploymentTarget = "autoscale"
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
+
+[[deployment.scheduled]]
+name = "Send DiscipleOS reminders"
+schedule = "every 1 minute"
+timeout = 120
+build = "pnpm --filter @workspace/api-server run build"
+run = "bash scripts/run-reminder-scheduled-job.sh"
 
 [workflows]
 runButton = "Project"
@@ -18,3 +25,12 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+packages = ["glib", "nss", "nspr", "atk", "cups", "dbus", "expat", "fontconfig", "freetype", "gdk-pixbuf", "gtk3", "libdrm", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXfixes", "xorg.libXrandr", "libxkbcommon", "mesa", "pango", "cairo", "alsa-lib", "libgbm"]
+
+[userenv]
+
+[userenv.shared]
+RESEND_FROM = "login@discipleos.app"

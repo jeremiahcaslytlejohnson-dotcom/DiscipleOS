@@ -1,6 +1,10 @@
-const CACHE_NAME = "discipleos-static-v3";
+const CACHE_NAME = "discipleos-static-v7";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
+  "/splash.jpg",
+  "/favicon-16.png",
+  "/favicon-32.png",
+  "/favicon-64.png",
   "/icon-192.png",
   "/icon-512.png",
   "/apple-touch-icon.png",
@@ -36,6 +40,17 @@ self.addEventListener("fetch", (event) => {
 
   // Never intercept API requests
   if (url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // Never cache Vite dev-server internals — they're dynamic and change
+  // between sessions; caching them causes the app to load stale JS bundles.
+  if (
+    url.pathname.startsWith("/@vite/") ||
+    url.pathname.startsWith("/@fs/") ||
+    url.pathname.startsWith("/src/") ||
+    url.pathname.startsWith("/node_modules/")
+  ) {
     return;
   }
 
@@ -93,14 +108,25 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      tag: data.tag || "discipleos-reminder",
-      data: {
-        url: data.url || "/",
-      },
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      const visibleClient = clientList.find((client) => client.visibilityState === "visible");
+
+      // A visible tab owns foreground delivery, avoiding a second notification
+      // when its local reminder timer and the server push refer to the same event.
+      if (visibleClient) {
+        visibleClient.postMessage({ type: "discipleos-push-received", reminder: data });
+        return undefined;
+      }
+
+      return self.registration.showNotification(data.title, {
+        body: data.body,
+        tag: data.tag || "discipleos-reminder",
+        data: {
+          url: data.url || "/",
+        },
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+      });
     })
   );
 });
