@@ -466,7 +466,7 @@ describe("Mountain Rhythm journey calculation", () => {
         currentElevationPercent: 100,
         percentage: 100,
         journeyComplete: true,
-        level: "Summit Rhythm",
+        level: "Summit",
       });
       expect(result.trail.at(-1)).toMatchObject({
         status: "complete",
@@ -515,7 +515,7 @@ describe("Mountain Rhythm journey calculation", () => {
       expect(result).toMatchObject({
         journeyProgress: 100,
         currentElevationPercent: 100,
-        level: "Summit Rhythm",
+        level: "Summit",
         journeyComplete: true,
       });
     }

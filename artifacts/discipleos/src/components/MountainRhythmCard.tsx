@@ -118,7 +118,7 @@ export default function MountainRhythmCard({
             >
               {score.journeyComplete
                 ? `Current: ${currentLevel}`
-                : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit Rhythm"}`}
+                : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit"}`}
             </div>
           ) : null}
 
@@ -304,7 +304,7 @@ export default function MountainRhythmCard({
             <span>
               {score.journeyComplete
                 ? `Current: ${currentLevel}`
-                : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit Rhythm"}`}
+                : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit"}`}
             </span>
           </div>
           <p className="discipleos-secondary-copy mt-3 text-xs leading-5">{RHYTHM_COPY}</p>

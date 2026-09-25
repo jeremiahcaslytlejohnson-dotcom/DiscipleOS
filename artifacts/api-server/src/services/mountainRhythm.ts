@@ -18,7 +18,7 @@ export const RHYTHM_LEVELS = [
   { min: 25, max: 49, name: "On the Trail" },
   { min: 50, max: 69, name: "Gaining Elevation" },
   { min: 70, max: 84, name: "Ridgeline" },
-  { min: 85, max: 100, name: "Summit Rhythm" },
+  { min: 85, max: 100, name: "Summit" },
 ] as const;
 
 export type RhythmCategory =
