@@ -249,7 +249,7 @@ async function expectDistinctMountainMetrics(page: Page, journeyLabel: string) {
   );
   await expect(mountainPanel.getByTestId("mountain-rhythm-metric-elevation")).toHaveCount(0);
   await expect(mountainPanel.getByTestId("mountain-rhythm-metric-rhythm")).toContainText(
-    "Recent rhythm",
+    "Consistency",
   );
   await expect(mountainPanel.getByTestId("mountain-rhythm-metric-rhythm")).toContainText(
     "consistency",
@@ -778,6 +778,11 @@ test("preserves catch-up timing after refresh hydration", async ({ page }) => {
   await openMountainRhythm(page);
 
   const points = () => page.locator('[data-testid^="mountain-rhythm-day-point-"]');
+  const journeyMetric = page.getByTestId("mountain-rhythm-metric-journey");
+  const consistencyMetric = page.getByTestId("mountain-rhythm-metric-rhythm");
+  await expect(journeyMetric).toContainText("28.6%");
+  await expect(consistencyMetric).toContainText("20%");
+  await expect(points().nth(2)).toHaveAttribute("aria-label", /Day 3, missed/);
   const beforeRefresh = await points().evaluateAll((items) =>
     items.slice(0, 3).map((point) => Number(point.getAttribute("cy"))),
   );
@@ -791,6 +796,9 @@ test("preserves catch-up timing after refresh hydration", async ({ page }) => {
     items.slice(0, 3).map((point) => Number(point.getAttribute("cy"))),
   );
   expect(afterRefresh).toEqual(beforeRefresh);
+  await expect(journeyMetric).toContainText("28.6%");
+  await expect(consistencyMetric).toContainText("20%");
+  await expect(points().nth(2)).toHaveAttribute("aria-label", /Day 3, missed/);
 });
 
 test("flatlines after one missed day, regresses after two, and recovers on catch-up", async ({
@@ -831,7 +839,7 @@ test("flatlines after one missed day, regresses after two, and recovers on catch
   expect(after[3]).toBeLessThan(before[2]);
 });
 
-test("lets a missed day change Recent rhythm while preserving Journey progress", async ({
+test("keeps on-schedule consistency separate from current reading checkboxes", async ({
   page,
 }) => {
   const today = new Date().toISOString().slice(0, 10);
@@ -860,7 +868,7 @@ test("lets a missed day change Recent rhythm while preserving Journey progress",
   await missedDayReadings.nth(1).click();
 
   await expect(journeyMetric).toContainText("57.1%");
-  await expect(rhythmMetric).toContainText("60%");
+  await expect(rhythmMetric).toContainText("80%");
   await expect(page.getByTestId("mountain-rhythm-panel").getByTestId("mountain-rhythm-metric-elevation")).toHaveCount(0);
   await expect(page.getByTestId("route-day-2")).toContainText("Next step");
 });

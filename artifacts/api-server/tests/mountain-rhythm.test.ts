@@ -69,6 +69,22 @@ function journey(
   };
 }
 
+function withCompletionHistory(
+  plan: any,
+  completedIndexes: number[],
+  completedOnByIndex: Record<number, string> = {},
+) {
+  return {
+    ...plan,
+    dayCompletionDates: Object.fromEntries(
+      completedIndexes.map((index) => [
+        plan.assignments[index].date,
+        completedOnByIndex[index] || plan.assignments[index].date,
+      ]),
+    ),
+  };
+}
+
 function event(
   id: string,
   type: string,
@@ -116,6 +132,8 @@ function expectPairParity(pair: ReturnType<typeof calculatePair>) {
     journeyProgress: pair.server.journeyProgress,
     earnedProgress: pair.server.earnedProgress,
     currentElevationPercent: pair.server.currentElevationPercent,
+    rhythmProgress: pair.server.rhythmProgress,
+    recordedDays: pair.server.recordedDays,
   });
 }
 
@@ -331,6 +349,101 @@ describe("Mountain Rhythm journey calculation", () => {
       );
     },
   );
+
+  it("measures consistency from on-schedule completions over elapsed scheduled days", () => {
+    const start = "2026-08-21";
+    const plan = withCompletionHistory(
+      journey("five-day-consistency", 7, {
+        start,
+        completedDays: [0, 1, 2, 3],
+      }),
+      [0, 1, 2, 3],
+    );
+    const pair = calculatePair({
+      today: addDays(start, 4),
+      plans: [plan],
+      selectedPlanId: plan.id,
+    });
+
+    expectPairParity(pair);
+    for (const result of [pair.server, pair.local]) {
+      expect(result).toMatchObject({
+        completedDays: 4,
+        journeyProgress: 57.1,
+        rhythmProgress: 80,
+        recordedDays: 5,
+      });
+      expect(result.trail.slice(5).every((point) => point.status === "future")).toBe(true);
+    }
+  });
+
+  it("keeps explicit consistency history when current reading checkboxes are reopened", () => {
+    const start = "2026-08-21";
+    const plan = withCompletionHistory(
+      journey("reopened-consistency-history", 7, { start }),
+      [0, 1, 2, 3],
+    );
+    const pair = calculatePair({
+      today: addDays(start, 4),
+      plans: [plan],
+      selectedPlanId: plan.id,
+    });
+
+    expectPairParity(pair);
+    for (const result of [pair.server, pair.local]) {
+      expect(result).toMatchObject({
+        completedDays: 0,
+        journeyProgress: 0,
+        rhythmProgress: 80,
+        recordedDays: 5,
+      });
+      expect(result.trail[0]).toMatchObject({
+        status: "missed",
+        rhythmStatus: "complete",
+      });
+    }
+  });
+
+  it("keeps late catch-up missed in rhythm history while journey progress reaches 100%", () => {
+    const start = "2026-08-21";
+    const lateCatchupDate = addDays(start, 4);
+    const completedIndexes = Array.from({ length: 7 }, (_, index) => index);
+    const plan = withCompletionHistory(
+      journey("late-catchup-consistency", 7, {
+        start,
+        completedDays: completedIndexes,
+      }),
+      completedIndexes,
+      { 3: lateCatchupDate },
+    );
+    const pair = calculatePair({
+      today: addDays(start, 6),
+      plans: [plan],
+      selectedPlanId: plan.id,
+    });
+
+    expectPairParity(pair);
+    for (const result of [pair.server, pair.local]) {
+      expect(result).toMatchObject({
+        completedDays: 7,
+        journeyProgress: 100,
+        rhythmProgress: 86,
+        recordedDays: 7,
+        journeyComplete: true,
+      });
+      expect(result.trail[3]).toMatchObject({
+        status: "complete",
+        rhythmStatus: "missed",
+        completion: 100,
+        elevationPercent: 42.9,
+      });
+      expect(result.trail[4]).toMatchObject({
+        status: "complete",
+        rhythmStatus: "complete",
+        elevationPercent: 71.4,
+      });
+    }
+  });
 
   it.each(ROUTES)(
     "reaches 100%% on the final completed day of the %s",

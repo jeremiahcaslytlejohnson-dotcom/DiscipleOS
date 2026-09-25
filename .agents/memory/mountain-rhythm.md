@@ -5,7 +5,7 @@ description: Approved product semantics for the Mountain Rhythm elevation score 
 
 Mountain Rhythm follows one explicitly selected structured reading climb: the 7-Day Climb, 20-Day Reset, or 40-Day Climb. Ordinary reading plans, custom-duration plans, and legacy 30-day resets keep their progress but never control ascent. It is never a spiritual-worth score.
 
-Canonical journey progress is exactly completed assigned days divided by the selected climb's planned days, with one-decimal percentage precision for proportional routes. Earned plan days are permanent and monotonic once every reading for that planned day has been completed. Reopening readings must not remove the earned day. The visible current trail elevation and mountain marker follow the recent consistency signal: a first miss holds flat, consecutive misses regress, and later consistency recovers it; future and unscheduled days are neutral.
+Canonical journey progress is exactly completed assigned days divided by the selected climb's planned days, with one-decimal percentage precision for proportional routes. Earned plan days are permanent and monotonic once every reading for that planned day has been completed. Reopening readings must not remove the earned day. Consistency is the on-schedule completion count divided by elapsed scheduled days; future days are excluded, and late catch-up advances journey progress without crediting the missed scheduled day. Trail elevation reflects completion timing: a first miss holds flat, consecutive misses regress, and later catch-up rises on its actual completion date.
 
 If a plan has an explicit completion map and no reading is currently true, treat any stale earned-day metadata as reset state so a visibly untouched climb remains at Basecamp.
 
@@ -13,11 +13,11 @@ If a plan has an explicit completion map and no reading is currently true, treat
 
 **How to apply:** Keep valid earned history when the explicit completion map still contains true readings, but return an empty earned-day map when the explicit map exists and all values are false.
 
-**Why:** Ascent should communicate progress through a deliberate reading journey rather than blending unrelated spiritual activities. Separating earned history from recent rhythm prevents a miss from erasing prior faithfulness.
+**Why:** Ascent should communicate progress through a deliberate reading journey rather than blending unrelated spiritual activities. Separating journey progress from on-schedule consistency prevents catch-up from erasing a missed scheduled day.
 
 **How to apply:** Require the selected plan to identify one of the three supported climbs; never fall back to another plan. Count only that climb’s assigned readings, keep Day 1 at Basecamp, and treat partial reading as today's progress only until the full day is complete. Use canonical ascent for journey progress and earned milestones, and use the recent rhythm trail for current elevation and the mountain marker. Prayer, fasting, church, birthdays, calendar events, and custom events stay separate and never affect scores, categories, elevation, commitments, or trail output.
 
-Today should use “Climb Progress” for the compact active-plan summary; reserve “Mountain Rhythm” and “Recent rhythm” for the dedicated consistency/detail view.
+Today should use “Climb Progress” for the compact active-plan summary; reserve “Mountain Rhythm” and “Consistency” for the dedicated consistency/detail view.
 
 **Why:** Today answers immediate-status questions, while the dedicated view explains position in the selected climb and consistency over time. Repeating the full rhythm vocabulary on Today makes those scopes unclear.
 
@@ -52,6 +52,12 @@ Completion timing must be preserved separately from checkbox state: a day comple
 **Why:** Current checkbox state can make a catch-up look as though it happened in the past, retroactively backfilling missed trail points and misrepresenting the journey.
 
 **How to apply:** Store a validated scheduled-day → completion-date map whenever a day first becomes complete; use that map for trail elevation and retain legacy earned-day keys as backward-compatible history.
+
+Trail points expose current assignment state separately from on-schedule history. Route rows use current status; mountain markers use the historical rhythm status. Explicit completion-date history remains valid for consistency even when current reading checkboxes are all reopened.
+
+**Why:** A catch-up day should still look complete in the route while its original scheduled anchor remains visibly missed. Current checkbox state must not rewrite a verified completion date.
+
+**How to apply:** Keep `status` for current reading completion and `rhythmStatus` for the graph's timing history. Derive consistency and rhythm history from validated completion dates; retain the all-unchecked stale-metadata guard only for earned journey ascent and legacy inferred state.
 
 Refresh hydration must merge locally known earned-day keys and completion dates into the server plan. Local completion dates take precedence for matching days because they preserve same-device late-catch-up timing; the server’s completed-reading map remains authoritative for reading state.
 

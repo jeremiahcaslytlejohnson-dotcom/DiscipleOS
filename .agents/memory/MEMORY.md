@@ -3,7 +3,7 @@
 - [Session persistence](session-persistence.md) — Sessions backed by Postgres via connect-pg-simple; sessionEstablished flag drives hydration trust; defensive loadData() in Home.tsx.
 - [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
 - [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.
-- [Mountain Rhythm](mountain-rhythm.md) — ascent follows only a selected 7-, 20-, or 40-day climb; events stay separate and earned days remain permanent.
+- [Mountain Rhythm](mountain-rhythm.md) — Journey progress and on-schedule consistency are separate; late catch-up counts for progress but not its missed day.
 - [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
 - [Browser smoke tests](browser-smoke-tests.md) — Playwright needs Chromium plus Nix-declared GLib/graphics libraries in this workspace.
 - [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.

@@ -24,6 +24,7 @@ export type RhythmDayStatus =
 export type RhythmTrailPoint = {
   date: string;
   status: RhythmDayStatus;
+  rhythmStatus: RhythmDayStatus;
   planned: number;
   completed: number;
   completion: number;
@@ -165,6 +166,25 @@ function getEarnedDayCompletionDates(
     }
   }
 
+  return result;
+}
+
+function getConsistencyCompletionDates(
+  plan: any,
+  completedMap: Record<string, boolean>,
+) {
+  const completionDates = getDayCompletionDates(plan);
+  if (Object.keys(completionDates).length === 0) {
+    return getEarnedDayCompletionDates(plan, completedMap);
+  }
+
+  const result = new Map<string, string>(Object.entries(completionDates));
+  const earnedDayKeys = Array.isArray(plan?.earnedDayKeys)
+    ? plan.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
+    : [];
+  earnedDayKeys.forEach((day: string) => {
+    if (!result.has(day)) result.set(day, day);
+  });
   return result;
 }
 
@@ -469,6 +489,9 @@ export function calculateMountainRhythm({
   const earnedCompletionDates = selectedPlan
     ? getEarnedDayCompletionDates(selectedPlan, selectedCompletedMap)
     : new Map<string, string>();
+  const consistencyCompletionDates = selectedPlan
+    ? getConsistencyCompletionDates(selectedPlan, selectedCompletedMap)
+    : new Map<string, string>();
   const completedDaySet = selectedPlan
     ? getCompletedDaySetThroughDate(
         selectedPlan,
@@ -477,6 +500,16 @@ export function calculateMountainRhythm({
         today,
       )
     : new Set<string>();
+  const elapsedScheduledDates = (profile?.scheduledDates || []).filter(
+    (date) => date <= today,
+  );
+  const onScheduleCompletedDays = elapsedScheduledDates.filter(
+    (date) => consistencyCompletionDates.get(date) === date,
+  ).length;
+  const consistencyScore =
+    elapsedScheduledDates.length === 0
+      ? null
+      : Math.round((onScheduleCompletedDays / elapsedScheduledDates.length) * 100);
   const completed = Math.min(planned, completedDaySet.size);
   const journeyProgress =
     planned === 0 ? 0 : roundPercent((completed / planned) * 100);
@@ -505,19 +538,14 @@ export function calculateMountainRhythm({
       completion: plannedUnits === 0 ? 0 : completedUnits / plannedUnits,
     };
   };
-  const recentDays = window.dates
-    .map((date) => ({ date, ...getDayCompletion(date) }))
-    .filter((day) => day.date <= today && day.plannedUnits > 0);
 
   for (const date of profile?.scheduledDates || []) {
     const {
-      assignment,
-      assignmentCompletion,
       plannedUnits,
       completedUnits,
       completion,
     } = getDayCompletion(date);
-    const status: RhythmDayStatus =
+    const completionStatus: RhythmDayStatus =
       date > today
         ? "future"
         : plannedUnits === 0
@@ -527,6 +555,18 @@ export function calculateMountainRhythm({
             : completion > 0
               ? "partial"
               : "missed";
+    const completionDateForDay = consistencyCompletionDates.get(date);
+    // Keep assignment state separate from the on-schedule history used by the graph.
+    const rhythmStatus: RhythmDayStatus =
+      date > today
+        ? "future"
+        : completionDateForDay
+          ? completionDateForDay === date
+            ? "complete"
+            : "missed"
+          : completionStatus === "complete"
+            ? "missed"
+            : completionStatus;
 
     earnedDays = [...completedDaySet].filter((day) => {
       const completedOn = earnedCompletionDates.get(day);
@@ -535,17 +575,13 @@ export function calculateMountainRhythm({
     const completionOccurred = [...earnedCompletionDates.values()].some(
       (completedOn) => completedOn === date,
     );
-    const completionDateForDay = earnedCompletionDates.get(date);
-    const wasCompletedLate =
-      status === "complete" &&
-      Boolean(completionDateForDay && completionDateForDay > date);
-    const rhythmStatus = wasCompletedLate ? "missed" : status;
     const ascentPercent =
       planned === 0 ? 0 : roundPercent((earnedDays / planned) * 100);
     if (date > today) {
       trail.push({
         date,
-        status,
+        status: completionStatus,
+        rhythmStatus,
         planned: plannedUnits,
         completed: completedUnits,
         completion: Math.round(completion * 100),
@@ -588,7 +624,8 @@ export function calculateMountainRhythm({
     previousEarnedDays = earnedDays;
     trail.push({
       date,
-      status,
+      status: completionStatus,
+      rhythmStatus,
       planned: plannedUnits,
       completed: completedUnits,
       completion: Math.round(completion * 100),
@@ -598,19 +635,12 @@ export function calculateMountainRhythm({
     });
   }
 
-  const recentScore =
-    recentDays.length === 0
-      ? null
-      : Math.round(
-          (recentDays.reduce((sum, day) => sum + day.completion * 100, 0) /
-            recentDays.length),
-        );
   const rhythmProgress =
     planned === 0
       ? 0
-      : recentScore === null
+      : consistencyScore === null
         ? 0
-        : recentScore;
+        : consistencyScore;
   const currentTrailPoint = [...trail]
     .reverse()
     .find((point) => point.date <= today && point.status !== "future");
@@ -623,12 +653,12 @@ export function calculateMountainRhythm({
         currentElevationPercent <= entry.max,
     )?.name ||
     "Basecamp";
-  const recordedDays = recentDays.length;
+  const recordedDays = elapsedScheduledDates.length;
   const journeyComplete = Boolean(profile && completed >= profile.journeyDays);
   const currentTrend =
-    recentScore === null || recentScore >= 80
+    consistencyScore === null || consistencyScore >= 80
       ? "Steady"
-      : recentScore >= 45
+      : consistencyScore >= 45
         ? "Recovering"
         : "Needs a next step";
 

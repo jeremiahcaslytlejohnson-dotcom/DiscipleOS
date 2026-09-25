@@ -104,7 +104,7 @@ export default function MountainRhythmCard({
             </div>
             {showRhythmMetric ? (
               <div data-testid="mountain-rhythm-metric-rhythm" className="min-w-0 border-l border-white/10 px-3 py-1">
-                <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Recent rhythm</div>
+                <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Consistency</div>
                 <div className="mt-1 text-base font-semibold text-white">{score.rhythmProgress}%</div>
                 <div className="discipleos-meta-copy mt-1 text-xs">{score.currentTrend} consistency</div>
               </div>
@@ -198,27 +198,30 @@ export default function MountainRhythmCard({
                   strokeWidth="4"
                 />
               ) : null}
-              {geometry.points.map((point, index) => (
-                <circle
-                  key={point.date}
-                  data-testid={`mountain-rhythm-day-point-${index + 1}`}
-                  cx={point.x}
-                  cy={point.y}
-                  r={point.status === "future" ? 3 : point.status === "missed" ? 4 : 4.5}
-                  fill={
-                    point.status === "future"
-                      ? "rgba(255,255,255,0.2)"
-                      : point.status === "missed"
-                        ? "#94A3B8"
-                        : point.status === "partial"
-                          ? "#D4A017"
-                          : "#86EFAC"
-                  }
-                  stroke={point.date === geometry.current.date ? "#F4D77A" : "rgba(8,16,18,0.9)"}
-                  strokeWidth={point.date === geometry.current.date ? 2 : 1}
-                  aria-label={`Day ${index + 1}, ${point.status}, ${point.elevationPercent}% current elevation, ${point.earnedPercent}% earned ascent`}
-                />
-              ))}
+              {geometry.points.map((point, index) => {
+                const rhythmStatus = point.rhythmStatus || point.status;
+                return (
+                  <circle
+                    key={point.date}
+                    data-testid={`mountain-rhythm-day-point-${index + 1}`}
+                    cx={point.x}
+                    cy={point.y}
+                    r={rhythmStatus === "future" ? 3 : rhythmStatus === "missed" ? 4 : 4.5}
+                    fill={
+                      rhythmStatus === "future"
+                        ? "rgba(255,255,255,0.2)"
+                        : rhythmStatus === "missed"
+                          ? "#94A3B8"
+                          : rhythmStatus === "partial"
+                            ? "#D4A017"
+                            : "#86EFAC"
+                    }
+                    stroke={point.date === geometry.current.date ? "#F4D77A" : "rgba(8,16,18,0.9)"}
+                    strokeWidth={point.date === geometry.current.date ? 2 : 1}
+                    aria-label={`Day ${index + 1}, ${rhythmStatus}, readings ${point.status}, ${point.elevationPercent}% current elevation, ${point.earnedPercent}% earned ascent`}
+                  />
+                );
+              })}
               <g data-testid="mountain-rhythm-day-labels" aria-hidden="true">
                 {geometry.points.map((point, index) => {
                   const isShortJourney = geometry.points.length <= 10;
