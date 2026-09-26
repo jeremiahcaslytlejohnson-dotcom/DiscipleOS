@@ -519,6 +519,83 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
   expect(dayCompletionWrites).toBe(1);
 });
 
+test("undoes a completed Calendar day while preserving its earned history", async ({ page }) => {
+  const today = todayISO();
+  const plan = {
+    ...makeOrdinaryPlan("calendar-undo-plan", "Calendar Undo Plan"),
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "calendar-undo-1", label: "Psalm 1" },
+          { key: "calendar-undo-2", label: "Psalm 2" },
+        ],
+      },
+    ],
+    completed: { "calendar-undo-1": true, "calendar-undo-2": true },
+    earnedDayKeys: [today],
+    dayCompletionDates: { [today]: today },
+  };
+  const dayCompletionWrites: any[] = [];
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan], [], true);
+  page.on("request", (request) => {
+    if (request.url().includes("/api/reading/day-complete") && request.method() === "POST") {
+      dayCompletionWrites.push(request.postDataJSON());
+    }
+  });
+
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await (await openDashboardNavigation(page)).getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByTestId(`calendar-day-${today}`).click();
+
+  const activities = page.getByTestId("dashboard-calendar-activities");
+  await activities.getByRole("button", { name: "Undo day", exact: true }).click();
+  await expect(activities.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+  await expect.poll(() => dayCompletionWrites.length).toBe(1);
+  expect(dayCompletionWrites[0]).toMatchObject({
+    planId: plan.id,
+    date: today,
+    completed: false,
+  });
+
+  const storedPlanState = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    const storedPlan = data.plans?.find((item: any) => item.id === "calendar-undo-plan");
+    return {
+      completed: storedPlan?.completed,
+      earnedDayKeys: storedPlan?.earnedDayKeys,
+      dayCompletionDates: storedPlan?.dayCompletionDates,
+    };
+  });
+  expect(storedPlanState).toEqual({
+    completed: { "calendar-undo-1": false, "calendar-undo-2": false },
+    earnedDayKeys: [today],
+    dayCompletionDates: { [today]: today },
+  });
+
+  await page.reload();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await (await openDashboardNavigation(page)).getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByTestId(`calendar-day-${today}`).click();
+  await expect(
+    page.getByTestId("dashboard-calendar-activities").getByRole("button", { name: "Complete day", exact: true }),
+  ).toBeVisible();
+  const persistedHistory = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    const storedPlan = data.plans?.find((item: any) => item.id === "calendar-undo-plan");
+    return {
+      earnedDayKeys: storedPlan?.earnedDayKeys,
+      dayCompletionDates: storedPlan?.dayCompletionDates,
+    };
+  });
+  expect(persistedHistory).toEqual({
+    earnedDayKeys: [today],
+    dayCompletionDates: { [today]: today },
+  });
+});
+
 test("keeps Mountain Rhythm plans out of the Plans view", async ({ page }) => {
   const ordinaryPlan = makeOrdinaryPlan("plans-view-ordinary", "Morning Psalms");
   const mountainPlan = makeStructuredClimbPlan("plans-view-mountain", "7-Day Climb");
@@ -1371,6 +1448,33 @@ test("keeps the Calendar activity form open when changing the selected day", asy
     await expect(page.getByTestId("calendar-items-list")).toHaveCount(1);
     await expect(page.getByTestId(`calendar-day-${chosenDate}`)).toHaveAttribute("aria-label", /selected/);
   }
+});
+
+test("moves the Calendar month with adjacent-month date selections", async ({ page }) => {
+  const today = new Date(`${todayISO()}T12:00:00`);
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const toISODate = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const monthLabel = (date: Date) =>
+    date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  await stubHomeApi(page, []);
+  await seedPlans(page, []);
+  await page.goto("/");
+  await (await openDashboardNavigation(page)).getByRole("button", { name: "Calendar", exact: true }).click();
+
+  const month = page.getByTestId("dashboard-calendar-month");
+  const nextMonthDate = toISODate(nextMonthStart);
+  await page.getByTestId(`calendar-day-${nextMonthDate}`).click();
+  await expect(month.getByText(monthLabel(nextMonthStart), { exact: true })).toBeVisible();
+  await expect(page.getByTestId(`calendar-day-${nextMonthDate}`)).toHaveAttribute("aria-label", /selected/);
+
+  const previousMonthDate = toISODate(currentMonthEnd);
+  await page.getByTestId(`calendar-day-${previousMonthDate}`).click();
+  await expect(month.getByText(monthLabel(currentMonthStart), { exact: true })).toBeVisible();
+  await expect(page.getByTestId(`calendar-day-${previousMonthDate}`)).toHaveAttribute("aria-label", /selected/);
 });
 
 test("keeps mobile pages inside the viewport and wraps active route labels", async ({ page }) => {

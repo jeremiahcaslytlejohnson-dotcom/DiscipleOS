@@ -2650,15 +2650,14 @@ export default function DiscipleOSApp() {
     }
   };
 
-  const markDayPlanComplete = (planId, dateISO) => {
+  const markDayPlanComplete = (planId, dateISO, newValue = true) => {
     const currentPlan = plans.find((plan) => plan.id === planId);
     const currentAssignment = currentPlan?.assignments?.find((day) => day.date === dateISO);
     if (!currentPlan || !currentAssignment?.readings?.length) return;
     const currentCompleted = getCompletedMap(currentPlan);
     const allDone = currentAssignment.readings.every((reading) => !!currentCompleted[reading.key]);
-    if (allDone) return;
-    const newValue = true;
-    const completionDate = todayISO();
+    if (allDone === newValue) return;
+    const completionDate = newValue ? todayISO() : undefined;
     setPlans((prevPlans) =>
       prevPlans.map((plan) => {
         if (plan.id !== planId) return plan;
@@ -2675,16 +2674,17 @@ export default function DiscipleOSApp() {
         });
         const earnedDayKeys = getEarnedDayKeys(plan);
         const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
-        if (newValue) earnedDayKeys.add(dateISO);
-        if (newValue && !dayCompletionDates[dateISO]) {
-          dayCompletionDates[dateISO] = completionDate;
+        if (newValue) {
+          earnedDayKeys.add(dateISO);
+          if (!dayCompletionDates[dateISO]) {
+            dayCompletionDates[dateISO] = completionDate;
+          }
         }
 
         return {
           ...plan,
           completed: nextCompleted,
-          earnedDayKeys: [...earnedDayKeys],
-          dayCompletionDates,
+          ...(newValue ? { earnedDayKeys: [...earnedDayKeys], dayCompletionDates } : {}),
         };
       })
     );
@@ -3229,7 +3229,7 @@ export default function DiscipleOSApp() {
 
           {isPlanItem ? (
             <button
-              onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate)}
+              onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate, !allDone)}
               className="discipleos-control--compact shrink-0 border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:border-[#D4A017]/30 hover:bg-[#D4A017]/10 hover:text-[#F4D77A]"
             >
               {allDone ? "Undo day" : "Complete day"}
@@ -5372,7 +5372,7 @@ export default function DiscipleOSApp() {
                       return (
                         <button
                           key={iso}
-                          onClick={() => setSelectedCalendarDate(iso)}
+                          onClick={() => showEventDate(iso)}
                           aria-label={`${formatDate(iso)}${markerLabels.length ? `, ${markerLabels.join(", ")}` : hasEvents ? `, ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}${selected ? ", selected" : ""}`}
                           data-testid={`calendar-day-${iso}`}
                           className={cn(

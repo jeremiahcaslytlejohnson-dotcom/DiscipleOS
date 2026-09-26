@@ -57,7 +57,10 @@ function makePlan({
   };
 }
 
-async function stubApi(page: Page) {
+async function stubApi(
+  page: Page,
+  sessionInfo: Record<string, unknown> = { success: true, established: false },
+) {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
 
@@ -65,7 +68,7 @@ async function stubApi(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, established: false }),
+        body: JSON.stringify(sessionInfo),
       });
       return;
     }
@@ -314,8 +317,13 @@ test("keeps the 20-Day Reset locked", async ({ page }) => {
   await expect(page.getByTestId("dialog-confirm-20-day-reset")).toHaveCount(0);
 });
 
-test("automatically enters a new user on the free 7-Day Climb", async ({ page }) => {
-  await stubApi(page);
+test("automatically starts a 7-Day Climb for an anonymous session with a user ID", async ({ page }) => {
+  await stubApi(page, {
+    success: true,
+    userId: "anonymous-mountain-session",
+    authenticated: false,
+    established: false,
+  });
   await seedLocalData(page, [], null);
   const saveRequest = page.waitForRequest(
     (request) =>

@@ -224,7 +224,7 @@ export default function MountainRhythm() {
         const sessionResponse = await fetch("/api/session/info", { cache: "no-store" });
         const sessionData = sessionResponse.ok ? await sessionResponse.json() : null;
         if (!cancelled) {
-          setHasAuthenticatedSession(Boolean(sessionData?.authenticated || sessionData?.userId));
+          setHasAuthenticatedSession(sessionData?.authenticated === true);
         }
         if (!cancelled && typeof sessionData?.userId === "string") {
           setOwnerId(sessionData.userId);
