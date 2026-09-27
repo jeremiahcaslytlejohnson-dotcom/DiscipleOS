@@ -32,6 +32,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - If applicationServerKey is exposed, compare it before subscribe(); retire only a confirmed incompatible local subscription, pass its endpoint as scoped cleanup metadata, and preserve ownership checks.
 - Browser renewal must confirm the replacement with the server before retiring a compatible previous subscription; a failed registration must leave that working subscription usable.
 
+## Android foreground notifications
+- Use `ServiceWorkerRegistration.showNotification()` for foreground reminders; do not rely on `new Notification()` in a page.
+  **Why:** Android browsers and installed PWAs may reject the page constructor even when notification permission is granted.
+  **How to apply:** When the service worker forwards a push to a visible page, have the page request a service-worker notification and retain duplicate suppression.
+
 ## Endpoint ownership concurrency
 - Endpoint ownership decisions must be serialized and completed before deleting a caller's previous subscription.
   **Why:** A lookup followed by cleanup is not race-safe: two accounts can observe the same endpoint as unowned, and the losing request could otherwise delete its working subscription before discovering the ownership conflict.

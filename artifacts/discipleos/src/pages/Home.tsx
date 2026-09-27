@@ -1881,6 +1881,7 @@ export default function DiscipleOSApp() {
 
   useEffect(() => {
     if (notificationPermission !== "granted") return undefined;
+    if (!("serviceWorker" in navigator)) return undefined;
 
     const showForegroundReminder = (reminder: {
       title: string;
@@ -1889,11 +1890,21 @@ export default function DiscipleOSApp() {
     }) => {
       if (sentNotificationsRef.current.has(reminder.tag)) return;
 
-      new Notification(reminder.title, {
-        body: reminder.body,
-        tag: reminder.tag,
-      });
       sentNotificationsRef.current.add(reminder.tag);
+      void navigator.serviceWorker.ready
+        .then((registration) =>
+          registration.showNotification(reminder.title, {
+            body: reminder.body,
+            tag: reminder.tag,
+            icon: "/icon-192.png",
+            badge: "/icon-192.png",
+            data: { url: "/" },
+          }),
+        )
+        .catch((error) => {
+          sentNotificationsRef.current.delete(reminder.tag);
+          console.error("Foreground reminder notification failed:", error);
+        });
     };
 
     const receivePushInVisibleTab = (event: MessageEvent) => {
