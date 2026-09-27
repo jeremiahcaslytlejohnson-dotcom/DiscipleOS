@@ -24,6 +24,10 @@ function isIosDevice() {
   return isIPhone || isIPad || isIPod || isModernIPad;
 }
 
+function isAndroidDevice() {
+  return typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+}
+
 function isStandaloneMode() {
   if (typeof window === "undefined") return false;
 
@@ -121,6 +125,13 @@ export default function InstallButton({
 
     if (isIos) {
       alert('To install DiscipleOS on iPhone or iPad, tap Share, then "Add to Home Screen".');
+      return;
+    }
+
+    if (isAndroidDevice()) {
+      alert(
+        "In Chrome on Android, tap ⋮, then choose “Install app” or “Add to Home screen.” If DiscipleOS is already installed, open it from your Home Screen. No APK download is needed.",
+      );
       return;
     }
 
