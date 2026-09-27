@@ -134,22 +134,25 @@ export async function sendDueReminders(): Promise<ReminderDeliverySummary> {
     }
 
     summary.dueEvents++;
-    const alreadySent = await db
-      .select({ id: sentRemindersTable.id })
-      .from(sentRemindersTable)
-      .where(
-        and(
-          eq(sentRemindersTable.eventId, event.id),
-          gte(sentRemindersTable.sentAt, new Date(`${today}T00:00:00Z`)),
-          lte(sentRemindersTable.sentAt, new Date(`${today}T23:59:59Z`)),
-        ),
-      )
-      .limit(1);
-
-    if (alreadySent.length) continue;
-
-    let sentThisEvent = 0;
     for (const subscription of subsByUser.get(event.userId) ?? []) {
+      // A successful delivery to one device must not suppress retries to
+      // another device whose push service failed. Legacy "broadcast" rows are
+      // intentionally ignored because they cannot identify which device got it.
+      const alreadySentToSubscription = await db
+        .select({ id: sentRemindersTable.id })
+        .from(sentRemindersTable)
+        .where(
+          and(
+            eq(sentRemindersTable.eventId, event.id),
+            eq(sentRemindersTable.endpoint, subscription.endpoint),
+            gte(sentRemindersTable.sentAt, new Date(`${today}T00:00:00Z`)),
+            lte(sentRemindersTable.sentAt, new Date(`${today}T23:59:59Z`)),
+          ),
+        )
+        .limit(1);
+
+      if (alreadySentToSubscription.length) continue;
+
       try {
         await webpush.sendNotification(
           {
@@ -167,11 +170,14 @@ export async function sendDueReminders(): Promise<ReminderDeliverySummary> {
           }),
         );
         summary.sent++;
-        sentThisEvent++;
       } catch (err: any) {
         summary.failedDeliveries++;
         logger.warn(
-          { statusCode: err?.statusCode, errorName: err?.name },
+          {
+            subscriptionId: subscription.id,
+            statusCode: err?.statusCode,
+            errorName: err?.name,
+          },
           "Push delivery failed",
         );
         if (err?.statusCode === 404 || err?.statusCode === 410) {
@@ -185,14 +191,15 @@ export async function sendDueReminders(): Promise<ReminderDeliverySummary> {
             );
           summary.expiredSubscriptionsRemoved++;
         }
+        continue;
       }
-    }
 
-    // An unsuccessful run remains eligible for the next scheduled attempt.
-    if (sentThisEvent > 0) {
+      // Persist only after the push service accepts this endpoint. If the
+      // database write fails, let the run fail visibly rather than reporting a
+      // delivery failure for a push that was already accepted.
       await db.insert(sentRemindersTable).values({
         eventId: event.id,
-        endpoint: "broadcast",
+        endpoint: subscription.endpoint,
         sentAt: new Date(),
       });
     }

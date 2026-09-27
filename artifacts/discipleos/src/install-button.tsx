@@ -130,7 +130,7 @@ export default function InstallButton({
 
     if (isAndroidDevice()) {
       alert(
-        "In Chrome on Android, tap ⋮, then choose “Install app” or “Add to Home screen.” If DiscipleOS is already installed, open it from your Home Screen. No APK download is needed.",
+        "DiscipleOS updates from the website, so you do not need to reinstall it. After a new version is published, close and reopen the Home Screen app or refresh this page. To install it for the first time, tap Chrome’s ⋮ menu and choose “Install app” or “Add to Home screen.” No APK download is used.",
       );
       return;
     }

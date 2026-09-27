@@ -8,7 +8,7 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - `DELETE /api/push/:endpoint` — session-scoped no-op for wrong owner (not 403).
 - `POST /api/push/test` — CRON_SECRET protected broadcast test.
 - `POST /api/reminders/send` — CRON_SECRET protected; groups subs by userId; only sends to event owner.
-- `sent_reminders` table — duplicate suppression; row only inserted if sentThisEvent > 0 (NOT on failure).
+- `sent_reminders` records each successful event-to-subscription delivery; failed subscriptions remain eligible for retry.
 - 410/404 from push service → subscription deleted; other errors → subscription kept for retry.
 
 ## Production scheduling
@@ -16,6 +16,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **Why:** Replit publishes this project as one web deployment, so an external scheduler is the compatible way to trigger the reminder worker without taking the site offline.
 - `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
   **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
+
+## Per-device retry invariant
+- Deduplicate successful sends per event and subscription endpoint; never let one device's success suppress retries to another device.
+  **Why:** Event-wide broadcast markers can hide a failed phone delivery when a laptop succeeds.
+  **How to apply:** Keep successful rows endpoint-specific and leave failed endpoints unrecorded. Legacy `broadcast` rows do not identify which devices received a push, so they must not block endpoint retries.
 
 ## Required Secrets (ALL must be set manually in Replit Secrets before real delivery works)
 - `VAPID_PUBLIC_KEY` — from `npx web-push generate-vapid-keys`

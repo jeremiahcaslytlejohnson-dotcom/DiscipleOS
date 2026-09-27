@@ -10,9 +10,10 @@
  *  2. Missing VAPID configuration → 500
  *  3. Subscription creation and per-device renewal via POST /api/push
  *  4. Due-reminder delivery targeting (owner only)
- *  5. Duplicate reminder suppression via sent_reminders
+ *  5. Duplicate reminder suppression per subscription via sent_reminders
  *  6. Invalid subscription (410) → subscription deleted; other errors → kept
  *  7. sent_reminders only inserted when at least one send succeeds
+ *  8. A successful device does not suppress retries to a failed device
  */
 
 // ── web-push mock — must be declared before any import that loads web-push ───
@@ -564,7 +565,9 @@ describe("5 — Due-reminder delivery targeting", () => {
       .select()
       .from(sentRemindersTable)
       .where(eq(sentRemindersTable.eventId, eventId));
-    expect(sentRows).toHaveLength(1);
+    expect(new Set(sentRows.map((row) => row.endpoint))).toEqual(
+      new Set([ownerEndpoint, ownerSecondEndpoint]),
+    );
   });
 });
 
@@ -1038,5 +1041,103 @@ describe("8 — sent_reminders insert gating", () => {
       .from(sentRemindersTable)
       .where(eq(sentRemindersTable.eventId, eventId));
     expect(rows.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 9. One device's success must not suppress another device's retry
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("9 — Partial device delivery retries", () => {
+  it("retries a failed subscription when another subscription succeeded", async () => {
+    const ownerRes = await request(app).get("/api/session/info");
+    const ownerCookie = extractCookie(ownerRes);
+    const ownerUserId = ownerRes.body.userId;
+    const eventId = uid("partial-fanout");
+    const phoneEndpoint = `https://push-test.example/partial-phone/${uid()}`;
+    const laptopEndpoint = `https://push-test.example/partial-laptop/${uid()}`;
+
+    await db.insert(eventsTable).values({
+      id: eventId,
+      userId: ownerUserId,
+      title: "Partial Fanout Event",
+      type: "prayer",
+      date: todayUTC(),
+      time: nowHHMM(),
+      reminderMinutes: 0,
+      remind: true,
+      timeZone: "UTC",
+      repeat: "none",
+      repeatWeekdays: [],
+      notes: "",
+    });
+
+    await request(app)
+      .post("/api/push")
+      .set("Cookie", ownerCookie)
+      .send({
+        endpoint: phoneEndpoint,
+        keys: { p256dh: "phone-key", auth: "phone-auth" },
+        deviceId: uid("phone-device"),
+      });
+    await request(app)
+      .post("/api/push")
+      .set("Cookie", ownerCookie)
+      .send({
+        endpoint: laptopEndpoint,
+        keys: { p256dh: "laptop-key", auth: "laptop-auth" },
+        deviceId: uid("laptop-device"),
+      });
+
+    // A prior release wrote an ambiguous event-wide marker. It must not block
+    // this release from retrying current subscriptions individually.
+    await db.insert(sentRemindersTable).values({
+      eventId,
+      endpoint: "broadcast",
+      sentAt: new Date(),
+    });
+
+    vi.mocked(webpush.sendNotification).mockImplementation(async (subscription) => {
+      if ((subscription as any).endpoint === phoneEndpoint) {
+        throw new Error("Temporary phone push failure");
+      }
+      return {} as any;
+    });
+
+    const sendReminders = () =>
+      request(app).post("/api/reminders/send").set("x-cron-secret", CRON_SECRET);
+
+    const firstResponse = await sendReminders();
+    expect(firstResponse.status).toBe(200);
+    const firstAttempts = vi.mocked(webpush.sendNotification).mock.calls.map(
+      (call) => (call[0] as any).endpoint,
+    );
+    expect(new Set(firstAttempts)).toEqual(new Set([phoneEndpoint, laptopEndpoint]));
+
+    const firstSentRows = await db
+      .select()
+      .from(sentRemindersTable)
+      .where(eq(sentRemindersTable.eventId, eventId));
+    expect(new Set(firstSentRows.map((row) => row.endpoint))).toEqual(
+      new Set(["broadcast", laptopEndpoint]),
+    );
+
+    vi.mocked(webpush.sendNotification).mockClear();
+    vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
+
+    const retryResponse = await sendReminders();
+    expect(retryResponse.status).toBe(200);
+    const retryAttempts = vi.mocked(webpush.sendNotification).mock.calls.map(
+      (call) => (call[0] as any).endpoint,
+    );
+    expect(retryAttempts).toEqual([phoneEndpoint]);
+
+    const finalSentRows = await db
+      .select()
+      .from(sentRemindersTable)
+      .where(eq(sentRemindersTable.eventId, eventId));
+    expect(new Set(finalSentRows.map((row) => row.endpoint))).toEqual(
+      new Set(["broadcast", phoneEndpoint, laptopEndpoint]),
+    );
   });
 });
