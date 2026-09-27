@@ -11,6 +11,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - `sent_reminders` records each successful event-to-subscription delivery; failed subscriptions remain eligible for retry.
 - 410/404 from push service → subscription deleted; other errors → subscription kept for retry.
 
+## Product scope
+- Reliable scheduled reminders are the essential product scope; any native app work should be limited to what makes reminders dependable.
+  **Why:** The owner clarified that reminders are the core purpose, while store presence or a broad web-app port is secondary.
+  **How to apply:** Prioritize end-to-end Android/iOS closed-app notification delivery and only the controls needed for it; do not expand into unrelated native features unless requested.
+
 ## Production scheduling
 - An external cron calling the protected POST route supports closed-browser reminders; the browser does not need to remain open.
   **Why:** Replit publishes this project as one web deployment, so an external scheduler is the compatible way to trigger the reminder worker without taking the site offline.
