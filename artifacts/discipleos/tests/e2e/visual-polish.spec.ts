@@ -414,6 +414,7 @@ test("keeps audited secondary text readable across responsive DiscipleOS states"
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
+    await page.locator(".launch-splash").waitFor({ state: "detached" });
     await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
     await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
 
@@ -889,6 +890,10 @@ test("lets custom events be completed and reopened", async ({ page }) => {
 
 test("edits and deletes a recurring Calendar activity", async ({ page }) => {
   const today = todayISO();
+  const todayWeekday = new Date(`${today}T12:00:00`).getDay();
+  const expectedRepeatWeekdays = [0, 1, 2, 3, 4, 5, 6].filter(
+    (day) => (day > 0 && day < 6) || day === todayWeekday,
+  );
   const addDays = (amount: number) => {
     const date = new Date(`${today}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + amount);
@@ -928,8 +933,13 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
   await editForm.getByLabel("Title").fill(updatedTitle);
   await editForm.getByLabel("Repeats").selectOption("weekly");
   await editForm.getByLabel("Ends on").fill(updatedRepeatUntil);
-  await editForm.getByRole("button", { name: "S", exact: true }).first().click();
-  await editForm.getByRole("button", { name: "S", exact: true }).last().click();
+  const sundayAndSaturdayButtons = editForm.getByRole("button", { name: "S", exact: true });
+  if (!expectedRepeatWeekdays.includes(0)) {
+    await sundayAndSaturdayButtons.first().click();
+  }
+  if (!expectedRepeatWeekdays.includes(6)) {
+    await sundayAndSaturdayButtons.last().click();
+  }
 
   const updateRequest = page.waitForRequest(
     (request) =>
@@ -943,7 +953,7 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
     title: updatedTitle,
     repeat: "weekly",
     repeatUntil: updatedRepeatUntil,
-    repeatWeekdays: [1, 2, 3, 4, 5],
+    repeatWeekdays: expectedRepeatWeekdays,
     replacesEventId: event.id,
   });
   await expect(page.getByTestId("calendar-activity-feedback")).toContainText("Activity updated");
@@ -957,11 +967,11 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
   await expect(reopenedEditForm.getByLabel("Ends on")).toHaveValue(updatedRepeatUntil);
   await expect(reopenedEditForm.getByRole("button", { name: "S", exact: true }).first()).toHaveAttribute(
     "aria-pressed",
-    "false",
+    String(expectedRepeatWeekdays.includes(0)),
   );
   await expect(reopenedEditForm.getByRole("button", { name: "S", exact: true }).last()).toHaveAttribute(
     "aria-pressed",
-    "false",
+    String(expectedRepeatWeekdays.includes(6)),
   );
   await reopenedEditForm.getByRole("button", { name: "Cancel edit", exact: true }).click();
 
@@ -1125,19 +1135,33 @@ test("shows assigned Bible readings as an icon alongside Calendar activity marke
   const nextMonthStart = shiftDate(monthEnd.toISOString().slice(0, 10), 1);
   const onlyBibleDate = shiftDate(today, -1);
   const recurringBibleDate = shiftDate(today, 1);
-  const completedDate = shiftDate(today, 8);
-  const incompleteDate = shiftDate(today, 9);
-  const assignedBibleDates = new Set([
+  const reservedBibleDates = new Set([
     onlyBibleDate,
     today,
-    completedDate,
-    incompleteDate,
+    recurringBibleDate,
     previousMonthEnd,
     nextMonthStart,
   ]);
-  const noReadingDate = Array.from({ length: monthEnd.getUTCDate() }, (_, index) =>
+  const currentMonthDates = Array.from({ length: monthEnd.getUTCDate() }, (_, index) =>
     shiftDate(`${today.slice(0, 7)}-01`, index),
-  ).find((date) => !assignedBibleDates.has(date));
+  );
+  const availableMarkerDates = currentMonthDates.filter(
+    (date) => !reservedBibleDates.has(date),
+  );
+  const [completedDate, incompleteDate] = availableMarkerDates;
+
+  if (!completedDate || !incompleteDate) {
+    throw new Error("Could not find visible dates for the completion markers");
+  }
+
+  const assignedBibleDates = new Set([
+    ...reservedBibleDates,
+    completedDate,
+    incompleteDate,
+  ]);
+  const noReadingDate = currentMonthDates.find(
+    (date) => !assignedBibleDates.has(date),
+  );
 
   if (!noReadingDate) {
     throw new Error("Could not find an unassigned date in the displayed month");
@@ -2022,6 +2046,54 @@ test("shows the browser install action beside mobile navigation", async ({ page 
       ),
     )
     .toBe(true);
+});
+
+test("does not reuse a dismissed install prompt from the hidden responsive button", async ({ page }) => {
+  const plan = makeOrdinaryPlan();
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
+  const mobileInstallButton = page.getByRole("button", { name: "Install App", exact: true });
+  await expect(mobileInstallButton).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as Window & { __installPromptCalls?: number }).__installPromptCalls = 0;
+    const promptEvent = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(promptEvent, {
+      prompt: async () => {
+        const target = window as Window & { __installPromptCalls?: number };
+        target.__installPromptCalls = (target.__installPromptCalls || 0) + 1;
+      },
+      userChoice: Promise.resolve({ outcome: "dismissed", platform: "web" }),
+    });
+    window.dispatchEvent(promptEvent);
+  });
+
+  await mobileInstallButton.click();
+  await expect(mobileInstallButton).toHaveText("Install App");
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const desktopInstallButton = page.getByRole("button", { name: "Install App", exact: true });
+  await expect(desktopInstallButton).toBeVisible();
+
+  let fallbackDialogMessage = "";
+  page.once("dialog", async (dialog) => {
+    fallbackDialogMessage = dialog.message();
+    await dialog.dismiss();
+  });
+  await desktopInstallButton.click();
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { __installPromptCalls?: number }).__installPromptCalls,
+      ),
+    )
+    .toBe(1);
+  expect(fallbackDialogMessage).toContain("Install isn’t available yet");
 });
 
 test("keeps every desktop and tablet navigation control visible without overflow", async ({ page }) => {

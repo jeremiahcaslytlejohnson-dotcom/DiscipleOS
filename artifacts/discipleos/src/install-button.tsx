@@ -11,6 +11,16 @@ type BeforeInstallPromptEvent = Event & {
   }>;
 };
 
+let sharedDeferredPrompt: BeforeInstallPromptEvent | null = null;
+const deferredPromptSubscribers = new Set<
+  (prompt: BeforeInstallPromptEvent | null) => void
+>();
+
+function updateSharedDeferredPrompt(prompt: BeforeInstallPromptEvent | null) {
+  sharedDeferredPrompt = prompt;
+  deferredPromptSubscribers.forEach((subscriber) => subscriber(prompt));
+}
+
 function isIosDevice() {
   if (typeof navigator === "undefined") return false;
 
@@ -53,12 +63,18 @@ export default function InstallButton({
   const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
+    const syncDeferredPrompt = (prompt: BeforeInstallPromptEvent | null) => {
+      setDeferredPrompt(prompt);
+    };
+    deferredPromptSubscribers.add(syncDeferredPrompt);
+    syncDeferredPrompt(sharedDeferredPrompt);
+
     const syncInstalledState = () => {
       const installed = isStandaloneMode();
       setIsInstalled(installed);
 
       if (installed) {
-        setDeferredPrompt(null);
+        updateSharedDeferredPrompt(null);
         setIsInstalling(false);
       }
     };
@@ -68,12 +84,12 @@ export default function InstallButton({
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
+      updateSharedDeferredPrompt(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
-      setDeferredPrompt(null);
+      updateSharedDeferredPrompt(null);
       setIsInstalling(false);
     };
 
@@ -90,6 +106,7 @@ export default function InstallButton({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      deferredPromptSubscribers.delete(syncDeferredPrompt);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
       window.removeEventListener("focus", syncInstalledState);
@@ -107,17 +124,16 @@ export default function InstallButton({
   const handleInstall = async () => {
     if (isInstalled || isInstalling) return;
 
-    if (deferredPrompt) {
+    const prompt = sharedDeferredPrompt;
+    if (prompt) {
+      updateSharedDeferredPrompt(null);
       try {
         setIsInstalling(true);
-        await deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-
-        if (choice.outcome !== "accepted") {
-          setIsInstalling(false);
-        }
+        await prompt.prompt();
+        await prompt.userChoice;
       } catch (error) {
         console.error("Install prompt failed:", error);
+      } finally {
         setIsInstalling(false);
       }
       return;
