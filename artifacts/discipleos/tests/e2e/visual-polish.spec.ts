@@ -1991,6 +1991,39 @@ test("shows one contained empty Plans state without an abandoned detail column",
   }
 });
 
+test("shows the browser install action beside mobile navigation", async ({ page }) => {
+  const plan = makeOrdinaryPlan();
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
+  const installButton = page.getByRole("button", { name: "Install App", exact: true });
+  await expect(installButton).toBeVisible();
+  await expect(page.getByTestId("dashboard-navigation-toggle")).toBeVisible();
+
+  await page.evaluate(() => {
+    const promptEvent = new Event("beforeinstallprompt", { cancelable: true });
+    Object.assign(promptEvent, {
+      prompt: async () => {
+        (window as Window & { __installPromptCalled?: boolean }).__installPromptCalled = true;
+      },
+      userChoice: Promise.resolve({ outcome: "accepted", platform: "web" }),
+    });
+    window.dispatchEvent(promptEvent);
+  });
+
+  await installButton.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { __installPromptCalled?: boolean }).__installPromptCalled,
+      ),
+    )
+    .toBe(true);
+});
+
 test("keeps every desktop and tablet navigation control visible without overflow", async ({ page }) => {
   const plan = makeOrdinaryPlan();
   await stubHomeApi(page, plan);
