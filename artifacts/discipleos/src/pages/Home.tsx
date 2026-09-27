@@ -4134,20 +4134,25 @@ export default function DiscipleOSApp() {
             className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] z-40 flex items-end justify-center px-4 md:static md:mb-5 md:w-full md:items-start md:justify-center md:px-0"
         >
           <div className="pointer-events-auto relative">
-            <button
-              type="button"
-              data-testid="dashboard-navigation-toggle"
-              aria-expanded={isNavigationOpen}
-              aria-controls="dashboard-navigation-panel"
-              aria-label={isNavigationOpen ? "Close menu" : "Open menu"}
-              onClick={() => setIsNavigationOpen((open) => !open)}
-              className="group relative z-20 inline-flex min-h-11 w-[min(14rem,calc(100vw-2rem))] items-center justify-center gap-1.5 rounded-full border border-white/15 bg-[#11161D]/95 px-5 py-3 text-sm font-semibold text-white/85 shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur transition hover:border-[#D4A017]/45 hover:bg-[#1A2029] hover:text-white md:hidden"
-            >
-              {isNavigationOpen ? <X className="h-4 w-4 text-[#D4A017]" /> : <ChevronDown className="h-4 w-4 rotate-180 text-[#D4A017]" />}
-              <span>{isNavigationOpen ? "Close menu" : "Menu"}</span>
-            </button>
+            <div className="flex w-full max-w-md items-center gap-2 md:hidden">
+              <div className="min-w-0 flex-1">
+                <InstallButton />
+              </div>
+              <button
+                type="button"
+                data-testid="dashboard-navigation-toggle"
+                aria-expanded={isNavigationOpen}
+                aria-controls="dashboard-navigation-panel"
+                aria-label={isNavigationOpen ? "Close menu" : "Open menu"}
+                onClick={() => setIsNavigationOpen((open) => !open)}
+                className="group relative z-20 inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/15 bg-[#11161D]/95 px-4 py-3 text-sm font-semibold text-white/85 shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur transition hover:border-[#D4A017]/45 hover:bg-[#1A2029] hover:text-white"
+              >
+                {isNavigationOpen ? <X className="h-4 w-4 text-[#D4A017]" /> : <ChevronDown className="h-4 w-4 rotate-180 text-[#D4A017]" />}
+                <span>{isNavigationOpen ? "Close menu" : "Menu"}</span>
+              </button>
+            </div>
 
-          <div
+            <div
               data-testid="dashboard-navigation-row"
               role="navigation"
               aria-label="Dashboard navigation"
@@ -4270,7 +4275,6 @@ export default function DiscipleOSApp() {
                           Settings
                         </Link>
                       ) : null}
-                      <InstallButton compact />
                       <button
                         type="button"
                         onClick={() => void enableNotifications()}
