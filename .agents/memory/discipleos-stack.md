@@ -11,6 +11,12 @@ description: Key decisions and quirks from porting DiscipleOS from Vercel/Next.j
 
 **DB:** @workspace/db (Drizzle + node-postgres) with three tables: `events`, `reading_plans` (JSONB blob), `push_subscriptions`. Push is web-push (VAPID). The public key is supplied through `VITE_VAPID_PUBLIC_KEY`; private key/subject remain server-only env vars.
 
+**Production reads:** The app uses external Neon; Replit-managed production SQL targets a different database. A healthy Neon MCP connection can still be unscoped and expose no projects. Never assume it targets this app; verify the project and production branch before querying.
+
+**Why:** A valid connector can have no access to the app's database, making an otherwise successful read misleading.
+
+**How to apply:** Use only read-only queries after confirming the Neon project and branch. If authentication fails, reauthorize once and retry that operation once; if project access is still absent, stop and request the correct access rather than inspecting connection strings or secrets.
+
 **API routes:** All in artifacts/api-server/src/routes/. Key endpoints: /api/events (CRUD), /api/reading/plans (CRUD), /api/reading/complete (JSONB update), /api/push (subscribe), /api/verse (daily verse via bible-api.com, in-memory cached), /api/track (no-op logger).
 
 **Email delivery:** Passwordless verification emails use the connected Replit Resend connector through `@replit/connectors-sdk`; the app does not store a Resend API key. `RESEND_FROM` is the required verified sender setting, and the connection may be send-only.
