@@ -55,7 +55,8 @@ function isStandaloneMode() {
 
 export default function InstallButton({
   compact = false,
-}: { compact?: boolean }) {
+  testId = "install-app-button",
+}: { compact?: boolean; testId?: string }) {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -161,6 +162,7 @@ export default function InstallButton({
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={handleInstall}
       disabled={disabled}
       aria-disabled={disabled}

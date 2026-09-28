@@ -2015,7 +2015,7 @@ test("shows one contained empty Plans state without an abandoned detail column",
   }
 });
 
-test("shows the browser install action beside mobile navigation", async ({ page }) => {
+test("shows the browser install action inside the mobile navigation menu", async ({ page }) => {
   const plan = makeOrdinaryPlan();
   await stubHomeApi(page, plan);
   await seedPlans(page, [plan]);
@@ -2023,9 +2023,12 @@ test("shows the browser install action beside mobile navigation", async ({ page 
   await page.goto("/");
 
   await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
-  const installButton = page.getByRole("button", { name: "Install App", exact: true });
-  await expect(installButton).toBeVisible();
   await expect(page.getByTestId("dashboard-navigation-toggle")).toBeVisible();
+  await expect(page.getByTestId("install-app-menu-button")).toBeHidden();
+  await page.getByTestId("dashboard-navigation-toggle").click();
+  const installButton = page.getByTestId("install-app-menu-button");
+  await expect(installButton).toBeVisible();
+  await expect(page.getByTestId("dashboard-navigation-panel")).toContainElement(installButton);
 
   await page.evaluate(() => {
     const promptEvent = new Event("beforeinstallprompt", { cancelable: true });
@@ -2056,7 +2059,8 @@ test("does not reuse a dismissed install prompt from the hidden responsive butto
   await page.goto("/");
 
   await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
-  const mobileInstallButton = page.getByRole("button", { name: "Install App", exact: true });
+  await page.getByTestId("dashboard-navigation-toggle").click();
+  const mobileInstallButton = page.getByTestId("install-app-menu-button");
   await expect(mobileInstallButton).toBeVisible();
 
   await page.evaluate(() => {
@@ -2076,7 +2080,7 @@ test("does not reuse a dismissed install prompt from the hidden responsive butto
   await expect(mobileInstallButton).toHaveText("Install App");
 
   await page.setViewportSize({ width: 1024, height: 900 });
-  const desktopInstallButton = page.getByRole("button", { name: "Install App", exact: true });
+  const desktopInstallButton = page.getByTestId("install-app-desktop-button");
   await expect(desktopInstallButton).toBeVisible();
 
   let fallbackDialogMessage = "";
