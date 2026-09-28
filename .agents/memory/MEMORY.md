@@ -1,5 +1,5 @@
 - [DiscipleOS stack](discipleos-stack.md) — Next.js → Vite+React port; dark-only theme uses direct hex/opacity classes, not HSL CSS vars; all API routes use Neon→Drizzle+pg via @workspace/db.
-- [Push notifications](push-notifications.md) — VAPID Web Push; dedupe successes per endpoint so one device cannot suppress another device’s retry.
+- [Push notifications](push-notifications.md) — VAPID worker config, production cron rules, per-endpoint dedupe, and safe operational logging.
 - [Session persistence](session-persistence.md) — Sessions backed by Postgres via connect-pg-simple; sessionEstablished flag drives hydration trust; defensive loadData() in Home.tsx.
 - [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
 - [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.

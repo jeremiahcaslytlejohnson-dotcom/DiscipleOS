@@ -38,6 +38,8 @@ import {
 } from "@workspace/db";
 import { and, eq, like } from "drizzle-orm";
 import { createApp, createPgSessionStore } from "../src/app";
+import { logger } from "../src/lib/logger";
+import { sendDueReminders } from "../src/services/reminderDelivery";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -160,6 +162,7 @@ describe("2 — Missing VAPID configuration", () => {
     expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toMatch(/VAPID/i);
+    expect(res.body.error).not.toContain("Missing VAPID env vars");
   });
 
   it("2b: /api/push/test returns 500 when VAPID setup fails", async () => {
@@ -894,12 +897,46 @@ describe("7 — Invalid subscription handling", () => {
       .set("Cookie", ownerCookie)
       .send({ endpoint, keys: { p256dh: "k", auth: "a" } });
 
-    // Simulate a transient network error (no statusCode property → not 404/410)
-    vi.mocked(webpush.sendNotification).mockRejectedValueOnce(new Error("Connection reset"));
+    // A transient provider error is retryable and should be logged without
+    // including the endpoint or push keys.
+    const warnSpy = vi
+      .spyOn(logger, "warn")
+      .mockImplementation(() => undefined);
+    try {
+      vi.mocked(webpush.sendNotification).mockImplementation(
+        async (subscription) => {
+          if ((subscription as any).endpoint === endpoint) {
+            throw Object.assign(new Error("Connection reset"), {
+              statusCode: 503,
+            });
+          }
+          return { statusCode: 201 } as any;
+        },
+      );
 
-    await request(app)
-      .post("/api/reminders/send")
-      .set("x-cron-secret", CRON_SECRET);
+      await request(app)
+        .post("/api/reminders/send")
+        .set("x-cron-secret", CRON_SECRET);
+
+      const failureLog = warnSpy.mock.calls
+        .map(([fields]) => fields as Record<string, unknown>)
+        .find(
+          (fields) =>
+            fields.event === "reminder_delivery_outcome" &&
+            fields.eventId === eventId,
+        );
+      expect(failureLog).toMatchObject({
+        outcome: "failure",
+        providerStatusCode: 503,
+        subscriptionRemoved: false,
+      });
+      expect(JSON.stringify(failureLog)).not.toContain(endpoint);
+      expect(JSON.stringify(failureLog)).not.toContain("Connection reset");
+      expect(JSON.stringify(failureLog)).not.toContain('"p256dh"');
+      expect(JSON.stringify(failureLog)).not.toContain('"auth"');
+    } finally {
+      warnSpy.mockRestore();
+    }
 
     // Subscription must be retained for retry
     const rows = await db
@@ -1139,5 +1176,180 @@ describe("9 — Partial device delivery retries", () => {
     expect(new Set(finalSentRows.map((row) => row.endpoint))).toEqual(
       new Set(["broadcast", phoneEndpoint, laptopEndpoint]),
     );
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 10. Scheduled worker fan-out and overlapping-run suppression
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("10 — Scheduled reminder worker delivery", () => {
+  it("fans out to every owner's device and logs safe per-device outcomes", async () => {
+    const ownerRes = await request(app).get("/api/session/info");
+    const ownerCookie = extractCookie(ownerRes);
+    const ownerUserId = ownerRes.body.userId;
+    const otherRes = await request(app).get("/api/session/info");
+    const otherCookie = extractCookie(otherRes);
+    const eventId = uid("scheduled-fanout");
+    const ownerFirstEndpoint = `https://push-test.example/scheduled-first/${uid()}`;
+    const ownerSecondEndpoint = `https://push-test.example/scheduled-second/${uid()}`;
+    const otherEndpoint = `https://push-test.example/scheduled-other/${uid()}`;
+    const invocationId = uid("scheduled-invocation");
+
+    await db.insert(eventsTable).values({
+      id: eventId,
+      userId: ownerUserId,
+      title: "Scheduled Fanout Event",
+      type: "prayer",
+      date: todayUTC(),
+      time: nowHHMM(),
+      reminderMinutes: 0,
+      remind: true,
+      timeZone: "UTC",
+      repeat: "none",
+      repeatWeekdays: [],
+      notes: "",
+    });
+
+    for (const [cookie, endpoint, label] of [
+      [ownerCookie, ownerFirstEndpoint, "scheduled-owner-first"],
+      [ownerCookie, ownerSecondEndpoint, "scheduled-owner-second"],
+      [otherCookie, otherEndpoint, "scheduled-other"],
+    ]) {
+      await request(app)
+        .post("/api/push")
+        .set("Cookie", cookie)
+        .send({
+          deviceId: uid(label),
+          endpoint,
+          keys: { p256dh: `${label}-key`, auth: `${label}-auth` },
+        });
+    }
+
+    vi.mocked(webpush.sendNotification).mockResolvedValue({
+      statusCode: 201,
+    } as any);
+    const infoSpy = vi
+      .spyOn(logger, "info")
+      .mockImplementation(() => undefined);
+
+    try {
+      const summary = await sendDueReminders({
+        invocationId,
+        source: "scheduled",
+      });
+      const callsForEvent = vi.mocked(webpush.sendNotification).mock.calls.filter(
+        (call) =>
+          JSON.parse(call[1] as string).tag ===
+          `discipleos-${eventId}-${todayUTC()}`,
+      );
+      const targetedEndpoints = callsForEvent.map(
+        (call) => (call[0] as any).endpoint,
+      );
+      expect(new Set(targetedEndpoints)).toEqual(
+        new Set([ownerFirstEndpoint, ownerSecondEndpoint]),
+      );
+      expect(summary).toMatchObject({ invocationId, source: "scheduled" });
+
+      const logFields = infoSpy.mock.calls
+        .map(([fields]) => fields as Record<string, unknown>)
+        .filter((fields) => fields.eventId === eventId);
+      expect(logFields.find((fields) => fields.event === "reminder_event_selected"))
+        .toMatchObject({
+          invocationId,
+          source: "scheduled",
+          subscriptionsTargeted: 2,
+        });
+      const deviceOutcomes = logFields.filter(
+        (fields) =>
+          fields.event === "reminder_delivery_outcome" &&
+          fields.outcome === "success",
+      );
+      expect(deviceOutcomes).toHaveLength(2);
+      expect(new Set(deviceOutcomes.map((fields) => fields.subscriptionId)).size).toBe(2);
+      expect(deviceOutcomes.every((fields) => fields.providerStatusCode === 201)).toBe(
+        true,
+      );
+      expect(JSON.stringify(logFields)).not.toContain(ownerFirstEndpoint);
+      expect(JSON.stringify(logFields)).not.toContain(ownerSecondEndpoint);
+      expect(JSON.stringify(logFields)).not.toContain(otherEndpoint);
+      expect(JSON.stringify(logFields)).not.toContain("scheduled-owner-first-key");
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
+  it("does not send twice when two scheduled invocations overlap", async () => {
+    const ownerRes = await request(app).get("/api/session/info");
+    const ownerCookie = extractCookie(ownerRes);
+    const ownerUserId = ownerRes.body.userId;
+    const eventId = uid("scheduled-overlap");
+    const endpoints = [
+      `https://push-test.example/overlap-first/${uid()}`,
+      `https://push-test.example/overlap-second/${uid()}`,
+    ];
+
+    await db.insert(eventsTable).values({
+      id: eventId,
+      userId: ownerUserId,
+      title: "Overlapping Worker Event",
+      type: "prayer",
+      date: todayUTC(),
+      time: nowHHMM(),
+      reminderMinutes: 0,
+      remind: true,
+      timeZone: "UTC",
+      repeat: "none",
+      repeatWeekdays: [],
+      notes: "",
+    });
+
+    for (const [index, endpoint] of endpoints.entries()) {
+      await request(app)
+        .post("/api/push")
+        .set("Cookie", ownerCookie)
+        .send({
+          deviceId: uid(`overlap-device-${index}`),
+          endpoint,
+          keys: { p256dh: `overlap-key-${index}`, auth: `overlap-auth-${index}` },
+        });
+    }
+
+    vi.mocked(webpush.sendNotification).mockImplementation(async (subscription) => {
+      const endpoint = (subscription as any).endpoint as string;
+      if (endpoints.includes(endpoint)) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return { statusCode: 201 } as any;
+    });
+
+    await Promise.all([
+      sendDueReminders({
+        invocationId: uid("overlap-run-one"),
+        source: "scheduled",
+      }),
+      sendDueReminders({
+        invocationId: uid("overlap-run-two"),
+        source: "scheduled",
+      }),
+    ]);
+
+    const callsForEvent = vi.mocked(webpush.sendNotification).mock.calls.filter(
+      (call) =>
+        JSON.parse(call[1] as string).tag ===
+        `discipleos-${eventId}-${todayUTC()}`,
+    );
+    expect(callsForEvent.map((call) => (call[0] as any).endpoint).sort()).toEqual(
+      [...endpoints].sort(),
+    );
+
+    const sentRows = await db
+      .select()
+      .from(sentRemindersTable)
+      .where(eq(sentRemindersTable.eventId, eventId));
+    expect(new Set(sentRows.map((row) => row.endpoint))).toEqual(
+      new Set(endpoints),
+    );
+    expect(sentRows).toHaveLength(2);
   });
 });

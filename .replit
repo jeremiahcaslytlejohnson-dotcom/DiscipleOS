@@ -10,7 +10,7 @@ env = { "CI" = "true" }
 
 [[deployment.scheduled]]
 name = "Send DiscipleOS reminders"
-schedule = "every 1 minute"
+schedule = "* * * * *"
 timeout = 120
 build = "pnpm --filter @workspace/api-server run build"
 run = "bash scripts/run-reminder-scheduled-job.sh"
