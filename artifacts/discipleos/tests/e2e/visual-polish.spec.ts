@@ -2026,9 +2026,9 @@ test("shows the browser install action inside the mobile navigation menu", async
   await expect(page.getByTestId("dashboard-navigation-toggle")).toBeVisible();
   await expect(page.getByTestId("install-app-menu-button")).toBeHidden();
   await page.getByTestId("dashboard-navigation-toggle").click();
-  const installButton = page.getByTestId("install-app-menu-button");
+  const navigationPanel = page.getByTestId("dashboard-navigation-panel");
+  const installButton = navigationPanel.getByTestId("install-app-menu-button");
   await expect(installButton).toBeVisible();
-  await expect(page.getByTestId("dashboard-navigation-panel")).toContainElement(installButton);
 
   await page.evaluate(() => {
     const promptEvent = new Event("beforeinstallprompt", { cancelable: true });
