@@ -11,11 +11,11 @@ description: Key decisions and quirks from porting DiscipleOS from Vercel/Next.j
 
 **DB:** @workspace/db (Drizzle + node-postgres) with three tables: `events`, `reading_plans` (JSONB blob), `push_subscriptions`. Push is web-push (VAPID). The public key is supplied through `VITE_VAPID_PUBLIC_KEY`; private key/subject remain server-only env vars.
 
-**Production reads:** The app uses external Neon; Replit-managed production SQL targets a different database. A healthy Neon MCP connection can still be unscoped and expose no projects. Never assume it targets this app; verify the project and production branch before querying.
+**Production reads:** The app uses runtime-managed `DATABASE_URL`, and `replit.md` describes it as auto-provisioned. The actual host is not visible without reading a credential-bearing value, so treat Replit-managed Postgres as likely, not proven; a Neon MCP account may be unrelated.
 
-**Why:** A valid connector can have no access to the app's database, making an otherwise successful read misleading.
+**Why:** Replit supports both managed Postgres and legacy external Neon, while the code refers to either through `DATABASE_URL`.
 
-**How to apply:** Use only read-only queries after confirming the Neon project and branch. If authentication fails, reauthorize once and retry that operation once; if project access is still absent, stop and request the correct access rather than inspecting connection strings or secrets.
+**How to apply:** Confirm the production target with safe database metadata and environment-variable metadata; never read the connection string. If an external Neon target is confirmed, verify the exact project and branch before any row queries.
 
 **API routes:** All in artifacts/api-server/src/routes/. Key endpoints: /api/events (CRUD), /api/reading/plans (CRUD), /api/reading/complete (JSONB update), /api/push (subscribe), /api/verse (daily verse via bible-api.com, in-memory cached), /api/track (no-op logger).
 
