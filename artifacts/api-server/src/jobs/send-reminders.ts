@@ -55,14 +55,30 @@ async function runScheduledReminderJob(): Promise<void> {
       source: "scheduled",
     });
 
-    logger.info(
-      {
-        event: "reminder_worker_completed",
-        success: true,
-        ...summary,
-      },
-      "Scheduled reminder worker completed",
-    );
+    const deliveryErrorCount =
+      summary.failedDeliveries +
+      summary.processingErrors +
+      summary.deliveryRecordErrors;
+    const deliveryStatus =
+      deliveryErrorCount > 0
+        ? "completed_with_delivery_errors"
+        : "no_delivery_errors";
+    const completionFields = {
+      event: "reminder_worker_completed",
+      workerStatus: "completed",
+      deliveryStatus,
+      deliveryErrorCount,
+      ...summary,
+    };
+
+    if (deliveryErrorCount > 0) {
+      logger.warn(
+        completionFields,
+        "Scheduled reminder worker completed with delivery errors",
+      );
+    } else {
+      logger.info(completionFields, "Scheduled reminder worker completed");
+    }
   } catch (error) {
     logger.error(
       {

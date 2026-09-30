@@ -28,6 +28,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **Why:** Event-wide broadcast markers can hide a failed phone delivery when a laptop succeeds.
   **How to apply:** Keep successful rows endpoint-specific and leave failed endpoints unrecorded. Legacy `broadcast` rows do not identify which devices received a push, so they must not block endpoint retries.
 
+## Delivery evidence
+- A successful Web Push provider response proves provider acceptance, not that an operating system displayed the notification.
+  **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.
+  **How to apply:** Report provider acceptance per registration, distinguish it from device receipt, and treat a missing send record as “no success recorded” rather than proof that the provider never accepted it.
+
 ## Required Secrets (ALL must be set manually in Replit Secrets before real delivery works)
 - `VAPID_PUBLIC_KEY` — from `npx web-push generate-vapid-keys`
 - `VAPID_PRIVATE_KEY` — from same command, keep secret

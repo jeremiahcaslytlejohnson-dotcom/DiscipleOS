@@ -27,6 +27,7 @@ vi.mock("web-push", () => ({
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import webpush from "web-push";
@@ -47,6 +48,13 @@ const PREFIX = "push-test-";
 
 function uid(label = "") {
   return `${PREFIX}${label}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+}
+
+function diagnosticKey(scope: string, value: string) {
+  return `${scope}_${createHash("sha256")
+    .update(`${scope}:${value}`)
+    .digest("hex")
+    .slice(0, 16)}`;
 }
 
 /** Current UTC date as YYYY-MM-DD */
@@ -923,13 +931,15 @@ describe("7 — Invalid subscription handling", () => {
         .find(
           (fields) =>
             fields.event === "reminder_delivery_outcome" &&
-            fields.eventId === eventId,
+            fields.eventKey === diagnosticKey("event", eventId),
         );
       expect(failureLog).toMatchObject({
         outcome: "failure",
+        providerAccepted: false,
         providerStatusCode: 503,
         subscriptionRemoved: false,
       });
+      expect(failureLog?.deviceKey).toMatch(/^device_[a-f0-9]{16}$/);
       expect(JSON.stringify(failureLog)).not.toContain(endpoint);
       expect(JSON.stringify(failureLog)).not.toContain("Connection reset");
       expect(JSON.stringify(failureLog)).not.toContain('"p256dh"');
@@ -1191,6 +1201,7 @@ describe("10 — Scheduled reminder worker delivery", () => {
     const otherRes = await request(app).get("/api/session/info");
     const otherCookie = extractCookie(otherRes);
     const eventId = uid("scheduled-fanout");
+    const staleEventId = uid("scheduled-stale");
     const ownerFirstEndpoint = `https://push-test.example/scheduled-first/${uid()}`;
     const ownerSecondEndpoint = `https://push-test.example/scheduled-second/${uid()}`;
     const otherEndpoint = `https://push-test.example/scheduled-other/${uid()}`;
@@ -1226,6 +1237,21 @@ describe("10 — Scheduled reminder worker delivery", () => {
         });
     }
 
+    await db.insert(eventsTable).values({
+      id: staleEventId,
+      userId: ownerUserId,
+      title: "Stale Event Must Not Send",
+      type: "prayer",
+      date: "2000-01-01",
+      time: nowHHMM(),
+      reminderMinutes: 0,
+      remind: true,
+      timeZone: "UTC",
+      repeat: "none",
+      repeatWeekdays: [],
+      notes: "",
+    });
+
     vi.mocked(webpush.sendNotification).mockResolvedValue({
       statusCode: 201,
     } as any);
@@ -1253,8 +1279,17 @@ describe("10 — Scheduled reminder worker delivery", () => {
 
       const logFields = infoSpy.mock.calls
         .map(([fields]) => fields as Record<string, unknown>)
-        .filter((fields) => fields.eventId === eventId);
-      expect(logFields.find((fields) => fields.event === "reminder_event_selected"))
+        .filter(
+          (fields) =>
+            fields.eventKey === diagnosticKey("event", eventId) ||
+            fields.eventKey === diagnosticKey("event", staleEventId),
+        );
+      const selectedLog = logFields.find(
+        (fields) =>
+          fields.eventKey === diagnosticKey("event", eventId) &&
+          fields.event === "reminder_event_selected",
+      );
+      expect(selectedLog)
         .toMatchObject({
           invocationId,
           source: "scheduled",
@@ -1262,18 +1297,37 @@ describe("10 — Scheduled reminder worker delivery", () => {
         });
       const deviceOutcomes = logFields.filter(
         (fields) =>
+          fields.eventKey === diagnosticKey("event", eventId) &&
           fields.event === "reminder_delivery_outcome" &&
-          fields.outcome === "success",
+          fields.outcome === "provider_accepted",
       );
       expect(deviceOutcomes).toHaveLength(2);
-      expect(new Set(deviceOutcomes.map((fields) => fields.subscriptionId)).size).toBe(2);
+      expect(new Set(deviceOutcomes.map((fields) => fields.deviceKey)).size).toBe(2);
       expect(deviceOutcomes.every((fields) => fields.providerStatusCode === 201)).toBe(
         true,
       );
+      expect(deviceOutcomes.every((fields) => fields.providerAccepted === true)).toBe(
+        true,
+      );
+      expect(
+        logFields.filter(
+          (fields) =>
+            fields.eventKey === diagnosticKey("event", eventId) &&
+            fields.event === "reminder_delivery_attempt_started",
+        ),
+      ).toHaveLength(2);
+      expect(
+        logFields.find(
+          (fields) =>
+            fields.eventKey === diagnosticKey("event", staleEventId) &&
+            fields.event === "reminder_event_not_selected",
+        ),
+      ).toMatchObject({ reason: "not_scheduled_on_local_date" });
       expect(JSON.stringify(logFields)).not.toContain(ownerFirstEndpoint);
       expect(JSON.stringify(logFields)).not.toContain(ownerSecondEndpoint);
       expect(JSON.stringify(logFields)).not.toContain(otherEndpoint);
       expect(JSON.stringify(logFields)).not.toContain("scheduled-owner-first-key");
+      expect(JSON.stringify(logFields)).not.toContain("scheduled-owner-second-key");
     } finally {
       infoSpy.mockRestore();
     }

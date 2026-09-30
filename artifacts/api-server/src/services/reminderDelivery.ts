@@ -5,7 +5,7 @@ import {
   sentRemindersTable,
 } from "@workspace/db";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import webpush from "web-push";
 import { logger } from "../lib/logger";
 
@@ -13,7 +13,10 @@ export type ReminderDeliverySummary = {
   invocationId: string;
   source: "scheduled" | "api";
   eventsChecked: number;
+  candidateEventsEvaluated: number;
+  notSelectedCandidates: number;
   dueEvents: number;
+  dueEventsWithoutSubscriptions: number;
   subscriptionsTargeted: number;
   deliveryAttempts: number;
   alreadySentSkips: number;
@@ -148,6 +151,47 @@ function safeErrorFields(error: unknown) {
   };
 }
 
+function diagnosticKey(scope: string, value: string): string {
+  const digest = createHash("sha256")
+    .update(`${scope}:${value}`)
+    .digest("hex")
+    .slice(0, 16);
+  return `${scope}_${digest}`;
+}
+
+function eventDiagnosticKey(eventId: string): string {
+  return diagnosticKey("event", eventId);
+}
+
+function deviceDiagnosticKey(
+  subscription: (typeof pushSubscriptionsTable.$inferSelect),
+): string {
+  const identity = subscription.deviceId
+    ? `device:${subscription.deviceId}`
+    : `subscription:${subscription.id}`;
+  return diagnosticKey("device", `${subscription.userId}:${identity}`);
+}
+
+function minutesUntilReminderDue(
+  eventTime: string,
+  reminderMinutes: number,
+  nowHHMM: string,
+): number | null {
+  const dueTime = reminderDueTime(eventTime, reminderMinutes);
+  if (!dueTime) return null;
+
+  const [dueHours, dueMinutes] = dueTime.split(":").map(Number);
+  const [nowHours, nowMinutes] = nowHHMM.split(":").map(Number);
+  if (![dueHours, dueMinutes, nowHours, nowMinutes].every(Number.isFinite)) {
+    return null;
+  }
+
+  const dueTotal = dueHours * 60 + dueMinutes;
+  const nowTotal = nowHours * 60 + nowMinutes;
+  const forwardDistance = (dueTotal - nowTotal + 1440) % 1440;
+  return forwardDistance > 720 ? forwardDistance - 1440 : forwardDistance;
+}
+
 function isReminderDue(
   eventTime: string,
   reminderMinutes: number,
@@ -232,7 +276,10 @@ export async function sendDueReminders(
     invocationId,
     source,
     eventsChecked: allEvents.length,
+    candidateEventsEvaluated: 0,
+    notSelectedCandidates: 0,
     dueEvents: 0,
+    dueEventsWithoutSubscriptions: 0,
     subscriptionsTargeted: 0,
     deliveryAttempts: 0,
     alreadySentSkips: 0,
@@ -248,23 +295,65 @@ export async function sendDueReminders(
     const requestedTimeZone = event.timeZone || fallbackTZ;
     const { today, nowHHMM, timeZone } = getNowInTimeZone(requestedTimeZone);
     const reminderMinutes = Number(event.reminderMinutes ?? 10);
-    if (
-      !event.time ||
-      !eventOccursOnDate(event, today) ||
-      !isReminderDue(event.time, reminderMinutes, nowHHMM)
-    ) {
+    if (!event.time) {
       continue;
     }
 
+    const eventKey = eventDiagnosticKey(event.id);
+    const minutesUntilDue = minutesUntilReminderDue(
+      event.time,
+      reminderMinutes,
+      nowHHMM,
+    );
+    const nearDueWindow =
+      minutesUntilDue !== null &&
+      minutesUntilDue >= -7 &&
+      minutesUntilDue <= 1;
+    const occursToday = eventOccursOnDate(event, today);
+    const dueNow = isReminderDue(event.time, reminderMinutes, nowHHMM);
+
+    if (!occursToday || !dueNow) {
+      if (nearDueWindow) {
+        summary.candidateEventsEvaluated++;
+        summary.notSelectedCandidates++;
+        logger.info(
+          {
+            event: "reminder_event_not_selected",
+            invocationId,
+            source,
+            eventKey,
+            occurrenceDate: today,
+            eventTime: event.time,
+            dueTimeLocal: reminderDueTime(event.time, reminderMinutes),
+            timeZone,
+            currentTimeLocal: nowHHMM,
+            reason: !occursToday
+              ? "not_scheduled_on_local_date"
+              : minutesUntilDue !== null && minutesUntilDue > 0
+                ? "due_in_future"
+                : "retry_window_expired",
+          },
+          "Near-due reminder was not selected",
+        );
+      }
+      continue;
+    }
+
+    if (nearDueWindow) {
+      summary.candidateEventsEvaluated++;
+    }
     summary.dueEvents++;
     const targetSubscriptions = subsByUser.get(event.userId) ?? [];
     summary.subscriptionsTargeted += targetSubscriptions.length;
+    if (targetSubscriptions.length === 0) {
+      summary.dueEventsWithoutSubscriptions++;
+    }
     logger.info(
       {
         event: "reminder_event_selected",
         invocationId,
         source,
-        eventId: event.id,
+        eventKey,
         occurrenceDate: today,
         eventTime: event.time,
         dueTimeLocal: reminderDueTime(event.time, reminderMinutes),
@@ -276,6 +365,7 @@ export async function sendDueReminders(
 
     const dayBounds = localDayBounds(today, timeZone);
     for (const subscription of targetSubscriptions) {
+      const deviceKey = deviceDiagnosticKey(subscription);
       let deliveryAttempted = false;
       let providerStatusCode: number | undefined;
       let outcome:
@@ -324,6 +414,17 @@ export async function sendDueReminders(
 
           deliveryAttempted = true;
           summary.deliveryAttempts++;
+          logger.info(
+            {
+              event: "reminder_delivery_attempt_started",
+              invocationId,
+              source,
+              eventKey,
+              occurrenceDate: today,
+              deviceKey,
+            },
+            "Push delivery attempt started",
+          );
           let response;
           try {
             response = await webpush.sendNotification(
@@ -396,10 +497,11 @@ export async function sendDueReminders(
             event: "reminder_delivery_outcome",
             invocationId,
             source,
-            eventId: event.id,
+            eventKey,
             occurrenceDate: today,
-            subscriptionId: subscription.id,
+            deviceKey,
             outcome: "skipped_duplicate",
+            providerAccepted: null,
           },
           "Reminder delivery skipped",
         );
@@ -413,13 +515,14 @@ export async function sendDueReminders(
             event: "reminder_delivery_outcome",
             invocationId,
             source,
-            eventId: event.id,
+            eventKey,
             occurrenceDate: today,
-            subscriptionId: subscription.id,
-            outcome: "success",
+            deviceKey,
+            outcome: "provider_accepted",
+            providerAccepted: true,
             providerStatusCode: outcome.statusCode ?? null,
           },
-          "Reminder delivery accepted",
+          "Push provider accepted delivery request",
         );
         continue;
       }
@@ -434,10 +537,14 @@ export async function sendDueReminders(
             event: "reminder_delivery_outcome",
             invocationId,
             source,
-            eventId: event.id,
+            eventKey,
             occurrenceDate: today,
-            subscriptionId: subscription.id,
+            deviceKey,
             outcome: "failure",
+            providerAccepted:
+              outcome.statusCode === undefined
+                ? null
+                : outcome.statusCode >= 200 && outcome.statusCode < 300,
             providerStatusCode: outcome.statusCode ?? null,
             errorName: outcome.errorName,
             subscriptionRemoved: outcome.subscriptionRemoved,
@@ -457,13 +564,17 @@ export async function sendDueReminders(
           event: "reminder_delivery_outcome",
           invocationId,
           source,
-          eventId: event.id,
+          eventKey,
           occurrenceDate: today,
-          subscriptionId: subscription.id,
+          deviceKey,
           outcome:
             outcome.kind === "recording_error"
               ? "recording_error_after_attempt"
               : "processing_error_before_attempt",
+          providerAccepted:
+            providerStatusCode === undefined
+              ? null
+              : providerStatusCode >= 200 && providerStatusCode < 300,
           providerStatusCode: outcome.providerStatusCode ?? null,
           errorName: outcome.errorName,
         },
