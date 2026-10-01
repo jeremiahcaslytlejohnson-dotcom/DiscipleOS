@@ -20,6 +20,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - Use one Replit scheduled deployment for closed-browser reminders. Its cadence must be a five-field cron expression (for example, `* * * * *` for every minute); do not run a second scheduler at the same time.
   **Why:** Replit rejects natural-language intervals, so invalid schedule syntax can prevent the worker from starting. Duplicate triggers increase database and push load even when successful sends are suppressed.
   **How to apply:** Keep one active scheduled trigger. If moving to an external cron, disable the Replit scheduled deployment first. Check production secret presence through metadata only; never print secret values.
+- Treat a `.replit` scheduled block as configuration, not proof that a production Scheduled Deployment is active; the Autoscale API command does not launch the standalone reminder runner.
+  **Why:** The live web/API deployment and the scheduled worker have separate entry points, and Autoscale logs do not establish scheduled-run execution.
+  **How to apply:** Confirm a real production scheduled invocation before calling reminders active; do not create another trigger solely because Autoscale logs lack worker events.
 - `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
   **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
 
