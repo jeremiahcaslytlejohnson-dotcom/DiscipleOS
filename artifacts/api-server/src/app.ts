@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import session, { type Store } from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "@workspace/db";
+import healthRouter from "./routes/health";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { attachCurrentUser } from "./middlewares/auth";
@@ -58,6 +59,10 @@ export function createApp(sessionStore?: Store): Express {
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Deployment health probes must run before session/auth middleware, which
+  // depends on PostgreSQL and writes a session for anonymous requests.
+  app.use("/api", healthRouter);
 
   app.use(
     session({

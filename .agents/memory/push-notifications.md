@@ -47,6 +47,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.
   **How to apply:** Report provider acceptance per registration, distinguish it from device receipt, and treat a missing send record as “no success recorded” rather than proof that the provider never accepted it.
 
+## Deployment health and database pool errors
+- Keep `/api` and `/api/healthz` on the same database-readiness handler before session middleware, and handle idle pool errors without wrapping or suppressing query failures.
+  **Why:** Promotion probes may hit the artifact root instead of its configured health path; database-backed session writes caused root probes to fail, while an unhandled idle-client termination could crash the API.
+  **How to apply:** Probe PostgreSQL with a read-only query, return non-2xx when it fails, and log only safe error metadata for idle-client events.
+
 ## Required Secrets (ALL must be set manually in Replit Secrets before real delivery works)
 - `VAPID_PUBLIC_KEY` — from `npx web-push generate-vapid-keys`
 - `VAPID_PRIVATE_KEY` — from same command, keep secret
