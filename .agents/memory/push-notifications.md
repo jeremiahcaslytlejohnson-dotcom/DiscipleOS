@@ -23,9 +23,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - Treat a `.replit` scheduled block as configuration, not proof that a production Scheduled Deployment is active; the Autoscale API command does not launch the standalone reminder runner.
   **Why:** The live web/API deployment and the scheduled worker have separate entry points, and Autoscale logs do not establish scheduled-run execution.
   **How to apply:** Confirm a real production scheduled invocation before calling reminders active; do not create another trigger solely because Autoscale logs lack worker events.
-- The available deployment metadata and publishing tools cannot create a Scheduled Deployment or inspect its run history; Replit documents Scheduled Deployments as separate from Autoscale and managed through Publishing.
+- The available deployment tools and published Admin API cannot create or activate a Scheduled Deployment; the API exposes only read-only deployment endpoints, and run history is separate from Autoscale logs.
   **Why:** A code/config change or website publish alone does not prove the standalone worker is active.
-  **How to apply:** Keep the single scheduled entry prepared, then have the owner activate it through Publishing and verify a real worker completion log before calling reminders operational.
+  **How to apply:** Keep the single scheduled entry prepared; the owner must activate it in the signed-in Replit Publishing UI and verify a real worker completion in Monitoring before calling reminders operational.
 - `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
   **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
 - Reminder delivery keeps the existing one-minute scheduler cadence and accepts only the due minute plus one minute of lateness; calculate due dates across local midnight for early next-day events.
