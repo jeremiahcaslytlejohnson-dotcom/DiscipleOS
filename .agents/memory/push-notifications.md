@@ -23,6 +23,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - Treat a `.replit` scheduled block as configuration, not proof that a production Scheduled Deployment is active; the Autoscale API command does not launch the standalone reminder runner.
   **Why:** The live web/API deployment and the scheduled worker have separate entry points, and Autoscale logs do not establish scheduled-run execution.
   **How to apply:** Confirm a real production scheduled invocation before calling reminders active; do not create another trigger solely because Autoscale logs lack worker events.
+- The owner confirmed an external cron scheduler is configured for reminders; its provider and execution history are not visible in this workspace.
+  **Why:** External scheduler state is managed outside the repository and was directly confirmed by the owner.
+  **How to apply:** Treat its setup as owner-confirmed, but do not claim its provider, last successful invocation, or whether the Replit scheduled deployment is active without separate evidence.
 - The available deployment tools and published Admin API cannot create or activate a Scheduled Deployment; the API exposes only read-only deployment endpoints, and run history is separate from Autoscale logs.
   **Why:** A code/config change or website publish alone does not prove the standalone worker is active.
   **How to apply:** Keep the single scheduled entry prepared; the owner must activate it in the signed-in Replit Publishing UI and verify a real worker completion in Monitoring before calling reminders operational.
