@@ -46,8 +46,8 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **How to apply:** Fail closed if the target or registrations are missing, return privacy-safe per-device provider results, and do not treat provider acceptance as proof of display or scheduler operation.
 
 ## Delivery evidence
-- The user reports desktop reminders work; mobile reminders are intermittent, with five-minute lead times seeming more reliable than ten-minute ones.
-  **Why:** This is direct evidence about the user's device experience, but provider acceptance still does not prove phone display.
+- The user reports desktop reminders work, mobile delivery is intermittent, five-minute lead times seem more reliable than ten-minute ones, and two back-to-back reminders arrived with the phone app closed.
+  **Why:** This is direct device-level evidence, but two background successes do not establish consistent delivery.
   **How to apply:** Compare scheduler timing and phone receipt per occurrence; do not change reminder defaults from this observation alone.
 - The user opens DiscipleOS on their phone from the home-screen-installed app.
   **Why:** Installed web apps have app-level notification controls that differ from browser-tab settings.
