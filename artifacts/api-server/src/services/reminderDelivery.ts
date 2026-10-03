@@ -88,11 +88,21 @@ function getNowInTimeZone(timeZone: string): {
   }
 }
 
-function nextDateISO(dateISO: string): string {
+function shiftDateISO(dateISO: string, days: number): string {
   const [year, month, day] = dateISO.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + 1))
+  return new Date(Date.UTC(year, month - 1, day + days))
     .toISOString()
     .slice(0, 10);
+}
+
+function nextDateISO(dateISO: string): string {
+  return shiftDateISO(dateISO, 1);
+}
+
+function dayOrdinal(dateISO: string): number | null {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  if (![year, month, day].every(Number.isFinite)) return null;
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
 function startOfLocalDayUtc(dateISO: string, timeZone: string): Date {
@@ -136,6 +146,26 @@ function reminderDueTime(eventTime: string, reminderMinutes: number): string | n
   return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }
 
+export function reminderDueDateISO(
+  occurrenceDate: string,
+  eventTime: string,
+  reminderMinutes: number,
+): string | null {
+  const occurrenceDay = dayOrdinal(occurrenceDate);
+  const [hours, minutes] = eventTime.split(":").map(Number);
+  if (
+    occurrenceDay === null ||
+    ![hours, minutes, reminderMinutes].every(Number.isFinite)
+  ) {
+    return null;
+  }
+
+  const dueDay = Math.floor(
+    (occurrenceDay * 1440 + hours * 60 + minutes - reminderMinutes) / 1440,
+  );
+  return shiftDateISO("1970-01-01", dueDay);
+}
+
 function safeErrorFields(error: unknown) {
   const candidate = error as {
     name?: unknown;
@@ -172,48 +202,57 @@ function deviceDiagnosticKey(
   return diagnosticKey("device", `${subscription.userId}:${identity}`);
 }
 
-function minutesUntilReminderDue(
+function minutesSinceReminderDue(
   eventTime: string,
   reminderMinutes: number,
+  occurrenceDate: string,
+  today: string,
   nowHHMM: string,
 ): number | null {
-  const dueTime = reminderDueTime(eventTime, reminderMinutes);
-  if (!dueTime) return null;
-
-  const [dueHours, dueMinutes] = dueTime.split(":").map(Number);
+  const dueDate = reminderDueDateISO(
+    occurrenceDate,
+    eventTime,
+    reminderMinutes,
+  );
+  const dueDay = dueDate ? dayOrdinal(dueDate) : null;
+  const todayDay = dayOrdinal(today);
+  const [eventHours, eventMinutes] = eventTime.split(":").map(Number);
   const [nowHours, nowMinutes] = nowHHMM.split(":").map(Number);
-  if (![dueHours, dueMinutes, nowHours, nowMinutes].every(Number.isFinite)) {
+  if (
+    dueDay === null ||
+    todayDay === null ||
+    ![eventHours, eventMinutes, reminderMinutes, nowHours, nowMinutes].every(
+      Number.isFinite,
+    )
+  ) {
     return null;
   }
 
-  const dueTotal = dueHours * 60 + dueMinutes;
-  const nowTotal = nowHours * 60 + nowMinutes;
-  const forwardDistance = (dueTotal - nowTotal + 1440) % 1440;
-  return forwardDistance > 720 ? forwardDistance - 1440 : forwardDistance;
+  const dueMinuteOfDay =
+    ((eventHours * 60 + eventMinutes - reminderMinutes) % 1440 + 1440) %
+    1440;
+  const nowMinuteOfDay = nowHours * 60 + nowMinutes;
+  return (todayDay - dueDay) * 1440 + nowMinuteOfDay - dueMinuteOfDay;
 }
 
-function isReminderDue(
+export function isReminderDue(
   eventTime: string,
   reminderMinutes: number,
+  occurrenceDate: string,
+  today: string,
   nowHHMM: string,
 ): boolean {
-  const [eventHours, eventMinutes] = eventTime.split(":").map(Number);
-  const [nowHours, nowMinutes] = nowHHMM.split(":").map(Number);
-  if (![eventHours, eventMinutes, nowHours, nowMinutes].every(Number.isFinite)) {
-    return false;
-  }
+  const elapsedMinutes = minutesSinceReminderDue(
+    eventTime,
+    reminderMinutes,
+    occurrenceDate,
+    today,
+    nowHHMM,
+  );
 
-  const dueMinutes = eventHours * 60 + eventMinutes - reminderMinutes;
-  const normalizedDueMinutes = ((dueMinutes % 1440) + 1440) % 1440;
-  const currentMinutes = nowHours * 60 + nowMinutes;
-  const elapsedMinutes =
-    dueMinutes < 0
-      ? currentMinutes + 1440 - normalizedDueMinutes
-      : currentMinutes - normalizedDueMinutes;
-
-  // Scheduled runs can start late. Keep a retry window; sent_reminders
-  // prevents duplicate sends during overlapping executions.
-  return elapsedMinutes >= 0 && elapsedMinutes <= 6;
+  // Allow the due minute and one subsequent scheduler tick, but never send
+  // more than one minute late. sent_reminders suppresses overlapping runs.
+  return elapsedMinutes !== null && elapsedMinutes >= 0 && elapsedMinutes <= 1;
 }
 
 function eventOccursOnDate(event: typeof eventsTable.$inferSelect, dateISO: string): boolean {
@@ -300,17 +339,36 @@ export async function sendDueReminders(
     }
 
     const eventKey = eventDiagnosticKey(event.id);
-    const minutesUntilDue = minutesUntilReminderDue(
+    const dueOccurrenceDate =
+      [today, nextDateISO(today)].find(
+        (occurrenceDate) =>
+          eventOccursOnDate(event, occurrenceDate) &&
+          reminderDueDateISO(
+            occurrenceDate,
+            event.time!,
+            reminderMinutes,
+          ) === today,
+      ) ?? null;
+    const elapsedMinutesSinceDue = dueOccurrenceDate
+      ? minutesSinceReminderDue(
+          event.time,
+          reminderMinutes,
+          dueOccurrenceDate,
+          today,
+          nowHHMM,
+        )
+      : null;
+    const dueNow = isReminderDue(
       event.time,
       reminderMinutes,
+      dueOccurrenceDate ?? today,
+      today,
       nowHHMM,
-    );
+    ) && dueOccurrenceDate !== null;
     const nearDueWindow =
-      minutesUntilDue !== null &&
-      minutesUntilDue >= -7 &&
-      minutesUntilDue <= 1;
-    const occursToday = eventOccursOnDate(event, today);
-    const dueNow = isReminderDue(event.time, reminderMinutes, nowHHMM);
+      elapsedMinutesSinceDue !== null &&
+      elapsedMinutesSinceDue >= -1 &&
+      elapsedMinutesSinceDue <= 2;
 
     if (!occursToday || !dueNow) {
       if (nearDueWindow) {
