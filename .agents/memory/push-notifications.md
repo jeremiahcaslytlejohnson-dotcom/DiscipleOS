@@ -46,6 +46,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **How to apply:** Fail closed if the target or registrations are missing, return privacy-safe per-device provider results, and do not treat provider acceptance as proof of display or scheduler operation.
 
 ## Delivery evidence
+- The owner reports reminders work on desktop; this does not establish mobile delivery or external scheduler execution.
+  **Why:** The observation confirms only the desktop path.
+  **How to apply:** Treat desktop delivery as owner-confirmed and verify mobile or scheduler run history separately.
 - A successful Web Push provider response proves provider acceptance, not that an operating system displayed the notification.
   **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.
   **How to apply:** Report provider acceptance per registration, distinguish it from device receipt, and treat a missing send record as “no success recorded” rather than proof that the provider never accepted it.
