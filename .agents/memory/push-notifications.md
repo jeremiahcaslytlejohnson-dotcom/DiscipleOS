@@ -28,6 +28,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **How to apply:** Keep the single scheduled entry prepared, then have the owner activate it through Publishing and verify a real worker completion log before calling reminders operational.
 - `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
   **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
+- Reminder delivery keeps the existing one-minute scheduler cadence and accepts only the due minute plus one minute of lateness; calculate due dates across local midnight for early next-day events.
+  **Why:** The owner chose a one-minute maximum delay and asked that reminders crossing midnight not be lost.
+  **How to apply:** Keep the retry cutoff at one minute, and consider both today’s and tomorrow’s event occurrence when finding reminders due on today’s local date. Never test this by sending a live/manual notification.
 
 ## Per-device retry invariant
 - Deduplicate successful sends per event and subscription endpoint; never let one device's success suppress retries to another device.

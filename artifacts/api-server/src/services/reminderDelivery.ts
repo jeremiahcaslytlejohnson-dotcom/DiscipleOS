@@ -342,13 +342,15 @@ export async function sendDueReminders(
     const dueOccurrenceDate =
       [today, nextDateISO(today)].find(
         (occurrenceDate) =>
-          eventOccursOnDate(event, occurrenceDate) &&
           reminderDueDateISO(
             occurrenceDate,
             event.time!,
             reminderMinutes,
           ) === today,
       ) ?? null;
+    const occursOnDueOccurrence =
+      dueOccurrenceDate !== null &&
+      eventOccursOnDate(event, dueOccurrenceDate);
     const elapsedMinutesSinceDue = dueOccurrenceDate
       ? minutesSinceReminderDue(
           event.time,
@@ -364,13 +366,15 @@ export async function sendDueReminders(
       dueOccurrenceDate ?? today,
       today,
       nowHHMM,
-    ) && dueOccurrenceDate !== null;
+    ) &&
+      dueOccurrenceDate !== null &&
+      occursOnDueOccurrence;
     const nearDueWindow =
       elapsedMinutesSinceDue !== null &&
       elapsedMinutesSinceDue >= -1 &&
       elapsedMinutesSinceDue <= 2;
 
-    if (!occursToday || !dueNow) {
+    if (!dueNow) {
       if (nearDueWindow) {
         summary.candidateEventsEvaluated++;
         summary.notSelectedCandidates++;
@@ -380,14 +384,15 @@ export async function sendDueReminders(
             invocationId,
             source,
             eventKey,
-            occurrenceDate: today,
+            occurrenceDate: dueOccurrenceDate,
             eventTime: event.time,
             dueTimeLocal: reminderDueTime(event.time, reminderMinutes),
             timeZone,
             currentTimeLocal: nowHHMM,
-            reason: !occursToday
+            reason: !occursOnDueOccurrence
               ? "not_scheduled_on_local_date"
-              : minutesUntilDue !== null && minutesUntilDue > 0
+              : elapsedMinutesSinceDue !== null &&
+                  elapsedMinutesSinceDue < 0
                 ? "due_in_future"
                 : "retry_window_expired",
           },
@@ -412,7 +417,7 @@ export async function sendDueReminders(
         invocationId,
         source,
         eventKey,
-        occurrenceDate: today,
+        occurrenceDate: dueOccurrenceDate,
         eventTime: event.time,
         dueTimeLocal: reminderDueTime(event.time, reminderMinutes),
         timeZone,
@@ -421,6 +426,7 @@ export async function sendDueReminders(
       "Due reminder selected",
     );
 
+    const occurrenceDate = dueOccurrenceDate!;
     const dayBounds = localDayBounds(today, timeZone);
     for (const subscription of targetSubscriptions) {
       const deviceKey = deviceDiagnosticKey(subscription);
@@ -478,7 +484,7 @@ export async function sendDueReminders(
               invocationId,
               source,
               eventKey,
-              occurrenceDate: today,
+              occurrenceDate,
               deviceKey,
             },
             "Push delivery attempt started",
@@ -497,7 +503,7 @@ export async function sendDueReminders(
                 title: event.title || "DiscipleOS Reminder",
                 body: event.notes || `${event.type || "Event"} starts at ${event.time}`,
                 url: "/",
-                tag: `discipleos-${event.id}-${today}`,
+                tag: `discipleos-${event.id}-${occurrenceDate}`,
               }),
             );
             providerStatusCode = response.statusCode;
@@ -556,7 +562,7 @@ export async function sendDueReminders(
             invocationId,
             source,
             eventKey,
-            occurrenceDate: today,
+            occurrenceDate,
             deviceKey,
             outcome: "skipped_duplicate",
             providerAccepted: null,
@@ -574,7 +580,7 @@ export async function sendDueReminders(
             invocationId,
             source,
             eventKey,
-            occurrenceDate: today,
+            occurrenceDate,
             deviceKey,
             outcome: "provider_accepted",
             providerAccepted: true,
@@ -596,7 +602,7 @@ export async function sendDueReminders(
             invocationId,
             source,
             eventKey,
-            occurrenceDate: today,
+            occurrenceDate,
             deviceKey,
             outcome: "failure",
             providerAccepted:
@@ -623,7 +629,7 @@ export async function sendDueReminders(
           invocationId,
           source,
           eventKey,
-          occurrenceDate: today,
+          occurrenceDate,
           deviceKey,
           outcome:
             outcome.kind === "recording_error"
