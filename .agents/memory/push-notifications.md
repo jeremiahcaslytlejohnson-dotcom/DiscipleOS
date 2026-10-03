@@ -46,8 +46,8 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **How to apply:** Fail closed if the target or registrations are missing, return privacy-safe per-device provider results, and do not treat provider acceptance as proof of display or scheduler operation.
 
 ## Delivery evidence
-- The user reports desktop reminders work, mobile delivery is intermittent, five-minute lead times seem more reliable than ten-minute ones, and two back-to-back reminders arrived with the phone app closed.
-  **Why:** This is direct device-level evidence, but two background successes do not establish consistent delivery.
+- The owner reports intermittent mobile reminders: two arrived with the app closed, but an expected 7:40 p.m. EDT reminder on Oct. 3, 2026 was missed.
+  **Why:** Direct receipt reports show background delivery can succeed but is not reliable; the 7:40 run recorded no due event or send attempt.
   **How to apply:** Compare scheduler timing and phone receipt per occurrence; do not change reminder defaults from this observation alone.
 - The owner reports that tapping “Reminders enabled” appears to precede working delivery; both page-load restoration and the button POST to `/api/push`, so server logs cannot identify which path registered it.
   **Why:** A successful registration was logged shortly before a reminder run sent to two subscriptions, but neither the click source nor the phone endpoint is identifiable in those logs.
