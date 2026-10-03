@@ -109,12 +109,21 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      const visibleClient = clientList.find((client) => client.visibilityState === "visible");
+      const scopePath = new URL(self.registration.scope).pathname.replace(/\/+$/, "") || "/";
+      const visibleHomeClient = clientList.find((client) => {
+        if (client.visibilityState !== "visible") return false;
+        try {
+          const clientPath = new URL(client.url).pathname.replace(/\/+$/, "") || "/";
+          return clientPath === scopePath;
+        } catch {
+          return false;
+        }
+      });
 
       // A visible tab owns foreground delivery, avoiding a second notification
       // when its local reminder timer and the server push refer to the same event.
-      if (visibleClient) {
-        visibleClient.postMessage({ type: "discipleos-push-received", reminder: data });
+      if (visibleHomeClient) {
+        visibleHomeClient.postMessage({ type: "discipleos-push-received", reminder: data });
         return undefined;
       }
 
