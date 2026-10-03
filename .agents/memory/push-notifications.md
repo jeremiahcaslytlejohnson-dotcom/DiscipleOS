@@ -49,6 +49,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - The owner reports reminders work on desktop; this does not establish mobile delivery or external scheduler execution.
   **Why:** The observation confirms only the desktop path.
   **How to apply:** Treat desktop delivery as owner-confirmed and verify mobile or scheduler run history separately.
+- The user opens DiscipleOS on their phone from the home-screen-installed app.
+  **Why:** Installed web apps have app-level notification controls that differ from browser-tab settings.
+  **How to apply:** Diagnose notification permission through the phone's app settings; don't ask which access mode they use unless it changes.
 - A successful Web Push provider response proves provider acceptance, not that an operating system displayed the notification.
   **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.
   **How to apply:** Report provider acceptance per registration, distinguish it from device receipt, and treat a missing send record as “no success recorded” rather than proof that the provider never accepted it.
