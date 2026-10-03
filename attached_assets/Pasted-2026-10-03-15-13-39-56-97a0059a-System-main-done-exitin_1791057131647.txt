@@ -1,0 +1,392 @@
+2026-10-03 15:13:39.56
+97a0059a
+System
+main done, exiting
+2026-10-03 15:13:39.56
+97a0059a
+System
+all artifact processes stopped
+2026-10-03 15:16:08.24
+80bfb094
+System
+artifact manifest discovery completed manifest_location=artifacts/**/.replit-artifact/artifact.toml manifests=3 search_root=artifacts
+2026-10-03 15:16:08.24
+80bfb094
+System
+starting up user application
+2026-10-03 15:16:08.24
+80bfb094
+System
+artifact mode enabled runnable=1 static=1
+2026-10-03 15:16:08.24
+80bfb094
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-10-03 15:16:08.24
+80bfb094
+System
+forwarding local port 0 to external port 80 (mapped as 1104)
+2026-10-03 15:16:08.24
+80bfb094
+System
+starting artifact processes for monorepo deployment
+2026-10-03 15:16:08.24
+80bfb094
+System
+waiting for artifact servers to listen on their configured ports ports=[8080] timeout_seconds=60
+2026-10-03 15:16:08.24
+80bfb094
+System
+registered static handler for artifact path=/ publicDir=artifacts/discipleos/dist/public
+2026-10-03 15:16:08.25
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.25
+80bfb094
+System
+starting artifact processes count=1
+2026-10-03 15:16:08.25
+80bfb094
+System
+starting artifact server on its configured port artifact=artifacts/api-server port=8080
+2026-10-03 15:16:08.25
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.26
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.27
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.28
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.34
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:08.58
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:09.06
+80bfb094
+System
+healthcheck failed error=healthcheck /api returned status 500
+2026-10-03 15:16:09.12
+80bfb094
+System
+all artifact ports are open; application health checks may still be pending
+2026-10-03 15:16:09.13
+80bfb094
+User
+{"level":30,"time":1791054969130,"pid":19,"hostname":"localhost","port":8080,"msg":"Server listening"}
+2026-10-03 15:16:09.68
+80bfb094
+User
+(Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-03 15:16:09.68
+80bfb094
+User
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+2026-10-03 15:16:09.68
+80bfb094
+User
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+2026-10-03 15:16:09.68
+80bfb094
+User
+To prepare for this change:
+2026-10-03 15:16:09.68
+80bfb094
+User
+(node:19) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+2026-10-03 15:16:09.68
+80bfb094
+User
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+2026-10-03 15:16:09.68
+80bfb094
+User
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+2026-10-03 15:16:09.98
+80bfb094
+User
+{"level":30,"time":1791054969987,"pid":19,"hostname":"localhost","req":{"id":1,"method":"GET","url":"/api/healthz"},"res":{"statusCode":200},"responseTime":318,"msg":"request completed"}
+2026-10-03 15:16:24.27
+80bfb094
+User
+{"level":30,"time":1791054984278,"pid":19,"hostname":"localhost","req":{"id":3,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":307,"msg":"request completed"}
+2026-10-03 15:16:24.42
+80bfb094
+User
+{"level":30,"time":1791054984425,"pid":19,"hostname":"localhost","req":{"id":4,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":74,"msg":"request completed"}
+2026-10-03 15:16:24.45
+80bfb094
+User
+{"level":30,"time":1791054984457,"pid":19,"hostname":"localhost","req":{"id":2,"method":"GET","url":"/api/verse"},"res":{"statusCode":200},"responseTime":501,"msg":"request completed"}
+2026-10-03 15:16:24.68
+80bfb094
+User
+{"level":30,"time":1791054984687,"pid":19,"hostname":"localhost","req":{"id":5,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":195,"msg":"request completed"}
+2026-10-03 15:16:24.86
+80bfb094
+User
+{"level":30,"time":1791054984866,"pid":19,"hostname":"localhost","req":{"id":7,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":361,"msg":"request completed"}
+2026-10-03 15:16:24.87
+80bfb094
+User
+{"level":30,"time":1791054984870,"pid":19,"hostname":"localhost","req":{"id":6,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":376,"msg":"request completed"}
+2026-10-03 15:18:56.67
+80bfb094
+User
+{"level":30,"time":1791055136671,"pid":19,"hostname":"localhost","req":{"id":9,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":912,"msg":"request completed"}
+2026-10-03 15:18:56.90
+80bfb094
+User
+{"level":30,"time":1791055136904,"pid":19,"hostname":"localhost","req":{"id":8,"method":"POST","url":"/api/push"},"res":{"statusCode":200},"responseTime":1171,"msg":"request completed"}
+2026-10-03 15:18:56.93
+80bfb094
+User
+{"level":30,"time":1791055136935,"pid":19,"hostname":"localhost","req":{"id":10,"method":"GET","url":"/api/settings"},"res":{"statusCode":304},"responseTime":133,"msg":"request completed"}
+2026-10-03 15:18:57.10
+80bfb094
+User
+{"level":30,"time":1791055137100,"pid":19,"hostname":"localhost","req":{"id":11,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":297,"msg":"request completed"}
+2026-10-03 15:18:57.53
+80bfb094
+User
+{"level":30,"time":1791055137538,"pid":19,"hostname":"localhost","req":{"id":12,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":97,"msg":"request completed"}
+2026-10-03 15:18:57.76
+80bfb094
+User
+{"level":30,"time":1791055137767,"pid":19,"hostname":"localhost","req":{"id":14,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":96,"msg":"request completed"}
+2026-10-03 15:18:57.80
+80bfb094
+User
+{"level":30,"time":1791055137808,"pid":19,"hostname":"localhost","req":{"id":15,"method":"GET","url":"/api/settings"},"res":{"statusCode":200},"responseTime":131,"msg":"request completed"}
+2026-10-03 15:18:57.82
+80bfb094
+User
+{"level":30,"time":1791055137823,"pid":19,"hostname":"localhost","req":{"id":13,"method":"POST","url":"/api/push"},"res":{"statusCode":200},"responseTime":282,"msg":"request completed"}
+2026-10-03 15:18:58.29
+80bfb094
+User
+{"level":30,"time":1791055138296,"pid":19,"hostname":"localhost","req":{"id":16,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":396,"msg":"request completed"}
+2026-10-03 15:18:58.56
+80bfb094
+User
+{"level":30,"time":1791055138562,"pid":19,"hostname":"localhost","req":{"id":17,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":133,"msg":"request completed"}
+2026-10-03 15:18:58.67
+80bfb094
+User
+{"level":30,"time":1791055138670,"pid":19,"hostname":"localhost","req":{"id":18,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":235,"msg":"request completed"}
+2026-10-03 15:18:58.79
+80bfb094
+User
+{"level":30,"time":1791055138792,"pid":19,"hostname":"localhost","req":{"id":19,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":355,"msg":"request completed"}
+2026-10-03 15:19:16.84
+80bfb094
+User
+{"level":30,"time":1791055156841,"pid":19,"hostname":"localhost","req":{"id":20,"method":"POST","url":"/api/events"},"res":{"statusCode":200},"responseTime":595,"msg":"request completed"}
+2026-10-03 15:23:49.88
+80bfb094
+User
+{"level":30,"time":1791055429883,"pid":19,"hostname":"localhost","req":{"id":21,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":942,"msg":"request completed"}
+2026-10-03 15:23:50.09
+80bfb094
+User
+{"level":30,"time":1791055430099,"pid":19,"hostname":"localhost","req":{"id":22,"method":"POST","url":"/api/push"},"res":{"statusCode":200},"responseTime":1154,"msg":"request completed"}
+2026-10-03 15:23:50.10
+80bfb094
+User
+{"level":30,"time":1791055430102,"pid":19,"hostname":"localhost","req":{"id":23,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":97,"msg":"request completed"}
+2026-10-03 15:23:50.33
+80bfb094
+User
+{"level":30,"time":1791055430337,"pid":19,"hostname":"localhost","req":{"id":24,"method":"GET","url":"/api/settings"},"res":{"statusCode":200},"responseTime":331,"msg":"request completed"}
+2026-10-03 15:23:52.65
+80bfb094
+User
+{"level":30,"time":1791055432653,"pid":19,"hostname":"localhost","req":{"id":25,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":388,"msg":"request completed"}
+2026-10-03 15:23:52.84
+80bfb094
+User
+{"level":30,"time":1791055432849,"pid":19,"hostname":"localhost","req":{"id":26,"method":"POST","url":"/api/push"},"res":{"statusCode":200},"responseTime":287,"msg":"request completed"}
+2026-10-03 15:23:52.91
+80bfb094
+User
+{"level":30,"time":1791055432916,"pid":19,"hostname":"localhost","req":{"id":27,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":131,"msg":"request completed"}
+2026-10-03 15:23:53.01
+80bfb094
+User
+{"level":30,"time":1791055433017,"pid":19,"hostname":"localhost","req":{"id":28,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":230,"msg":"request completed"}
+2026-10-03 15:23:53.21
+80bfb094
+User
+{"level":30,"time":1791055433210,"pid":19,"hostname":"localhost","req":{"id":29,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":422,"msg":"request completed"}
+2026-10-03 15:23:57.52
+80bfb094
+User
+{"level":30,"time":1791055437529,"pid":19,"hostname":"localhost","req":{"id":30,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":95,"msg":"request completed"}
+2026-10-03 15:23:57.92
+80bfb094
+User
+{"level":30,"time":1791055437924,"pid":19,"hostname":"localhost","req":{"id":31,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":95,"msg":"request completed"}
+2026-10-03 15:23:58.49
+80bfb094
+User
+{"level":30,"time":1791055438490,"pid":19,"hostname":"localhost","req":{"id":32,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":367,"msg":"request completed"}
+2026-10-03 15:23:58.76
+80bfb094
+User
+{"level":30,"time":1791055438768,"pid":19,"hostname":"localhost","req":{"id":33,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":128,"msg":"request completed"}
+2026-10-03 15:23:58.86
+80bfb094
+User
+{"level":30,"time":1791055438860,"pid":19,"hostname":"localhost","req":{"id":34,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":219,"msg":"request completed"}
+2026-10-03 15:23:58.98
+80bfb094
+User
+{"level":30,"time":1791055438983,"pid":19,"hostname":"localhost","req":{"id":35,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":341,"msg":"request completed"}
+2026-10-03 15:24:10.03
+80bfb094
+User
+{"level":30,"time":1791055450031,"pid":19,"hostname":"localhost","req":{"id":36,"method":"POST","url":"/api/events"},"res":{"statusCode":200},"responseTime":559,"msg":"request completed"}
+2026-10-03 15:45:43.84
+80bfb094
+User
+{"level":30,"time":1791056743845,"pid":19,"hostname":"localhost","req":{"id":37,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":1065,"msg":"request completed"}
+2026-10-03 15:45:44.06
+80bfb094
+User
+{"level":30,"time":1791056744065,"pid":19,"hostname":"localhost","req":{"id":38,"method":"POST","url":"/api/push"},"res":{"statusCode":200},"responseTime":1122,"msg":"request completed"}
+2026-10-03 15:45:44.11
+80bfb094
+User
+{"level":30,"time":1791056744109,"pid":19,"hostname":"localhost","req":{"id":39,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":96,"msg":"request completed"}
+2026-10-03 15:45:44.35
+80bfb094
+User
+{"level":30,"time":1791056744358,"pid":19,"hostname":"localhost","req":{"id":40,"method":"GET","url":"/api/settings"},"res":{"statusCode":304},"responseTime":344,"msg":"request completed"}
+2026-10-03 15:45:44.68
+80bfb094
+User
+{"level":30,"time":1791056744681,"pid":19,"hostname":"localhost","req":{"id":41,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":393,"msg":"request completed"}
+2026-10-03 15:45:44.95
+80bfb094
+User
+{"level":30,"time":1791056744947,"pid":19,"hostname":"localhost","req":{"id":42,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":133,"msg":"request completed"}
+2026-10-03 15:45:45.09
+80bfb094
+User
+{"level":30,"time":1791056745096,"pid":19,"hostname":"localhost","req":{"id":44,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":230,"msg":"request completed"}
+2026-10-03 15:45:45.21
+80bfb094
+User
+{"level":30,"time":1791056745215,"pid":19,"hostname":"localhost","req":{"id":43,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":351,"msg":"request completed"}
+2026-10-03 15:49:16.13
+80bfb094
+User
+{"level":30,"time":1791056956138,"pid":19,"hostname":"localhost","req":{"id":45,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":1070,"msg":"request completed"}
+2026-10-03 15:49:16.14
+80bfb094
+User
+{"level":30,"time":1791056956143,"pid":19,"hostname":"localhost","req":{"id":46,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":924,"msg":"request completed"}
+2026-10-03 15:49:17.10
+80bfb094
+User
+{"level":30,"time":1791056957109,"pid":19,"hostname":"localhost","req":{"id":47,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":795,"msg":"request completed"}
+2026-10-03 15:49:17.37
+80bfb094
+User
+{"level":30,"time":1791056957374,"pid":19,"hostname":"localhost","req":{"id":48,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":129,"msg":"request completed"}
+2026-10-03 15:49:17.60
+80bfb094
+User
+{"level":30,"time":1791056957606,"pid":19,"hostname":"localhost","req":{"id":50,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":122,"msg":"request completed"}
+2026-10-03 15:49:17.63
+80bfb094
+User
+{"level":30,"time":1791056957629,"pid":19,"hostname":"localhost","req":{"id":49,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":325,"msg":"request completed"}
+2026-10-03 15:49:40.32
+80bfb094
+User
+{"level":30,"time":1791056980327,"pid":19,"hostname":"localhost","req":{"id":51,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":301,"msg":"request completed"}
+2026-10-03 15:49:40.56
+80bfb094
+User
+{"level":30,"time":1791056980568,"pid":19,"hostname":"localhost","req":{"id":52,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":99,"msg":"request completed"}
+2026-10-03 15:49:41.08
+80bfb094
+User
+{"level":30,"time":1791056981085,"pid":19,"hostname":"localhost","req":{"id":53,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":386,"msg":"request completed"}
+2026-10-03 15:49:41.35
+80bfb094
+User
+{"level":30,"time":1791056981352,"pid":19,"hostname":"localhost","req":{"id":54,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":133,"msg":"request completed"}
+2026-10-03 15:49:41.65
+80bfb094
+User
+{"level":30,"time":1791056981655,"pid":19,"hostname":"localhost","req":{"id":55,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":434,"msg":"request completed"}
+2026-10-03 15:49:41.76
+80bfb094
+User
+{"level":30,"time":1791056981760,"pid":19,"hostname":"localhost","req":{"id":56,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":538,"msg":"request completed"}
+2026-10-03 15:50:00.70
+80bfb094
+User
+{"level":30,"time":1791057000700,"pid":19,"hostname":"localhost","req":{"id":57,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":308,"msg":"request completed"}
+2026-10-03 15:50:00.88
+80bfb094
+User
+{"level":30,"time":1791057000883,"pid":19,"hostname":"localhost","req":{"id":58,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":102,"msg":"request completed"}
+2026-10-03 15:50:01.41
+80bfb094
+User
+{"level":30,"time":1791057001416,"pid":19,"hostname":"localhost","req":{"id":59,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":393,"msg":"request completed"}
+2026-10-03 15:50:01.68
+80bfb094
+User
+{"level":30,"time":1791057001683,"pid":19,"hostname":"localhost","req":{"id":60,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":138,"msg":"request completed"}
+2026-10-03 15:50:01.98
+80bfb094
+User
+{"level":30,"time":1791057001984,"pid":19,"hostname":"localhost","req":{"id":61,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":437,"msg":"request completed"}
+2026-10-03 15:50:02.09
+80bfb094
+User
+{"level":30,"time":1791057002091,"pid":19,"hostname":"localhost","req":{"id":62,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":543,"msg":"request completed"}
+2026-10-03 15:50:48.07
+80bfb094
+User
+{"level":30,"time":1791057048076,"pid":19,"hostname":"localhost","req":{"id":64,"method":"GET","url":"/api/auth/me"},"res":{"statusCode":200},"responseTime":313,"msg":"request completed"}
+2026-10-03 15:50:48.08
+80bfb094
+User
+{"level":30,"time":1791057048088,"pid":19,"hostname":"localhost","req":{"id":63,"method":"GET","url":"/api/session/info"},"res":{"statusCode":200},"responseTime":326,"msg":"request completed"}
+2026-10-03 15:50:48.61
+80bfb094
+User
+{"level":30,"time":1791057048611,"pid":19,"hostname":"localhost","req":{"id":65,"method":"POST","url":"/api/account/claim"},"res":{"statusCode":200},"responseTime":371,"msg":"request completed"}
+2026-10-03 15:50:48.86
+80bfb094
+User
+{"level":30,"time":1791057048864,"pid":19,"hostname":"localhost","req":{"id":66,"method":"GET","url":"/api/reading/plans"},"res":{"statusCode":200},"responseTime":130,"msg":"request completed"}
+2026-10-03 15:50:48.88
+80bfb094
+User
+{"level":30,"time":1791057048888,"pid":19,"hostname":"localhost","req":{"id":67,"method":"GET","url":"/api/events"},"res":{"statusCode":200},"responseTime":129,"msg":"request completed"}
+2026-10-03 15:50:49.19
+80bfb094
+User
+{"level":30,"time":1791057049199,"pid":19,"hostname":"localhost","req":{"id":68,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":439,"msg":"request completed"}
+2026-10-03 15:50:49.19
+80bfb094
+User
+{"level":30,"time":1791057049199,"pid":19,"hostname":"localhost","req":{"id":68,"method":"GET","url":"/api/rhythm/score"},"res":{"statusCode":200},"responseTime":439,"msg":"request completed"}
