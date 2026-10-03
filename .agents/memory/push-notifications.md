@@ -49,6 +49,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - The user reports desktop reminders work, mobile delivery is intermittent, five-minute lead times seem more reliable than ten-minute ones, and two back-to-back reminders arrived with the phone app closed.
   **Why:** This is direct device-level evidence, but two background successes do not establish consistent delivery.
   **How to apply:** Compare scheduler timing and phone receipt per occurrence; do not change reminder defaults from this observation alone.
+- The owner reports that tapping “Reminders enabled” appears to precede working delivery; both page-load restoration and the button POST to `/api/push`, so server logs cannot identify which path registered it.
+  **Why:** A successful registration was logged shortly before a reminder run sent to two subscriptions, but neither the click source nor the phone endpoint is identifiable in those logs.
+  **How to apply:** Treat this as a plausible correlation, not proof the tap is required; if it recurs, compare app-load and click times with each reminder receipt.
 - The user opens DiscipleOS on their phone from the home-screen-installed app.
   **Why:** Installed web apps have app-level notification controls that differ from browser-tab settings.
   **How to apply:** Diagnose notification permission through the phone's app settings; don't ask which access mode they use unless it changes.
