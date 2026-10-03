@@ -37,6 +37,11 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
   **Why:** Event-wide broadcast markers can hide a failed phone delivery when a laptop succeeds.
   **How to apply:** Keep successful rows endpoint-specific and leave failed endpoints unrecorded. Legacy `broadcast` rows do not identify which devices received a push, so they must not block endpoint retries.
 
+## Manual diagnostic pushes
+- Keep account-targeted diagnostics on a separate authenticated path; resolve one account, send only to its registrations, and do not modify scheduled reminder state.
+  **Why:** A device test must not broadcast to other accounts, create sent-reminder records, or change normal reminder delivery.
+  **How to apply:** Fail closed if the target or registrations are missing, return privacy-safe per-device provider results, and do not treat provider acceptance as proof of display or scheduler operation.
+
 ## Delivery evidence
 - A successful Web Push provider response proves provider acceptance, not that an operating system displayed the notification.
   **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.

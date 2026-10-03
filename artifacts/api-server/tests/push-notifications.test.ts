@@ -41,6 +41,7 @@ import { and, eq, like } from "drizzle-orm";
 import { createApp, createPgSessionStore } from "../src/app";
 import { logger } from "../src/lib/logger";
 import { sendDueReminders } from "../src/services/reminderDelivery";
+import { sendAccountScopedTestPush } from "../src/services/accountPushTest";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,71 @@ describe("1 — CRON_SECRET guard", () => {
       .post("/api/push/test")
       .set("x-cron-secret", "wrong");
     expect(res.status).toBe(401);
+  });
+});
+
+describe("account-scoped push test", () => {
+  it("requires the protected header and rejects target overrides", async () => {
+    const unauthenticated = await request(app).post(
+      "/api/push/test/account-scoped",
+    );
+    expect(unauthenticated.status).toBe(401);
+
+    const overrideAttempt = await request(app)
+      .post("/api/push/test/account-scoped")
+      .set("x-cron-secret", CRON_SECRET)
+      .send({ email: "someone-else@example.com" });
+    expect(overrideAttempt.status).toBe(400);
+    expect(vi.mocked(webpush.sendNotification)).not.toHaveBeenCalled();
+  });
+
+  it("sends only to registrations owned by the selected account", async () => {
+    const targetUserId = uid("scoped-target");
+    const otherUserId = uid("scoped-other");
+    const targetEndpoint = `https://push-test.example/scoped-target/${uid()}`;
+    const otherEndpoint = `https://push-test.example/scoped-other/${uid()}`;
+
+    await db.insert(pushSubscriptionsTable).values([
+      {
+        userId: targetUserId,
+        deviceId: uid("scoped-target-device"),
+        endpoint: targetEndpoint,
+        p256dh: "scoped-target-key",
+        auth: "scoped-target-auth",
+      },
+      {
+        userId: otherUserId,
+        deviceId: uid("scoped-other-device"),
+        endpoint: otherEndpoint,
+        p256dh: "scoped-other-key",
+        auth: "scoped-other-auth",
+      },
+    ]);
+
+    vi.mocked(webpush.sendNotification).mockResolvedValue({
+      statusCode: 201,
+    } as any);
+
+    const result = await sendAccountScopedTestPush(targetUserId);
+    const calls = vi.mocked(webpush.sendNotification).mock.calls;
+
+    expect(result.registrations).toBe(1);
+    expect(result.devices).toHaveLength(1);
+    expect(result.devices[0]).toMatchObject({
+      providerAccepted: true,
+      statusCode: 201,
+    });
+    expect(result.devices[0].deviceKey).toMatch(/^device_[a-f0-9]{16}$/);
+    expect(calls.map(([subscription]) => (subscription as any).endpoint)).toEqual(
+      [targetEndpoint],
+    );
+    expect(JSON.stringify(result)).not.toContain(targetEndpoint);
+    expect(JSON.stringify(result)).not.toContain(otherEndpoint);
+    expect(
+      calls.some(
+        ([subscription]) => (subscription as any).endpoint === otherEndpoint,
+      ),
+    ).toBe(false);
   });
 });
 
