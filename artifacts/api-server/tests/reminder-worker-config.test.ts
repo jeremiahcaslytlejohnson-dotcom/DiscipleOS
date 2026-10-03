@@ -15,11 +15,17 @@ function makeVapidPair() {
 describe("scheduled reminder worker configuration", () => {
   it("requires a single valid one-minute cron deployment", () => {
     const config = readFileSync(new URL("../../../.replit", import.meta.url), "utf8");
+    const launcher = readFileSync(
+      new URL("../../../scripts/run-reminder-scheduled-job.sh", import.meta.url),
+      "utf8",
+    );
 
     expect(config.match(/^\[\[deployment\.scheduled\]\]$/gm)).toHaveLength(1);
     expect(config).toContain('schedule = "* * * * *"');
     expect(config).toContain('run = "bash scripts/run-reminder-scheduled-job.sh"');
     expect(config).not.toContain('schedule = "every 1 minute"');
+    expect(launcher).toContain("export NODE_ENV=production");
+    expect(launcher).toContain('exec node --enable-source-maps "$runner"');
   });
 
   it("accepts a matching server/browser VAPID key pair without returning values", () => {

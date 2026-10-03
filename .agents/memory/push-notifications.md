@@ -23,6 +23,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - Treat a `.replit` scheduled block as configuration, not proof that a production Scheduled Deployment is active; the Autoscale API command does not launch the standalone reminder runner.
   **Why:** The live web/API deployment and the scheduled worker have separate entry points, and Autoscale logs do not establish scheduled-run execution.
   **How to apply:** Confirm a real production scheduled invocation before calling reminders active; do not create another trigger solely because Autoscale logs lack worker events.
+- The available deployment metadata and publishing tools cannot create a Scheduled Deployment or inspect its run history; Replit documents Scheduled Deployments as separate from Autoscale and managed through Publishing.
+  **Why:** A code/config change or website publish alone does not prove the standalone worker is active.
+  **How to apply:** Keep the single scheduled entry prepared, then have the owner activate it through Publishing and verify a real worker completion log before calling reminders operational.
 - `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
   **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
 

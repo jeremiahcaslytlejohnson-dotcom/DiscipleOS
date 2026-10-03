@@ -4,6 +4,7 @@ set -euo pipefail
 # This is invoked by Replit's Scheduled Deployment. It runs the reminder
 # delivery service directly, avoiding an HTTP server and session store
 # startup in the background job.
+export NODE_ENV=production
 
 runner="artifacts/api-server/dist/jobs/send-reminders.mjs"
 
