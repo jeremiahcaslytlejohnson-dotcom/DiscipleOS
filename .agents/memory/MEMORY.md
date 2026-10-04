@@ -7,7 +7,7 @@
 - [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
 - [Browser smoke tests](browser-smoke-tests.md) — Playwright needs Chromium plus Nix-declared GLib/graphics libraries in this workspace.
 - [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.
-- [Mobile menu positioning](mobile-menu-positioning.md) — viewport-centered mobile panels need an untransformed fixed wrapper; keep the bottom selector independently fixed.
+- [Mobile menu positioning](mobile-menu-positioning.md) — reserve a bottom action dock outside mobile scrolling content; keep the open navigation panel viewport-centered.
 - [Visual contract probes](visual-contract-probes.md) — assert shared surface roles in the rendered tab state; flattened layouts may intentionally have no item cards.
 - [Splash-aware visual verification](splash-aware-visual-verification.md) — immediate preview screenshots can capture the launch splash; wait for post-splash DOM state before judging the app surface.
 - [Responsive disclosure probes](responsive-disclosure-probes.md) — keep mobile-only collapsed content out of geometry probes, while exposing the complete form from the tablet breakpoint upward.

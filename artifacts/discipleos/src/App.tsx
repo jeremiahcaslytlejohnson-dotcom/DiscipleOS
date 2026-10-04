@@ -165,14 +165,19 @@ function AppRoutes() {
       <PWARegister />
       {!isAuthRoute ? <LaunchSplash /> : null}
       {!isAuthRoute ? <FeedbackWidget /> : null}
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/mountain-rhythm" component={MountainRhythm} />
-        <Route path="/settings" component={SettingsRoute} />
-        <Route path="/sign-in/*?" component={EmailAuthPage} />
-        <Route path="/sign-up/*?" component={EmailAuthPage} />
-        <Route component={NotFound} />
-      </Switch>
+      <div className={`discipleos-app-frame${isAuthRoute ? " discipleos-app-frame--auth" : ""}`}>
+        <div className="discipleos-app-content">
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/mountain-rhythm" component={MountainRhythm} />
+            <Route path="/settings" component={SettingsRoute} />
+            <Route path="/sign-in/*?" component={EmailAuthPage} />
+            <Route path="/sign-up/*?" component={EmailAuthPage} />
+            <Route component={NotFound} />
+          </Switch>
+        </div>
+        {!isAuthRoute ? <div className="discipleos-app-bottom-spacer" aria-hidden="true" /> : null}
+      </div>
     </AuthProvider>
   );
 }

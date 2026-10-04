@@ -4130,24 +4130,24 @@ export default function DiscipleOSApp() {
         </section>
 
           <div
-          data-testid="dashboard-navigation"
-            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] z-40 flex items-end justify-center px-4 md:static md:mb-5 md:w-full md:items-start md:justify-center md:px-0"
-        >
-          <div className="pointer-events-auto relative">
-            <div className="w-full max-w-md md:hidden">
-              <button
-                type="button"
-                data-testid="dashboard-navigation-toggle"
-                aria-expanded={isNavigationOpen}
-                aria-controls="dashboard-navigation-panel"
-                aria-label={isNavigationOpen ? "Close menu" : "Open menu"}
-                onClick={() => setIsNavigationOpen((open) => !open)}
-                className="group relative z-20 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-white/15 bg-[#11161D]/95 px-4 py-3 text-sm font-semibold text-white/85 shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur transition hover:border-[#D4A017]/45 hover:bg-[#1A2029] hover:text-white"
-              >
-                {isNavigationOpen ? <X className="h-4 w-4 text-[#D4A017]" /> : <ChevronDown className="h-4 w-4 rotate-180 text-[#D4A017]" />}
-                <span>{isNavigationOpen ? "Close menu" : "Menu"}</span>
-              </button>
-            </div>
+            data-testid="dashboard-navigation"
+            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex items-end justify-start px-3 md:static md:mb-5 md:w-full md:items-start md:justify-center md:px-0"
+          >
+            <div className="pointer-events-auto relative">
+              <div className="w-auto md:hidden">
+                <button
+                  type="button"
+                  data-testid="dashboard-navigation-toggle"
+                  aria-expanded={isNavigationOpen}
+                  aria-controls="dashboard-navigation-panel"
+                  aria-label={isNavigationOpen ? "Close menu" : "Open menu"}
+                  onClick={() => setIsNavigationOpen((open) => !open)}
+                  className="group relative z-20 inline-flex min-h-11 w-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-white/15 bg-[#11161D]/95 px-4 py-3 text-sm font-semibold text-white/85 shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur transition hover:border-[#D4A017]/45 hover:bg-[#1A2029] hover:text-white"
+                >
+                  {isNavigationOpen ? <X className="h-4 w-4 text-[#D4A017]" /> : <ChevronDown className="h-4 w-4 rotate-180 text-[#D4A017]" />}
+                  <span>{isNavigationOpen ? "Close menu" : "Menu"}</span>
+                </button>
+              </div>
 
             <div
               data-testid="dashboard-navigation-row"

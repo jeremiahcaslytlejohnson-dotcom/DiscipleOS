@@ -753,7 +753,7 @@ test("keeps Mountain Rhythm, empty, and auth secondary states legible", async ({
   }
 });
 
-test("keeps mobile account and feedback controls clear of page content and navigation", async ({ page }) => {
+test("keeps mobile account, feedback, and navigation controls clear of page content", async ({ page }) => {
   await stubHomeApi(page, []);
 
   for (const width of [320, 360, 390, 430]) {
@@ -761,6 +761,8 @@ test("keeps mobile account and feedback controls clear of page content and navig
     await page.goto("/");
     await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
 
+    const appContent = page.locator(".discipleos-app-content");
+    const dock = page.locator(".discipleos-app-bottom-spacer");
     const accountLink = page.getByRole("link", { name: "Continue with email", exact: true });
     const feedback = page.getByRole("button", { name: "Feedback", exact: true });
     const navigation = page.getByTestId("dashboard-navigation-toggle");
@@ -779,6 +781,8 @@ test("keeps mobile account and feedback controls clear of page content and navig
     const taglineBox = await heroTagline.boundingBox();
     const feedbackBox = await feedback.boundingBox();
     const navigationBox = await navigation.boundingBox();
+    const contentBox = await appContent.boundingBox();
+    const dockBox = await dock.boundingBox();
 
     expect(accountBox).not.toBeNull();
     expect(brandBox).not.toBeNull();
@@ -786,6 +790,8 @@ test("keeps mobile account and feedback controls clear of page content and navig
     expect(taglineBox).not.toBeNull();
     expect(feedbackBox).not.toBeNull();
     expect(navigationBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+    expect(dockBox).not.toBeNull();
     expect((accountBox?.y ?? 0)).toBeLessThan((brandBox?.y ?? Infinity) + (brandBox?.height ?? 0));
     expect((accountBox?.y ?? 0) + (accountBox?.height ?? 0)).toBeGreaterThan((brandBox?.y ?? Infinity));
     const headerRowBottom = Math.max(
@@ -794,20 +800,27 @@ test("keeps mobile account and feedback controls clear of page content and navig
     );
     expect(headerRowBottom).toBeLessThanOrEqual((heroTitle?.y ?? Infinity) - 12);
     expect((titleBox?.y ?? 0) + (titleBox?.height ?? 0)).toBeLessThanOrEqual((taglineBox?.y ?? Infinity) - 12);
-    expect((feedbackBox?.y ?? 0) + (feedbackBox?.height ?? 0)).toBeLessThanOrEqual((navigationBox?.y ?? Infinity) - 8);
+    expect(contentBox?.y ?? 0).toBeLessThanOrEqual((dockBox?.y ?? Infinity) + 1);
+    expect((contentBox?.y ?? 0) + (contentBox?.height ?? 0)).toBeLessThanOrEqual((dockBox?.y ?? Infinity) + 1);
+    expect(feedbackBox?.y ?? 0).toBeGreaterThanOrEqual((dockBox?.y ?? Infinity) - 1);
+    expect(navigationBox?.y ?? 0).toBeGreaterThanOrEqual((dockBox?.y ?? Infinity) - 1);
+    expect((navigationBox?.x ?? 0) + (navigationBox?.width ?? 0) + 8).toBeLessThanOrEqual(feedbackBox?.x ?? 0);
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await appContent.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
     const scrolledFeedbackBox = await feedback.boundingBox();
     const scrolledNavigationBox = await navigation.boundingBox();
     const mountainBox = await page.getByTestId("dashboard-mountain-rhythm").boundingBox();
+    const scrolledDockBox = await dock.boundingBox();
     expect(scrolledFeedbackBox).not.toBeNull();
     expect(scrolledNavigationBox).not.toBeNull();
     expect(mountainBox).not.toBeNull();
-    expect((scrolledFeedbackBox?.y ?? 0) + (scrolledFeedbackBox?.height ?? 0)).toBeLessThanOrEqual(
-      scrolledNavigationBox?.y ?? Infinity,
-    );
+    expect(scrolledDockBox).not.toBeNull();
+    expect(scrolledFeedbackBox?.y).toBe(feedbackBox?.y);
+    expect(scrolledNavigationBox?.y).toBe(navigationBox?.y);
     expect((mountainBox?.y ?? 0) + (mountainBox?.height ?? 0)).toBeLessThanOrEqual(
-      (scrolledFeedbackBox?.y ?? Infinity) - 8,
+      (scrolledDockBox?.y ?? Infinity) - 8,
     );
   }
 });
@@ -2459,4 +2472,63 @@ test("keeps empty, create, edit, auth, and fallback states on the shared visual 
   await page.goto("/visual-polish-missing-route");
   await expect(page.getByText("404 Page Not Found", { exact: true })).toBeVisible();
   await expect(page.locator(".discipleos-functional-surface")).toBeVisible();
+});
+
+test("keeps mobile actions in a dedicated dock outside the scrolling app content", async ({ page }) => {
+  const plan = makeOrdinaryPlan();
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
+
+  const content = page.locator(".discipleos-app-content");
+  const menu = page.getByTestId("dashboard-navigation-toggle");
+  const feedback = page.getByRole("button", { name: "Feedback", exact: true });
+  await expect(menu).toBeVisible();
+  await expect(feedback).toBeVisible();
+
+  for (const width of [320, 390, 640, 767]) {
+    await page.setViewportSize({ width, height: 844 });
+    const dockGeometry = await page.evaluate(() => {
+      const content = document.querySelector(".discipleos-app-content");
+      const dock = document.querySelector(".discipleos-app-bottom-spacer");
+      const menu = document.querySelector('[data-testid="dashboard-navigation-toggle"]');
+      const feedback = document.querySelector(".discipleos-feedback-trigger");
+      if (!content || !dock || !menu || !feedback) return null;
+      const rect = (element: Element) => {
+        const { left, right, top, bottom } = element.getBoundingClientRect();
+        return { left, right, top, bottom };
+      };
+      return {
+        content: rect(content),
+        dock: rect(dock),
+        menu: rect(menu),
+        feedback: rect(feedback),
+        documentWidth: document.documentElement.scrollWidth,
+      };
+    });
+
+    expect(dockGeometry).not.toBeNull();
+    expect(dockGeometry!.content.bottom).toBeLessThanOrEqual(dockGeometry!.dock.top + 1);
+    expect(dockGeometry!.menu.top).toBeGreaterThanOrEqual(dockGeometry!.dock.top - 1);
+    expect(dockGeometry!.feedback.top).toBeGreaterThanOrEqual(dockGeometry!.dock.top - 1);
+    expect(dockGeometry!.menu.right + 8).toBeLessThanOrEqual(dockGeometry!.feedback.left);
+    expect(dockGeometry!.documentWidth).toBeLessThanOrEqual(width + 1);
+
+    await content.evaluate((element) => element.scrollTo({ top: 240, behavior: "instant" }));
+    await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const menuPositionBeforeOpen = await menu.boundingBox();
+    await menu.click();
+    const panel = page.getByTestId("dashboard-navigation-panel");
+    await expect(panel).toBeVisible();
+    const panelGeometry = await panel.evaluate((element) => {
+      const { left, right, top, bottom } = element.getBoundingClientRect();
+      return { left, right, top, bottom };
+    });
+    expect((panelGeometry.left + panelGeometry.right) / 2).toBeCloseTo(width / 2, 0);
+    expect((panelGeometry.top + panelGeometry.bottom) / 2).toBeCloseTo(844 / 2, 0);
+    await menu.click();
+    expect(await menu.boundingBox()).toEqual(menuPositionBeforeOpen);
+  }
 });

@@ -3,8 +3,8 @@ name: Mobile menu positioning
 description: Positioning constraint for the mobile dashboard navigation panel and its bottom selector.
 ---
 
-The mobile navigation panel and its bottom selector are separate viewport-anchored elements: center the open panel against the phone viewport, while the Menu/Close selector stays fixed at the bottom safe area.
+On phones, keep Menu/Close and Feedback in a safe-area-anchored bottom action band outside the scrolling app content. Center the open navigation panel against the viewport, independently of that dock.
 
-**Why:** A fixed panel inside an ancestor with a transform can use that ancestor as its containing block instead of the viewport, producing large vertical placement errors.
+**Why:** The fixed controls previously covered Calendar dates and activity-form fields while users scrolled. A dedicated dock keeps those actions available without placing them over interactive content.
 
-**How to apply:** Keep the mobile fixed wrapper untransformed and use flex centering for the selector. Use a viewport-centered fixed panel independently; leave desktop navigation outside this behavior.
+**How to apply:** Reserve the dock height outside the mobile content scroller; do not let page content scroll behind the controls. Keep fixed ancestors untransformed so the navigation panel remains centered in the phone viewport. Leave desktop navigation in normal flow.
