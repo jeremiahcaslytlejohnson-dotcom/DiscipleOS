@@ -1896,8 +1896,8 @@ export default function DiscipleOSApp() {
           registration.showNotification(reminder.title, {
             body: reminder.body,
             tag: reminder.tag,
-            icon: "/icon-192.png",
-            badge: "/icon-192.png",
+            icon: "/notification-icon.png",
+            badge: "/notification-icon.png",
             data: { url: "/" },
           }),
         )

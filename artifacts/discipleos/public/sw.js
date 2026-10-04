@@ -1,4 +1,4 @@
-const CACHE_NAME = "discipleos-static-v7";
+const CACHE_NAME = "discipleos-static-v8";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/splash.jpg",
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   "/favicon-64.png",
   "/icon-192.png",
   "/icon-512.png",
+  "/notification-icon.png",
   "/apple-touch-icon.png",
 ];
 
@@ -133,8 +134,8 @@ self.addEventListener("push", (event) => {
         data: {
           url: data.url || "/",
         },
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
+        icon: "/notification-icon.png",
+        badge: "/notification-icon.png",
       });
     })
   );
