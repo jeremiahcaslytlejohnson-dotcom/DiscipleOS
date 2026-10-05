@@ -1573,6 +1573,9 @@ export default function DiscipleOSApp() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(todayISO());
+  const [expandedCalendarPlanIds, setExpandedCalendarPlanIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!isAuthLoaded) return;
@@ -3220,6 +3223,8 @@ export default function DiscipleOSApp() {
 
   const renderCalendarItem = (event: any) => {
     const isPlanItem = event.kind === "plan";
+    const isPlanExpanded = isPlanItem && expandedCalendarPlanIds.has(event.planId);
+    const planReadingsId = `calendar-plan-readings-${event.planId}-${selectedCalendarDate}`;
     const allDone = isPlanItem && event.completedCount === event.readings.length;
     const eventCompletionEligible = !isPlanItem && isCompletableEvent(event);
     const eventCompleted =
@@ -3229,6 +3234,7 @@ export default function DiscipleOSApp() {
     return (
       <div
         key={event.id}
+        data-testid={isPlanItem ? `calendar-plan-item-${event.planId}` : undefined}
         className={cn(
           "discipleos-flat-row discipleos-safe-text",
           isPlanItem
@@ -3238,16 +3244,61 @@ export default function DiscipleOSApp() {
       >
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="discipleos-safe-text font-medium text-white">{event.title}</div>
-              <EventBadge type={event.type || "event"} />
-            </div>
-            <div className="discipleos-meta-copy mt-0.5 text-sm">{formatTime(event.time || "07:00")}</div>
-            {event.notes ? <div className="discipleos-safe-text mt-2 text-sm text-white/65">{event.notes}</div> : null}
+            {isPlanItem ? (
+              <>
+                <button
+                  type="button"
+                  data-testid={`calendar-plan-toggle-${event.planId}`}
+                  aria-label={`${isPlanExpanded ? "Collapse" : "Expand"} ${event.title} readings`}
+                  aria-expanded={isPlanExpanded}
+                  aria-controls={planReadingsId}
+                  onClick={() =>
+                    setExpandedCalendarPlanIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(event.planId)) next.delete(event.planId);
+                      else next.add(event.planId);
+                      return next;
+                    })
+                  }
+                  className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-1 text-left transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60"
+                >
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
+                      !isPlanExpanded && "-rotate-90",
+                    )}
+                  />
+                  <span className="discipleos-safe-text min-w-0 flex-1 break-words font-medium text-white">
+                    {event.title}
+                  </span>
+                  <EventBadge type={event.type || "event"} />
+                </button>
+                <div className="discipleos-meta-copy mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-7 text-sm">
+                  <span>{formatTime(event.time || "07:00")}</span>
+                  {event.notes ? (
+                    <>
+                      <span aria-hidden="true" className="text-white/30">·</span>
+                      <span>{event.notes}</span>
+                    </>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="discipleos-safe-text font-medium text-white">{event.title}</div>
+                  <EventBadge type={event.type || "event"} />
+                </div>
+                <div className="discipleos-meta-copy mt-0.5 text-sm">{formatTime(event.time || "07:00")}</div>
+                {event.notes ? <div className="discipleos-safe-text mt-2 text-sm text-white/65">{event.notes}</div> : null}
+              </>
+            )}
           </div>
 
           {isPlanItem ? (
             <button
+              type="button"
               onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate, !allDone)}
               className="discipleos-control--compact shrink-0 border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:border-[#D4A017]/30 hover:bg-[#D4A017]/10 hover:text-[#F4D77A]"
             >
@@ -3288,7 +3339,15 @@ export default function DiscipleOSApp() {
         </div>
 
         {isPlanItem ? (
-          <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
+          <div
+            id={planReadingsId}
+            data-testid={`calendar-plan-readings-${event.planId}`}
+            hidden={!isPlanExpanded}
+            className={cn(
+              "mt-3 gap-x-4 sm:grid-cols-2",
+              isPlanExpanded ? "grid" : "hidden",
+            )}
+          >
             {event.readings.map((reading) => {
               const plan = plans.find((p) => p.id === event.planId);
               const completedMap = getCompletedMap(plan);
@@ -3297,6 +3356,7 @@ export default function DiscipleOSApp() {
               return (
                 <button
                   key={reading.key}
+                  type="button"
                   onClick={() => toggleChapterComplete(plan.id, reading.key)}
                   className={cn(
                     "discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-sm transition",

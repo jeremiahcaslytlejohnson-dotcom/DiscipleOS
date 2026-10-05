@@ -520,6 +520,88 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
   expect(dayCompletionWrites).toBe(1);
 });
 
+test("collapses Calendar reading plans independently while keeping the summary and completion action visible", async ({ page }) => {
+  const today = todayISO();
+  const firstPlan = {
+    ...makeOrdinaryPlan("calendar-collapsible-climb", "7-Day Climb"),
+    readingTime: "06:45",
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "calendar-collapsible-1", label: "Psalm 1" },
+          { key: "calendar-collapsible-2", label: "Psalm 2" },
+          { key: "calendar-collapsible-3", label: "Psalm 3" },
+        ],
+      },
+    ],
+    completed: {},
+  };
+  const secondPlan = {
+    ...makeOrdinaryPlan("calendar-collapsible-purpose", "Prayer & Purpose"),
+    readingTime: "08:15",
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "calendar-purpose-1", label: "Matthew 1" },
+          { key: "calendar-purpose-2", label: "Matthew 2" },
+        ],
+      },
+    ],
+    completed: {},
+  };
+  await stubHomeApi(page, [firstPlan, secondPlan], []);
+  await seedPlans(page, [firstPlan, secondPlan]);
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const navigation = await openDashboardNavigation(page);
+    await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+
+    const activities = page.getByTestId("dashboard-calendar-activities");
+    const firstRow = activities.getByTestId(`calendar-plan-item-${firstPlan.id}`);
+    const secondRow = activities.getByTestId(`calendar-plan-item-${secondPlan.id}`);
+    const firstToggle = firstRow.getByTestId(`calendar-plan-toggle-${firstPlan.id}`);
+    const secondToggle = secondRow.getByTestId(`calendar-plan-toggle-${secondPlan.id}`);
+    const firstReadings = firstRow.getByTestId(`calendar-plan-readings-${firstPlan.id}`);
+    const secondReadings = secondRow.getByTestId(`calendar-plan-readings-${secondPlan.id}`);
+
+    await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(firstReadings).toBeHidden();
+    await expect(secondReadings).toBeHidden();
+
+    await expect(firstRow).toContainText("7-Day Climb");
+    await expect(firstRow).toContainText("bible");
+    await expect(firstRow).toContainText(/6:45/);
+    await expect(firstRow).toContainText("3 chapters assigned");
+    await expect(firstRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+    await expect(secondRow).toContainText("Prayer & Purpose");
+    await expect(secondRow).toContainText("2 chapters assigned");
+    await expect(secondRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+
+    const toggleBox = await firstToggle.boundingBox();
+    expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    await firstToggle.click();
+    await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(firstReadings).toBeVisible();
+    await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toBeVisible();
+    await expect(secondReadings).toBeHidden();
+
+    await firstReadings.getByRole("button", { name: "Psalm 1" }).click();
+    await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toHaveClass(/border-emerald-400/);
+    await firstToggle.click();
+    await expect(firstReadings).toBeHidden();
+
+    await firstRow.getByRole("button", { name: "Complete day", exact: true }).click();
+    await expect(firstRow.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
+    await expect(firstReadings).toBeHidden();
+  }
+});
+
 test("undoes a completed Calendar day while preserving its earned history", async ({ page }) => {
   const today = todayISO();
   const plan = {
