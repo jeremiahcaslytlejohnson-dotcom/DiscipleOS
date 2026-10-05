@@ -4,6 +4,7 @@
  */
 import request from "supertest";
 import app from "../src/app";
+import { getPlanDateInTimeZone } from "@workspace/structured-plan-lifecycle";
 
 // Each agent has its own cookie jar — two independent sessions
 const agentA = request.agent(app);
@@ -161,8 +162,9 @@ describe("Cross-user isolation", () => {
       const ordinaryPlanId = `ordinary-${suffix}`;
       const climbAId = `climb-a-${suffix}`;
       const climbBId = `climb-b-${suffix}`;
+      const today = getPlanDateInTimeZone("America/New_York");
       const assignments = Array.from({ length: 7 }, (_, index) => ({
-        date: addDays("2026-08-27", index),
+        date: addDays(today, index),
         readings: [{ key: `climb-${suffix}-${index}` }],
       }));
       const climbPayload = {

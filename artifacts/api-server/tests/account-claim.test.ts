@@ -1,7 +1,48 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getPlanDateInTimeZone } from "@workspace/structured-plan-lifecycle";
 
 const authUser = vi.hoisted(() => ({ id: null as string | null }));
+
+function addDays(date: string, amount: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + amount);
+  return value.toISOString().slice(0, 10);
+}
+
+function makeClimb(id: string, startDate: string, completed = false) {
+  const assignments = Array.from({ length: 7 }, (_, index) => ({
+    date: addDays(startDate, index),
+    readings: [{ key: `${id}-reading-${index}` }],
+  }));
+  const dates = assignments.map((assignment) => assignment.date);
+  return {
+    id,
+    name: "7-Day Climb",
+    journeyKey: "7-day-climb",
+    journeyType: "7-day-climb",
+    journeyDays: 7,
+    durationDays: 7,
+    totalDays: 7,
+    startDate,
+    endDate: dates[dates.length - 1],
+    timeZone: "America/New_York",
+    assignments,
+    completed: completed
+      ? Object.fromEntries(
+          assignments.flatMap((assignment) =>
+            assignment.readings.map((reading) => [reading.key, true]),
+          ),
+        )
+      : {},
+    ...(completed
+      ? {
+          earnedDayKeys: dates,
+          dayCompletionDates: Object.fromEntries(dates.map((date) => [date, date])),
+        }
+      : {}),
+  };
+}
 
 vi.mock("../src/middlewares/auth", () => ({
   attachCurrentUser: (req: any, _res: unknown, next: () => void) => {
@@ -76,6 +117,111 @@ describe("Account claim", () => {
       endpoint,
       keys: { p256dh: "CCCC", auth: "DDDD" },
     }).expect(403);
+  });
+
+  it("claims a fresh climb without blocking on or overwriting historical climbs", async () => {
+    const app = createApp(createPgSessionStore());
+    const accountBrowser = request.agent(app);
+    const anonymousBrowser = request.agent(app);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const accountUserId = `user_historical_climb_claim_${suffix}`;
+    const today = getPlanDateInTimeZone("America/New_York");
+    const expiredClimb = makeClimb(`expired-climb-${suffix}`, "2025-01-01");
+    const completedClimb = makeClimb(
+      `completed-climb-${suffix}`,
+      addDays(today, -6),
+      true,
+    );
+    const freshClimb = makeClimb(`fresh-climb-${suffix}`, today);
+    const accountOrdinaryPlan = {
+      id: `account-ordinary-${suffix}`,
+      name: "Account reading plan",
+      assignments: [],
+      completed: {},
+    };
+    const anonymousOrdinaryPlan = {
+      id: `anonymous-ordinary-${suffix}`,
+      name: "Anonymous reading plan",
+      assignments: [],
+      completed: {},
+    };
+
+    authUser.id = accountUserId;
+    await accountBrowser.post("/api/reading/plans").send(expiredClimb).expect(200);
+    await accountBrowser.post("/api/reading/plans").send(completedClimb).expect(200);
+    await accountBrowser
+      .post("/api/reading/plans")
+      .send(accountOrdinaryPlan)
+      .expect(200);
+
+    authUser.id = null;
+    await anonymousBrowser
+      .post("/api/reading/plans")
+      .send(freshClimb)
+      .expect(200);
+    await anonymousBrowser
+      .post("/api/reading/plans")
+      .send(anonymousOrdinaryPlan)
+      .expect(200);
+
+    authUser.id = accountUserId;
+    const claim = await anonymousBrowser.post("/api/account/claim").expect(200);
+    expect(claim.body.claimed).toEqual({
+      events: 0,
+      plans: 2,
+      subscriptions: 0,
+    });
+
+    const plansResponse = await accountBrowser.get("/api/reading/plans").expect(200);
+    const plans = new Map(
+      (plansResponse.body.plans as Array<Record<string, any>>).map((plan) => [
+        plan.id,
+        plan,
+      ]),
+    );
+    expect([...plans.keys()]).toEqual(
+      expect.arrayContaining([
+        expiredClimb.id,
+        completedClimb.id,
+        freshClimb.id,
+        accountOrdinaryPlan.id,
+        anonymousOrdinaryPlan.id,
+      ]),
+    );
+    expect(plans.get(expiredClimb.id)).toEqual(
+      expect.objectContaining({
+        startDate: expiredClimb.startDate,
+        endDate: expiredClimb.endDate,
+        completed: {},
+      }),
+    );
+    expect(plans.get(completedClimb.id)).toEqual(
+      expect.objectContaining({
+        completed: completedClimb.completed,
+        earnedDayKeys: completedClimb.earnedDayKeys,
+        dayCompletionDates: completedClimb.dayCompletionDates,
+      }),
+    );
+    expect(plans.get(freshClimb.id)).toEqual(
+      expect.objectContaining({
+        startDate: today,
+        assignments: freshClimb.assignments,
+        completed: {},
+      }),
+    );
+    expect(plans.get(accountOrdinaryPlan.id)).toEqual(
+      expect.objectContaining(accountOrdinaryPlan),
+    );
+    expect(plans.get(anonymousOrdinaryPlan.id)).toEqual(
+      expect.objectContaining(anonymousOrdinaryPlan),
+    );
+
+    await accountBrowser
+      .post("/api/reading/plans")
+      .send({
+        ...makeClimb(`second-active-climb-${suffix}`, today),
+      })
+      .expect(409);
   });
 
   it("does not claim or return a retired 30-day Reset", async () => {
