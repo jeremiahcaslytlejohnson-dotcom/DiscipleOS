@@ -70,3 +70,9 @@ Canonical schedule repairs must be persisted through the normal plan-save path, 
 **Why:** Repairing only in browser memory leaves old oversized plans in the database, while a later reconnect save can erase timing metadata written by day completion.
 
 **How to apply:** On hydration, save an oversized named journey after normalizing it to the canonical schedule. On server upsert, merge append-only journey history from the stored document before replacing the plan payload.
+
+Active, completed, and expired structured-plan lifecycle must use one shared client/server definition. A full set of earned scheduled days keeps the old instance historical even if its reading checkboxes are later reopened; an incomplete instance expires after its inclusive end date. Save an IANA time zone on new structured plans so browser selection and API conflict checks use the same calendar day; legacy plans use America/New_York. This lifecycle status is separate from the all-unchecked guard for live ascent metrics.
+
+**Why:** A completed or past-dated climb must not block a genuinely new instance or return as the active climb after refresh, sync, or account claim, while prior progress records remain intact.
+
+**How to apply:** Use the shared lifecycle helper when selecting active climbs, enforcing the one-active-climb API boundary, and claiming anonymous plans. Keep ordinary plans outside this lifecycle and never delete or overwrite a prior plan when starting a new climb.

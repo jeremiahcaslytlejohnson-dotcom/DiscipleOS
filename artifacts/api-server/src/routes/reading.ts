@@ -6,6 +6,10 @@ import {
   canStartNamedJourney,
   getNamedJourneyDuration,
 } from "../auth/capabilities";
+import {
+  getStructuredPlanKind,
+  isActiveStructuredPlan,
+} from "@workspace/structured-plan-lifecycle";
 
 const router = Router();
 
@@ -29,12 +33,6 @@ const RETIRED_RESET_NAMES = new Set([
   "30 Day Consistency Reset",
   "Legacy 30-Day Reset",
 ]);
-const STRUCTURED_JOURNEY_KEYS = new Set([
-  "7-day-climb",
-  "20-day-reset",
-  "40-day-climb",
-]);
-
 function normalizePlan(plan: any) {
   const name = typeof plan?.name === "string" ? plan.name.trim() : "";
   const templateKey = typeof plan?.templateKey === "string" ? plan.templateKey.trim() : "";
@@ -70,41 +68,8 @@ function isResetPlan(plan: any) {
   );
 }
 
-function isResetComplete(plan: any) {
-  const completed =
-    plan?.completed && typeof plan.completed === "object" && !Array.isArray(plan.completed)
-      ? plan.completed
-      : new Set(Array.isArray(plan?.completedChapterKeys) ? plan.completedChapterKeys : []);
-  const assignments = Array.isArray(plan?.assignments) ? plan.assignments : [];
-  return (
-    assignments.length > 0 &&
-    assignments.every(
-      (assignment: any) =>
-        Array.isArray(assignment.readings) &&
-        assignment.readings.length > 0 &&
-        assignment.readings.every((reading: any) =>
-          completed instanceof Set ? completed.has(reading.key) : completed[reading.key] === true,
-        ),
-    )
-  );
-}
-
 function getStructuredJourneyKey(plan: any) {
-  const journeyKey = plan?.journeyKey || plan?.journeyType;
-  if (STRUCTURED_JOURNEY_KEYS.has(journeyKey)) return journeyKey;
-  if (
-    plan?.templateKey === "20-day-reset" ||
-    plan?.templateKey === "20-day-consistency-reset" ||
-    plan?.name === "20-Day Reset" ||
-    plan?.name === "20-Day Consistency Reset"
-  ) {
-    return "20-day-reset";
-  }
-  return null;
-}
-
-function isStructuredClimb(plan: any) {
-  return Boolean(getStructuredJourneyKey(plan));
+  return getStructuredPlanKind(plan);
 }
 
 // GET /api/reading/plans — returns only the current user's plans
@@ -244,7 +209,7 @@ router.post("/reading/plans", async (req, res) => {
         };
       }
 
-      if (isStructuredClimb(plan) && !isResetComplete(plan)) {
+      if (isActiveStructuredPlan(plan)) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${"structured-climb:" + userId}, 0))`,
         );
@@ -255,7 +220,7 @@ router.post("/reading/plans", async (req, res) => {
         const anotherActiveClimb = existingPlans.find((row) => {
           if (row.id === plan.id) return false;
           const rowPlan = normalizePlan({ ...(row.data as Record<string, unknown>), id: row.id, templateKey: row.templateKey });
-          return isStructuredClimb(rowPlan) && !isResetComplete(rowPlan);
+          return isActiveStructuredPlan(rowPlan);
         });
         if (anotherActiveClimb) {
           const otherPlan = normalizePlan({

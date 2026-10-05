@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { apiFetch } from "@/lib/api-fetch";
 const fetch = apiFetch;
+import { getLocalPlanTimeZone } from "@workspace/structured-plan-lifecycle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useAuth } from "../lib/auth";
 import { Link } from "wouter";
@@ -624,6 +625,7 @@ function createPlanObject({
         journeyDays: journey.durationDays,
         durationDays: journey.durationDays,
         totalDays: journey.durationDays,
+        timeZone: getLocalPlanTimeZone(),
       }
       : {}),
   };
@@ -2495,6 +2497,12 @@ export default function DiscipleOSApp() {
           setPlans((prev) => prev.filter((item) => item.id !== plan.id));
           setSelectedPlanId(null);
           setLastSyncLabel("Named journeys are not available for this account");
+          return;
+        }
+        if (error?.status === 409 && journey) {
+          setPlans((prev) => prev.filter((item) => item.id !== plan.id));
+          setSelectedPlanId(null);
+          setLastSyncLabel("Another structured climb is already active");
           return;
         }
         queuePendingOp({ type: "upsert-plan", payload: plan, ts: Date.now() });

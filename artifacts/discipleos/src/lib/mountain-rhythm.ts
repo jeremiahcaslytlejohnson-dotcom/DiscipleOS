@@ -1,4 +1,10 @@
 import { addDaysISO, getLocalWeekday } from "./local-date";
+import {
+  findActiveStructuredPlan,
+  getStructuredPlanKind,
+  isActiveStructuredPlan,
+  isStructuredPlan,
+} from "@workspace/structured-plan-lifecycle";
 
 export const RHYTHM_COPY =
   "Mountain Rhythm reflects consistency with your active reading climb—not spiritual worth—and calendar activities remain separate.";
@@ -305,36 +311,11 @@ export const MOUNTAIN_RHYTHM_ROUTES = [
 ] as const;
 
 export function getStructuredClimbType(plan: any) {
-  const identity = [
-    plan?.journeyKey,
-    plan?.journeyType,
-    plan?.templateKey,
-    plan?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-    .replace(/[–—]/g, "-");
-
-  if (identity.includes("7-day-climb") || identity.includes("7 day climb")) {
-    return "7-day-climb" as const;
-  }
-  if (
-    identity.includes("20-day-reset") ||
-    identity.includes("20 day reset") ||
-    identity.includes("20-day-consistency-reset") ||
-    identity.includes("20 day consistency reset")
-  ) {
-    return "20-day-reset" as const;
-  }
-  if (identity.includes("40-day-climb") || identity.includes("40 day climb")) {
-    return "40-day-climb" as const;
-  }
-  return null;
+  return getStructuredPlanKind(plan);
 }
 
 export function isStructuredClimbPlan(plan: any) {
-  return Boolean(getStructuredClimbType(plan));
+  return isStructuredPlan(plan);
 }
 
 function getStructuredClimbProfile(plan: any) {
@@ -397,12 +378,8 @@ export function getCompletedStructuredClimb(plan: any) {
   };
 }
 
-export function findActiveStructuredClimb(plans: any[] = []) {
-  return (
-    sortedPlans(plans).find(
-      (plan) => isStructuredClimbPlan(plan) && !isStructuredClimbComplete(plan),
-    ) || null
-  );
+export function findActiveStructuredClimb(plans: any[] = [], today?: string) {
+  return findActiveStructuredPlan(sortedPlans(plans), today);
 }
 
 export function resolveStructuredClimbPlanId(
@@ -410,11 +387,7 @@ export function resolveStructuredClimbPlanId(
   preferredPlanId?: string | null,
 ) {
   const preferredPlan = plans.find((plan) => plan?.id === preferredPlanId);
-  if (
-    preferredPlan &&
-    isStructuredClimbPlan(preferredPlan) &&
-    hasStructuredClimbAssignments(preferredPlan)
-  ) {
+  if (preferredPlan && isActiveStructuredPlan(preferredPlan)) {
     return preferredPlan.id;
   }
   return findActiveStructuredClimb(plans)?.id || null;

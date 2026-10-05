@@ -2,17 +2,10 @@ import { Router } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, eventsTable, pushSubscriptionsTable, readingPlansTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
+import { isActiveStructuredPlan } from "@workspace/structured-plan-lifecycle";
 
 const router = Router();
 
-const RESET_TEMPLATE_KEYS = new Set([
-  "20-day-reset",
-  "20-day-consistency-reset",
-]);
-const RESET_NAMES = new Set([
-  "20-Day Reset",
-  "20-Day Consistency Reset",
-]);
 const RETIRED_RESET_PLAN_IDS = new Set([
   "plan-30day-consistency-reset",
   "discipleos-30-day-reset",
@@ -26,20 +19,6 @@ const RETIRED_RESET_NAMES = new Set([
   "Legacy 30-Day Reset",
 ]);
 
-function isResetPlan(plan: {
-  id: string;
-  templateKey: string | null;
-  data: unknown;
-}) {
-  const data = plan.data as { templateKey?: unknown; name?: unknown } | null;
-  const name = data && typeof data.name === "string" ? data.name : "";
-  return (
-    RESET_TEMPLATE_KEYS.has(plan.templateKey || "") ||
-    RESET_TEMPLATE_KEYS.has(String(data?.templateKey || "")) ||
-    RESET_NAMES.has(name)
-  );
-}
-
 function isRetiredResetPlan(plan: {
   id: string;
   templateKey: string | null;
@@ -52,29 +31,6 @@ function isRetiredResetPlan(plan: {
     RETIRED_RESET_TEMPLATE_KEYS.has(plan.templateKey || "") ||
     RETIRED_RESET_TEMPLATE_KEYS.has(String(data?.templateKey || "")) ||
     RETIRED_RESET_NAMES.has(name)
-  );
-}
-function isResetComplete(data: unknown) {
-  const plan = (data || {}) as {
-    assignments?: Array<{ readings?: Array<{ key?: string }> }>;
-    completed?: Record<string, boolean>;
-    completedChapterKeys?: string[];
-  };
-  const completed =
-    plan.completed && typeof plan.completed === "object"
-      ? plan.completed
-      : new Set(plan.completedChapterKeys || []);
-  const assignments = Array.isArray(plan.assignments) ? plan.assignments : [];
-  return (
-    assignments.length > 0 &&
-    assignments.every(
-      (assignment) =>
-        Array.isArray(assignment.readings) &&
-        assignment.readings.length > 0 &&
-        assignment.readings.every((reading) =>
-          completed instanceof Set ? completed.has(reading.key || "") : completed[reading.key || ""] === true,
-        ),
-    )
   );
 }
 
@@ -112,14 +68,31 @@ router.post("/account/claim", requireAuth, async (req, res) => {
         .select()
         .from(readingPlansTable)
         .where(eq(readingPlansTable.userId, accountUserId));
-      const activeAnonymousResets = anonymousPlans.filter(
-        (plan) => isResetPlan(plan) && !isResetComplete(plan.data),
+      const activeAnonymousClimbs = anonymousPlans.filter(
+        (plan) =>
+          isActiveStructuredPlan({
+            ...((plan.data && typeof plan.data === "object"
+              ? plan.data
+              : {}) as Record<string, unknown>),
+            id: plan.id,
+            templateKey: plan.templateKey,
+          }),
       );
-      const accountHasActiveReset = accountPlans.some(
-        (plan) => isResetPlan(plan) && !isResetComplete(plan.data),
+      const accountHasActiveClimb = accountPlans.some(
+        (plan) =>
+          isActiveStructuredPlan({
+            ...((plan.data && typeof plan.data === "object"
+              ? plan.data
+              : {}) as Record<string, unknown>),
+            id: plan.id,
+            templateKey: plan.templateKey,
+          }),
       );
-      if (activeAnonymousResets.length > 1 || (activeAnonymousResets.length > 0 && accountHasActiveReset)) {
-        throw Object.assign(new Error("An active Consistency Reset already exists"), { status: 409 });
+      if (
+        activeAnonymousClimbs.length > 1 ||
+        (activeAnonymousClimbs.length > 0 && accountHasActiveClimb)
+      ) {
+        throw Object.assign(new Error("An active structured climb already exists"), { status: 409 });
       }
 
       let events = 0;

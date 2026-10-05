@@ -112,7 +112,10 @@ async function stubAuthenticatedApi(
   page: Page,
   ordinaryPlan: unknown,
   initialPlans: any[] = [],
-  options: { stripCompletionHistoryOnRead?: boolean } = {},
+  options: {
+    stripCompletionHistoryOnRead?: boolean;
+    failPlanPosts?: boolean;
+  } = {},
 ) {
   let serverPlans: any[] = [...initialPlans];
 
@@ -150,6 +153,14 @@ async function stubAuthenticatedApi(
     if (pathname.endsWith("/reading/plans")) {
       if (request.method() === "POST") {
         const plan = request.postDataJSON();
+        if (options.failPlanPosts) {
+          await route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ success: false, error: "Temporary sync failure" }),
+          });
+          return;
+        }
         serverPlans = [
           ...serverPlans.filter((existing) => existing.id !== plan.id),
           { ...plan, updatedAt: "2026-08-30T12:00:00.000Z" },
@@ -206,25 +217,42 @@ async function stubAuthenticatedApi(
       body: JSON.stringify({ success: true }),
     });
   });
+
 }
 
-async function seedLocalData(page: Page, plans: unknown[], selectedPlanId: string | null) {
+async function seedLocalData(
+  page: Page,
+  plans: unknown[],
+  selectedPlanId: string | null,
+  options: { ownerId?: string | null; pendingOps?: unknown[] } = {},
+) {
   await page.addInitScript(
-    ({ plans: seededPlans, selectedId }) => {
+    ({ plans: seededPlans, selectedId, ownerId, pendingOps }) => {
       if (localStorage.getItem("discipleos-seed-applied") === "true") return;
       localStorage.setItem(
         "discipleos-data",
         JSON.stringify({
-          ownerId: null,
+          ownerId,
           plans: seededPlans,
           events: [],
           eventCompletions: {},
           selectedPlanId: selectedId,
         }),
       );
+      if (pendingOps) {
+        localStorage.setItem(
+          "discipleos:pendingOps",
+          JSON.stringify({ ownerId, ops: pendingOps }),
+        );
+      }
       localStorage.setItem("discipleos-seed-applied", "true");
     },
-    { plans, selectedId: selectedPlanId },
+    {
+      plans,
+      selectedId: selectedPlanId,
+      ownerId: options.ownerId ?? null,
+      pendingOps: options.pendingOps,
+    },
   );
 }
 
@@ -345,6 +373,142 @@ test("automatically starts a 7-Day Climb for an anonymous session with a user ID
   expect(Math.max(...savedPlan.assignments.map((day: any) => day.estimatedMinutes))).toBeLessThanOrEqual(
     savedPlan.dailyMinutes,
   );
+});
+
+test("starts a fresh 7-Day Climb after an expired one and keeps it selected after rehydration", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
+  });
+  const expiredPlan = makePlan({
+    id: "expired-7-day-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -14,
+  });
+  const ordinaryPlan = {
+    id: "ordinary-reading-plan",
+    name: "Ordinary plan",
+    assignments: [],
+    completed: {},
+  };
+  await stubAuthenticatedApi(page, ordinaryPlan, [expiredPlan]);
+  await seedLocalData(page, [expiredPlan], expiredPlan.id);
+
+  const plansLoaded = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/reading/plans") && response.request().method() === "GET",
+  );
+  await openMountainRhythm(page);
+  await plansLoaded;
+  const saveRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/reading/plans") && request.method() === "POST",
+  );
+  await page.getByTestId("button-choose-7-day-climb").click();
+
+  const freshPlan = (await saveRequest).postDataJSON();
+  expect(freshPlan.id).not.toBe(expiredPlan.id);
+  expect(freshPlan.startDate).toBe(today);
+  expect(freshPlan.assignments[0].date).toBe(today);
+  expect(freshPlan.completed).toEqual({});
+
+  await page.reload();
+  await expect(
+    page.getByText("7-Day Climb · active reading climb", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId(`past-climb-${expiredPlan.id}`),
+  ).toContainText("Expired");
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return data.selectedPlanId;
+    }),
+  ).toBe(freshPlan.id);
+  const persistedPlanIds = await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    return data.plans?.map((plan: any) => plan.id) || [];
+  });
+  expect(persistedPlanIds).toContain(expiredPlan.id);
+  expect(persistedPlanIds).toContain(freshPlan.id);
+  await expect.poll(async () =>
+    page.evaluate((freshId) => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return data.plans?.some((plan: any) => plan.id === freshId);
+    }, freshPlan.id),
+  ).toBe(true);
+
+});
+
+test("does not replace an unsynced fresh climb with an expired server record", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
+  });
+  const expiredPlan = makePlan({
+    id: "expired-server-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -14,
+  });
+  const freshPlan = makePlan({
+    id: "fresh-unsynced-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
+  const ordinaryPlan = {
+    id: "ordinary-reading-plan",
+    name: "Ordinary plan",
+    assignments: [],
+    completed: {},
+  };
+
+  await stubAuthenticatedApi(page, ordinaryPlan, [expiredPlan], {
+    failPlanPosts: true,
+  });
+  await seedLocalData(page, [expiredPlan, freshPlan], freshPlan.id, {
+    ownerId: "authenticated-mountain-user",
+    pendingOps: [
+      {
+        type: "upsert-plan",
+        payload: freshPlan,
+        ts: 1,
+      },
+    ],
+  });
+  await openMountainRhythm(page);
+
+  await expect(
+    page.getByText("7-Day Climb · active reading climb", { exact: true }),
+  ).toBeVisible();
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return data.selectedPlanId;
+    }),
+  ).toBe(freshPlan.id);
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const pending = JSON.parse(
+        localStorage.getItem("discipleos:pendingOps") || "{}",
+      );
+      return pending.ops?.some(
+        (op: any) => op.type === "upsert-plan" && op.payload?.id === "fresh-unsynced-climb",
+      );
+    }),
+  ).toBe(true);
 });
 
 test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) => {

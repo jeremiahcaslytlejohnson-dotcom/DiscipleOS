@@ -187,7 +187,10 @@ describe("Mountain Rhythm journey calculation", () => {
     const ordinaryB = journey("ordinary-b", 30, { completedDays: [0, 1, 2] });
     const climb = journey("climb", 7, { name: "7-Day Climb", completedDays: [0] });
 
-    const active = findActiveStructuredClimb([ordinaryA, ordinaryB, climb]);
+    const active = findActiveStructuredClimb(
+      [ordinaryA, ordinaryB, climb],
+      "2026-08-21",
+    );
 
     expect(active?.id).toBe(climb.id);
     expect(isStructuredClimbComplete(climb)).toBe(false);

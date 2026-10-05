@@ -3,6 +3,10 @@ import { apiFetch } from "@/lib/api-fetch";
 const fetch = apiFetch;
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import {
+  getLocalPlanTimeZone,
+  getStructuredPlanLifecycle,
+} from "@workspace/structured-plan-lifecycle";
 import { useAuth } from "../lib/auth";
 import {
   ArrowLeft,
@@ -139,6 +143,7 @@ function makeJourneyPlan(journeyKey: string, readingDefaults = loadReadingDefaul
     paceMode: "time",
     dailyMinutes: readingDefaults.dailyReadingBudget,
     readingWpm,
+    timeZone: getLocalPlanTimeZone(),
     assignments,
     completed: {},
   };
@@ -220,6 +225,7 @@ export default function MountainRhythm() {
   useEffect(() => {
     let cancelled = false;
     async function hydrate() {
+      let unresolvedPendingOps = loadPendingOpsState().ops;
       try {
         const sessionResponse = await fetch("/api/session/info", { cache: "no-store" });
         const sessionData = sessionResponse.ok ? await sessionResponse.json() : null;
@@ -251,6 +257,7 @@ export default function MountainRhythm() {
             },
             sessionData.userId,
           );
+          unresolvedPendingOps = boundary.pendingOps;
           if (boundary.localDataWasCleared) {
             setEvents([]);
             setPlans([]);
@@ -259,11 +266,17 @@ export default function MountainRhythm() {
           }
           if (boundary.pendingOpsWereCleared) {
             savePendingOps([], sessionData.userId);
+            unresolvedPendingOps = [];
           } else if (boundary.pendingOps.length > 0) {
             const remaining = await flushPendingOps(boundary.pendingOps);
             savePendingOps(remaining, sessionData.userId);
+            unresolvedPendingOps = remaining;
           }
         }
+
+        // Do not replace local plans with an older server snapshot while any
+        // local operation is still waiting to sync.
+        if (unresolvedPendingOps.length > 0) return;
 
         const [plansResponse, eventsResponse, rhythmResponse, settingsResponse] = await Promise.all([
           fetch("/api/reading/plans", { cache: "no-store" }),
@@ -295,8 +308,9 @@ export default function MountainRhythm() {
             const hydratedPlans = normalizePlans(data.plans).map((plan: any) =>
               mergeLocalCompletionHistory(plan, localPlansById.get(plan.id)),
             );
-            setPlans(
-              hydratedPlans,
+            setPlans(hydratedPlans);
+            setSelectedPlanId((current) =>
+              resolveStructuredClimbPlanId(hydratedPlans, current),
             );
             if (oversizedServerPlans.length > 0) {
               void Promise.all(
@@ -406,11 +420,14 @@ export default function MountainRhythm() {
       return;
     }
     const plan = kind === "20-day-reset"
-      ? createConsistencyResetPlan({
+      ? {
+          ...createConsistencyResetPlan({
           id: makeId("plan"),
           startDate: todayISO(),
           estimateChapterMinutes,
-        })
+          }),
+          timeZone: getLocalPlanTimeZone(),
+        }
       : makeJourneyPlan(kind, readingDefaults);
     setPlans((current) => [plan, ...current]);
     setSelectedPlanId(plan.id);
@@ -591,6 +608,13 @@ export default function MountainRhythm() {
           return summary ? { ...summary, plan } : null;
         })
         .filter(Boolean),
+    [structuredPlans],
+  );
+  const expiredClimbs = useMemo(
+    () =>
+      structuredPlans
+        .filter((plan) => getStructuredPlanLifecycle(plan) === "expired")
+        .sort((a, b) => String(b.startDate || "").localeCompare(String(a.startDate || ""))),
     [structuredPlans],
   );
   const selectedRouteIndex = MOUNTAIN_RHYTHM_ROUTES.findIndex(
@@ -774,6 +798,34 @@ export default function MountainRhythm() {
                         </div>
                         <div className="text-sm font-semibold text-emerald-200">
                           {climb.earnedAscent} ascent
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {expiredClimbs.length > 0 ? (
+                <section
+                  className="mt-4 border-t border-white/10 pt-4"
+                  data-testid="mountain-rhythm-expired-climbs"
+                >
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
+                    Past climbs
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {expiredClimbs.map((plan) => (
+                      <div
+                        key={plan.id}
+                        className="border-b border-white/10 bg-black/10 px-3 py-3"
+                        data-testid={`past-climb-${plan.id}`}
+                      >
+                        <div className="text-sm font-semibold text-white">
+                          {plan.name || "Structured climb"} · Expired
+                        </div>
+                        <div className="discipleos-secondary-copy text-xs">
+                          {plan.startDate && plan.endDate
+                            ? `${plan.startDate} – ${plan.endDate} · Progress remains in your history`
+                            : "Progress remains in your history"}
                         </div>
                       </div>
                     ))}

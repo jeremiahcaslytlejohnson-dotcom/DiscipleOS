@@ -182,6 +182,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/structured-plan-lifecycle':
+        specifier: workspace:*
+        version: link:../../lib/structured-plan-lifecycle
       connect-pg-simple:
         specifier: ^10.0.0
         version: 10.0.0
@@ -366,6 +369,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/structured-plan-lifecycle':
+        specifier: workspace:*
+        version: link:../../lib/structured-plan-lifecycle
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -652,6 +658,8 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  lib/structured-plan-lifecycle: {}
 
   scripts:
     devDependencies:
