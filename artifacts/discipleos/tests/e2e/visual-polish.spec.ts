@@ -523,7 +523,7 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
 test("collapses Calendar reading plans independently while keeping the summary and completion action visible", async ({ page }) => {
   const today = todayISO();
   const firstPlan = {
-    ...makeOrdinaryPlan("calendar-collapsible-climb", "7-Day Climb"),
+    ...makeOrdinaryPlan("calendar-collapsible-climb", "Morning Psalms"),
     readingTime: "06:45",
     assignments: [
       {
@@ -573,14 +573,14 @@ test("collapses Calendar reading plans independently while keeping the summary a
     await expect(firstReadings).toBeHidden();
     await expect(secondReadings).toBeHidden();
 
-    await expect(firstRow).toContainText("7-Day Climb");
+    await expect(firstRow).toContainText("Morning Psalms");
     await expect(firstRow).toContainText("bible");
     await expect(firstRow).toContainText(/6:45/);
     await expect(firstRow).toContainText("3 chapters assigned");
-    await expect(firstRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+    await expect(firstRow.getByRole("button", { name: /^(Complete|Undo) day$/ })).toBeVisible();
     await expect(secondRow).toContainText("Prayer & Purpose");
     await expect(secondRow).toContainText("2 chapters assigned");
-    await expect(secondRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+    await expect(secondRow.getByRole("button", { name: /^(Complete|Undo) day$/ })).toBeVisible();
 
     const toggleBox = await firstToggle.boundingBox();
     expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -591,14 +591,25 @@ test("collapses Calendar reading plans independently while keeping the summary a
     await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toBeVisible();
     await expect(secondReadings).toBeHidden();
 
-    await firstReadings.getByRole("button", { name: "Psalm 1" }).click();
-    await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toHaveClass(/border-emerald-400/);
     await firstToggle.click();
     await expect(firstReadings).toBeHidden();
 
-    await firstRow.getByRole("button", { name: "Complete day", exact: true }).click();
-    await expect(firstRow.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
-    await expect(firstReadings).toBeHidden();
+    await secondToggle.click();
+    await expect(secondReadings).toBeVisible();
+    const firstChapter = secondReadings.getByRole("button", { name: "Matthew 1" });
+    const initialChapterCompletion = await firstChapter.getAttribute("aria-pressed");
+    expect(["true", "false"]).toContain(initialChapterCompletion);
+    await firstChapter.click();
+    await expect(firstChapter).toHaveAttribute(
+      "aria-pressed",
+      initialChapterCompletion === "true" ? "false" : "true",
+    );
+    await secondToggle.click();
+    await expect(secondReadings).toBeHidden();
+    await expect(secondRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+    await secondRow.getByRole("button", { name: "Complete day", exact: true }).click();
+    await expect(secondRow.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
+    await expect(secondReadings).toBeHidden();
   }
 });
 

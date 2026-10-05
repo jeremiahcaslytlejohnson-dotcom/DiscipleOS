@@ -3357,6 +3357,7 @@ export default function DiscipleOSApp() {
                 <button
                   key={reading.key}
                   type="button"
+                  aria-pressed={done}
                   onClick={() => toggleChapterComplete(plan.id, reading.key)}
                   className={cn(
                     "discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-sm transition",

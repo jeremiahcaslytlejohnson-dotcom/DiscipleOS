@@ -18,4 +18,5 @@
 - [Playwright seeded state](playwright-seeded-state.md) — init scripts rerun on reload; preserve existing storage when a browser test verifies reload persistence.
 - [Calendar form handlers](calendar-form-handlers.md) — optional arguments on form reset helpers must be passed through zero-argument React click wrappers.
 - [Calendar visual test selectors](calendar-visual-test-selectors.md) — reserve the `calendar-day-*` test-id prefix for actual date cells, not list containers.
+- [Calendar reading disclosure tests](calendar-reading-disclosure-tests.md) — test disclosure separately from completion state; plan rows may render as already complete.
 - [Feedback operations](feedback-operations.md) — feedback is permanent in Postgres; owner access is server-gated and notification failures never roll back saved rows.
