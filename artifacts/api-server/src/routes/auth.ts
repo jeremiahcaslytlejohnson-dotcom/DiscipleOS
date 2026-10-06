@@ -3,6 +3,7 @@ import { Router, type Request } from "express";
 import {
   authEmailCodesTable,
   db,
+  deletedEventTombstonesTable,
   eventCompletionsTable,
   eventsTable,
   feedbackTable,
@@ -156,6 +157,10 @@ router.post("/auth/test-cleanup", async (req, res) => {
           .from(eventsTable)
           .where(inArray(eventsTable.userId, ownerIds));
         eventIds = fixtureEvents.map((event) => event.id);
+
+        await tx
+          .delete(deletedEventTombstonesTable)
+          .where(inArray(deletedEventTombstonesTable.userId, ownerIds));
 
         if (eventIds.length > 0) {
           deletedCompletions = (

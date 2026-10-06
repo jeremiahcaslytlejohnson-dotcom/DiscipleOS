@@ -11,6 +11,12 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - `sent_reminders` records each successful event-to-subscription delivery; failed subscriptions remain eligible for retry.
 - 410/404 from push service → subscription deleted; other errors → subscription kept for retry.
 
+## Deletion and dispatch eligibility
+- A reminder is eligible only while its current event row exists, reminders are enabled, and its recurrence and due-time rules match. `sent_reminders` is history/deduplication, never a dispatch source.
+- Keep owner-scoped deletion tombstones so stale queued upserts or replacement edits cannot restore a deleted event ID; move them when anonymous data is claimed by an account.
+  **Why:** A hard delete alone lets a reconnecting or stale tab recreate the same ID, making the reminder eligible again.
+  **How to apply:** Serialize deletes and upserts by event ID, reject reuse of tombstoned IDs, retain sent history, and keep scheduler exclusions aligned with activity types hidden from the current client.
+
 ## Product scope
 - Reliable scheduled reminders are the essential product scope; any native app work should be limited to what makes reminders dependable.
   **Why:** The owner clarified that reminders are the core purpose, while store presence or a broad web-app port is secondary.

@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, eventsTable, pushSubscriptionsTable, readingPlansTable } from "@workspace/db";
+import {
+  db,
+  deletedEventTombstonesTable,
+  eventsTable,
+  pushSubscriptionsTable,
+  readingPlansTable,
+} from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { isActiveStructuredPlan } from "@workspace/structured-plan-lifecycle";
 
@@ -64,6 +70,10 @@ router.post("/account/claim", requireAuth, async (req, res) => {
         .select()
         .from(pushSubscriptionsTable)
         .where(eq(pushSubscriptionsTable.userId, anonymousUserId));
+      const anonymousDeletedEventTombstones = await tx
+        .select()
+        .from(deletedEventTombstonesTable)
+        .where(eq(deletedEventTombstonesTable.userId, anonymousUserId));
       const accountPlans = await tx
         .select()
         .from(readingPlansTable)
@@ -171,6 +181,27 @@ router.post("/account/claim", requireAuth, async (req, res) => {
           subscriptions++;
         }
       }
+
+      for (const tombstone of anonymousDeletedEventTombstones) {
+        const [eventWithSameId] = await tx
+          .select({ id: eventsTable.id })
+          .from(eventsTable)
+          .where(eq(eventsTable.id, tombstone.eventId))
+          .limit(1);
+        if (!eventWithSameId) {
+          await tx
+            .insert(deletedEventTombstonesTable)
+            .values({
+              eventId: tombstone.eventId,
+              userId: accountUserId,
+              deletedAt: tombstone.deletedAt,
+            })
+            .onConflictDoNothing();
+        }
+      }
+      await tx
+        .delete(deletedEventTombstonesTable)
+        .where(eq(deletedEventTombstonesTable.userId, anonymousUserId));
 
       return { events, plans, subscriptions };
     });

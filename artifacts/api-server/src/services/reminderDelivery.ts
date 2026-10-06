@@ -30,6 +30,7 @@ export type ReminderDeliverySummary = {
 type ReminderRunOptions = {
   invocationId?: string;
   source?: "scheduled" | "api";
+  now?: Date;
 };
 
 function configureWebPush() {
@@ -66,20 +67,20 @@ function getPartsInTimeZone(
   );
 }
 
-function getNowInTimeZone(timeZone: string): {
+function getNowInTimeZone(timeZone: string, now: Date): {
   today: string;
   nowHHMM: string;
   timeZone: string;
 } {
   try {
-    const parts = getPartsInTimeZone(new Date(), timeZone);
+    const parts = getPartsInTimeZone(now, timeZone);
     return {
       today: `${parts.year}-${parts.month}-${parts.day}`,
       nowHHMM: `${parts.hour}:${parts.minute}`,
       timeZone,
     };
   } catch {
-    const parts = getPartsInTimeZone(new Date(), "UTC");
+    const parts = getPartsInTimeZone(now, "UTC");
     return {
       today: `${parts.year}-${parts.month}-${parts.day}`,
       nowHHMM: `${parts.hour}:${parts.minute}`,
@@ -281,6 +282,7 @@ export async function sendDueReminders(
 ): Promise<ReminderDeliverySummary> {
   const invocationId = options.invocationId ?? randomUUID();
   const source = options.source ?? "api";
+  const runNow = options.now ?? new Date();
   logger.info(
     {
       event: "reminder_run_started",
@@ -331,8 +333,15 @@ export async function sendDueReminders(
   const fallbackTZ = "America/New_York";
 
   for (const event of allEvents) {
+    const normalizedType = event.type.trim().toLowerCase();
+    if (normalizedType === "birthday" || normalizedType === "birthdays") {
+      // Older rows can remain in the database even though birthdays are no
+      // longer exposed as activities by the client.
+      continue;
+    }
+
     const requestedTimeZone = event.timeZone || fallbackTZ;
-    const { today, nowHHMM, timeZone } = getNowInTimeZone(requestedTimeZone);
+    const { today, nowHHMM, timeZone } = getNowInTimeZone(requestedTimeZone, runNow);
     const reminderMinutes = Number(event.reminderMinutes ?? 10);
     if (!event.time) {
       continue;

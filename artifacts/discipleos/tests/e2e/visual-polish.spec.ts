@@ -653,6 +653,137 @@ test("collapses Calendar reading plans independently while keeping the summary a
   }
 });
 
+test("collapses Plan details day readings independently while preserving completion and progress", async ({ page }) => {
+  const today = todayISO();
+  const tomorrow = tomorrowISO();
+  const plan = {
+    ...makeOrdinaryPlan("plan-details-day-disclosure", "Plan details disclosure"),
+    startDate: today,
+    endDate: tomorrow,
+    durationDays: 2,
+    totalDays: 2,
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "plan-disclosure-psalm-1", label: "Psalm 1" },
+          { key: "plan-disclosure-psalm-2", label: "Psalm 2" },
+        ],
+      },
+      {
+        date: tomorrow,
+        readings: [{ key: "plan-disclosure-psalm-3", label: "Psalm 3" }],
+      },
+    ],
+    completed: { "plan-disclosure-psalm-1": true },
+  };
+  const dayCompletionWrites: Array<{ planId: string; date: string; completed: boolean }> = [];
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname.endsWith("/api/reading/day-complete") &&
+      request.method() === "POST"
+    ) {
+      const body = request.postDataJSON();
+      dayCompletionWrites.push({
+        planId: body.planId,
+        date: body.date,
+        completed: body.completed,
+      });
+    }
+  });
+
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+  await page.getByTestId(`planned-reading-card-${plan.id}`).click();
+
+  const details = page.getByTestId("dashboard-plan-details");
+  const firstIdentifier = `${plan.id}-${today}`;
+  const secondIdentifier = `${plan.id}-${tomorrow}`;
+  const firstDay = details.getByTestId(`plan-day-section-${firstIdentifier}`);
+  const secondDay = details.getByTestId(`plan-day-section-${secondIdentifier}`);
+  const firstToggle = firstDay.getByTestId(`plan-day-toggle-${firstIdentifier}`);
+  const secondToggle = secondDay.getByTestId(`plan-day-toggle-${secondIdentifier}`);
+  const firstReadings = firstDay.getByTestId(`plan-day-readings-${firstIdentifier}`);
+  const secondReadings = secondDay.getByTestId(`plan-day-readings-${secondIdentifier}`);
+  const firstAction = firstDay.getByTestId("button-complete-plan-day-1");
+
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(firstReadings).toBeHidden();
+  await expect(secondReadings).toBeHidden();
+  await expect(firstDay.getByTestId(`plan-day-date-${firstIdentifier}`)).toBeVisible();
+  await expect(firstToggle).toContainText("Day 1 of 2");
+  await expect(firstDay.getByTestId(`plan-day-status-${firstIdentifier}`)).toHaveText("In progress");
+  await expect(firstDay.getByTestId(`plan-day-progress-${firstIdentifier}`)).toContainText(
+    "2 readings · 1/2 chapters complete",
+  );
+  await expect(secondToggle).toContainText("Day 2 of 2");
+  await expect(secondDay.getByTestId(`plan-day-status-${secondIdentifier}`)).toHaveText("Upcoming");
+  await expect(firstAction).toHaveText("Complete day");
+  await expect(firstAction).toBeVisible();
+  await expect(secondDay.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+  await expect(details.getByText("33%", { exact: true })).toBeVisible();
+
+  await firstToggle.click();
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(firstReadings).toBeVisible();
+  await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(secondReadings).toBeHidden();
+
+  await secondToggle.click();
+  await expect(secondReadings).toBeVisible();
+  await expect(firstReadings).toBeVisible();
+  await firstToggle.click();
+  await expect(firstReadings).toBeHidden();
+  await expect(secondReadings).toBeVisible();
+  await secondToggle.click();
+  await expect(secondReadings).toBeHidden();
+
+  await firstAction.click();
+  await expect(firstAction).toHaveText("Undo day");
+  await expect(firstDay.getByTestId(`plan-day-status-${firstIdentifier}`)).toHaveText("Complete");
+  await expect(firstDay.getByTestId(`plan-day-progress-${firstIdentifier}`)).toContainText(
+    "2 readings · 2/2 chapters complete",
+  );
+  await expect(details.getByText("67%", { exact: true })).toBeVisible();
+
+  await firstAction.click();
+  await expect(firstAction).toHaveText("Complete day");
+  await expect(firstDay.getByTestId(`plan-day-status-${firstIdentifier}`)).toHaveText("Not started");
+  await expect(firstDay.getByTestId(`plan-day-progress-${firstIdentifier}`)).toContainText(
+    "2 readings · 0/2 chapters complete",
+  );
+  await expect(details.getByText("0%", { exact: true })).toBeVisible();
+  expect(dayCompletionWrites).toEqual([
+    { planId: plan.id, date: today, completed: true },
+    { planId: plan.id, date: today, completed: false },
+  ]);
+
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const [toggleBox, actionBox] = await Promise.all([
+      firstToggle.boundingBox(),
+      firstAction.boundingBox(),
+    ]);
+    expect(toggleBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(actionBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width + 1,
+    );
+    await expect(firstToggle).toBeVisible();
+    await expect(firstAction).toBeVisible();
+  }
+});
+
 test("keeps the Plans add action aligned at narrow mobile width", async ({ page }) => {
   const plan = makeOrdinaryPlan("narrow-plan-alignment", "Morning Psalms");
   await stubHomeApi(page, plan);

@@ -33,6 +33,7 @@ import request from "supertest";
 import webpush from "web-push";
 import { db } from "@workspace/db";
 import {
+  deletedEventTombstonesTable,
   eventsTable,
   pushSubscriptionsTable,
   sentRemindersTable,
@@ -92,6 +93,9 @@ const app = createApp(store);
 afterAll(async () => {
   // Remove all rows created by this test run (identified by the prefix)
   await db.delete(eventsTable).where(like(eventsTable.id, `${PREFIX}%`));
+  await db
+    .delete(deletedEventTombstonesTable)
+    .where(like(deletedEventTombstonesTable.eventId, `${PREFIX}%`));
   await db.delete(pushSubscriptionsTable).where(like(pushSubscriptionsTable.endpoint, `https://push-test.example%`));
   await db.delete(sentRemindersTable).where(like(sentRemindersTable.eventId, `${PREFIX}%`));
 });
@@ -645,6 +649,173 @@ describe("5 — Due-reminder delivery targeting", () => {
     expect(new Set(sentRows.map((row) => row.endpoint))).toEqual(
       new Set([ownerEndpoint, ownerSecondEndpoint]),
     );
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5b. Deleted and legacy reminders are ineligible for dispatch
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("5b — Deleted reminder eligibility", () => {
+  it("keeps a deleted future reminder out of dispatch after stale upsert and orphan history", async () => {
+    const ownerRes = await request(app).get("/api/session/info");
+    const ownerCookie = extractCookie(ownerRes);
+    const ownerUserId = ownerRes.body.userId;
+    const eventId = uid("deleted-reminder");
+    const legacyEventId = uid("legacy-birthday");
+    const endpoint = `https://push-test.example/deleted/${uid()}`;
+    const legacyHistoryEndpoint = `https://push-test.example/history/${uid()}`;
+    const dueAt = new Date(Math.ceil(Date.now() / 60_000) * 60_000 + 2 * 60_000);
+    const scheduledEvent = {
+      id: eventId,
+      title: "Prayer night",
+      type: "prayer",
+      date: dueAt.toISOString().slice(0, 10),
+      time: dueAt.toISOString().slice(11, 16),
+      timeZone: "UTC",
+      remind: true,
+      reminderMinutes: 0,
+      repeat: "none",
+      repeatWeekdays: [],
+      repeatUntil: "",
+    };
+
+    const created = await request(app)
+      .post("/api/events")
+      .set("Cookie", ownerCookie)
+      .send(scheduledEvent);
+    expect(created.status).toBe(200);
+    expect(dueAt.getTime()).toBeGreaterThan(Date.now());
+
+    const deleted = await request(app)
+      .delete("/api/events")
+      .set("Cookie", ownerCookie)
+      .send({ id: eventId });
+    expect(deleted.status).toBe(200);
+
+    const staleUpsert = await request(app)
+      .post("/api/events")
+      .set("Cookie", ownerCookie)
+      .send(scheduledEvent);
+    expect(staleUpsert.status).toBe(409);
+
+    // Historical delivery rows are not dispatch sources and remain available
+    // for audit/history even after their event is deleted.
+    await db.insert(sentRemindersTable).values({
+      eventId,
+      endpoint: legacyHistoryEndpoint,
+    });
+
+    // Old birthday rows are hidden from current activity lists but can remain
+    // in the database, so they must not be treated as active reminders.
+    await db.insert(eventsTable).values({
+      id: legacyEventId,
+      userId: ownerUserId,
+      title: "Legacy birthday reminder",
+      type: "birthday",
+      date: dueAt.toISOString().slice(0, 10),
+      time: dueAt.toISOString().slice(11, 16),
+      notes: "",
+      remind: true,
+      reminderMinutes: 0,
+      repeat: "none",
+      repeatWeekdays: [],
+      timeZone: "UTC",
+    });
+
+    await request(app)
+      .post("/api/push")
+      .set("Cookie", ownerCookie)
+      .send({ endpoint, keys: { p256dh: "deletedKey", auth: "deletedAuth" } });
+
+    vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
+    await sendDueReminders({ source: "api", now: dueAt });
+
+    const callsForOwner = vi.mocked(webpush.sendNotification).mock.calls.filter(
+      (call) => (call[0] as any).endpoint === endpoint,
+    );
+    expect(callsForOwner).toHaveLength(0);
+
+    const remainingEvent = await db
+      .select()
+      .from(eventsTable)
+      .where(eq(eventsTable.id, eventId));
+    expect(remainingEvent).toHaveLength(0);
+
+    const tombstones = await db
+      .select()
+      .from(deletedEventTombstonesTable)
+      .where(
+        and(
+          eq(deletedEventTombstonesTable.eventId, eventId),
+          eq(deletedEventTombstonesTable.userId, ownerUserId),
+        ),
+      );
+    expect(tombstones).toHaveLength(1);
+
+    const historicalRows = await db
+      .select()
+      .from(sentRemindersTable)
+      .where(
+        and(
+          eq(sentRemindersTable.eventId, eventId),
+          eq(sentRemindersTable.endpoint, legacyHistoryEndpoint),
+        ),
+      );
+    expect(historicalRows).toHaveLength(1);
+  });
+
+  it("does not suppress an unrelated active reminder when one is deleted", async () => {
+    const ownerRes = await request(app).get("/api/session/info");
+    const ownerCookie = extractCookie(ownerRes);
+    const deletedId = uid("deleted-neighbor");
+    const activeId = uid("active-neighbor");
+    const endpoint = `https://push-test.example/active-neighbor/${uid()}`;
+    const dueAt = new Date(Math.ceil(Date.now() / 60_000) * 60_000 + 2 * 60_000);
+    const date = dueAt.toISOString().slice(0, 10);
+    const time = dueAt.toISOString().slice(11, 16);
+    const deletedPayload = {
+      id: deletedId,
+      title: "Deleted evening prayer",
+      type: "prayer",
+      date,
+      time,
+      timeZone: "UTC",
+      remind: true,
+      reminderMinutes: 0,
+      repeat: "none",
+      repeatWeekdays: [],
+      repeatUntil: "",
+    };
+    const activePayload = {
+      ...deletedPayload,
+      id: activeId,
+      title: "Active scripture review",
+    };
+
+    expect((await request(app).post("/api/events").set("Cookie", ownerCookie).send(deletedPayload)).status).toBe(200);
+    expect((await request(app).post("/api/events").set("Cookie", ownerCookie).send(activePayload)).status).toBe(200);
+    await request(app)
+      .post("/api/push")
+      .set("Cookie", ownerCookie)
+      .send({ endpoint, keys: { p256dh: "activeKey", auth: "activeAuth" } });
+
+    const deleted = await request(app)
+      .delete("/api/events")
+      .set("Cookie", ownerCookie)
+      .send({ id: deletedId });
+    expect(deleted.status).toBe(200);
+
+    vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
+    await sendDueReminders({ source: "api", now: dueAt });
+
+    const callsForOwner = vi.mocked(webpush.sendNotification).mock.calls.filter(
+      (call) => (call[0] as any).endpoint === endpoint,
+    );
+    expect(callsForOwner).toHaveLength(1);
+    const payload = JSON.parse(callsForOwner[0][1] as string);
+    expect(payload.title).toBe("Active scripture review");
+    expect(payload.title).not.toBe("Deleted evening prayer");
   });
 });
 

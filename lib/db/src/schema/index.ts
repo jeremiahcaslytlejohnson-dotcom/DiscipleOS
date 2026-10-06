@@ -1,4 +1,5 @@
 export * from "./events";
+export * from "./deleted_event_tombstones";
 export * from "./event_completions";
 export * from "./reading_plans";
 export * from "./push_subscriptions";

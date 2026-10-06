@@ -2,7 +2,8 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { eventCompletionsTable, eventsTable } from "@workspace/db";
 import { UpsertEventBody, UpsertEventResponse } from "@workspace/api-zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { deletedEventTombstonesTable } from "@workspace/db";
 import { eventOccursOnDate } from "../services/mountainRhythm";
 
 const router = Router();
@@ -99,20 +100,6 @@ router.post("/events", async (req, res) => {
       return;
     }
 
-    // If an ID was provided, check whether it already belongs to a different user
-    if (event.id) {
-      const [existing] = await db
-        .select({ id: eventsTable.id, userId: eventsTable.userId })
-        .from(eventsTable)
-        .where(eq(eventsTable.id, id))
-        .limit(1);
-
-      if (existing && existing.userId !== userId) {
-        res.status(409).json({ success: false, error: "Event ID already in use by another user" });
-        return;
-      }
-    }
-
     const values = {
       id,
       userId,
@@ -134,7 +121,37 @@ router.post("/events", async (req, res) => {
       updatedAt: new Date(),
     };
 
-    const saved = await db.transaction(async (tx) => {
+    const saveResult = await db.transaction(async (tx) => {
+      const lockIds = [...new Set([id, replacesEventId].filter(
+        (lockId): lockId is string => Boolean(lockId),
+      ))].sort();
+      for (const lockId of lockIds) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockId}, 0))`,
+        );
+      }
+
+      const [deletedId] = await tx
+        .select({ eventId: deletedEventTombstonesTable.eventId })
+        .from(deletedEventTombstonesTable)
+        .where(
+          and(
+            eq(deletedEventTombstonesTable.eventId, id),
+            eq(deletedEventTombstonesTable.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (deletedId) return { ok: false as const };
+
+      const [existingById] = await tx
+        .select({ id: eventsTable.id, userId: eventsTable.userId })
+        .from(eventsTable)
+        .where(eq(eventsTable.id, id))
+        .limit(1);
+      if (existingById && existingById.userId !== userId) {
+        return { ok: false as const };
+      }
+
       // Calendar edits deliberately mint a new ID. Deleting the superseded,
       // user-owned row in this transaction keeps the visible edit as one event
       // while leaving its historical sent_reminders record tied to the old ID.
@@ -144,14 +161,30 @@ router.post("/events", async (req, res) => {
           .from(eventsTable)
           .where(and(eq(eventsTable.id, replacesEventId), eq(eventsTable.userId, userId)))
           .limit(1);
-        if (replacedOwned) {
-          await tx.delete(eventCompletionsTable).where(
-            eq(eventCompletionsTable.eventId, replacesEventId),
-          );
-          await tx.delete(eventsTable).where(
-            and(eq(eventsTable.id, replacesEventId), eq(eventsTable.userId, userId)),
-          );
-        }
+        if (!replacedOwned) return { ok: false as const };
+
+        const [deletedReplacement] = await tx
+          .select({ eventId: deletedEventTombstonesTable.eventId })
+          .from(deletedEventTombstonesTable)
+          .where(
+            and(
+              eq(deletedEventTombstonesTable.eventId, replacesEventId),
+              eq(deletedEventTombstonesTable.userId, userId),
+            ),
+          )
+          .limit(1);
+        if (deletedReplacement) return { ok: false as const };
+
+        await tx
+          .insert(deletedEventTombstonesTable)
+          .values({ eventId: replacesEventId, userId })
+          .onConflictDoNothing();
+        await tx.delete(eventCompletionsTable).where(
+          eq(eventCompletionsTable.eventId, replacesEventId),
+        );
+        await tx.delete(eventsTable).where(
+          and(eq(eventsTable.id, replacesEventId), eq(eventsTable.userId, userId)),
+        );
       }
 
       const [existingOwned] = await tx
@@ -166,12 +199,20 @@ router.post("/events", async (req, res) => {
           .set(values)
           .where(and(eq(eventsTable.id, id), eq(eventsTable.userId, userId)))
           .returning();
-        return updated;
+        return { ok: true as const, event: updated };
       }
 
       const [created] = await tx.insert(eventsTable).values(values).returning();
-      return created;
+      return { ok: true as const, event: created };
     });
+    if (!saveResult.ok) {
+      res.status(409).json({
+        success: false,
+        error: "Event or replacement is no longer available",
+      });
+      return;
+    }
+    const saved = saveResult.event;
 
     // Mark session as established — server state is now authoritative for this session
     if (!req.session.sessionEstablished) {
@@ -189,21 +230,29 @@ router.post("/events", async (req, res) => {
 router.delete("/events", async (req, res) => {
   try {
     const userId = req.session.userId!;
-    const { id } = req.body;
-    if (!id) {
+    const { id } = req.body ?? {};
+    if (typeof id !== "string" || !id) {
       res.status(400).json({ success: false, error: "Missing id" });
       return;
     }
-    const [ownedEvent] = await db
-      .select({ id: eventsTable.id })
-      .from(eventsTable)
-      .where(and(eq(eventsTable.id, id), eq(eventsTable.userId, userId)))
-      .limit(1);
-    if (!ownedEvent) {
-      res.json({ success: true });
-      return;
-    }
     await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${id}, 0))`,
+      );
+
+      const [event] = await tx
+        .select({ id: eventsTable.id, userId: eventsTable.userId })
+        .from(eventsTable)
+        .where(eq(eventsTable.id, id))
+        .limit(1);
+      if (event && event.userId !== userId) return;
+
+      await tx
+        .insert(deletedEventTombstonesTable)
+        .values({ eventId: id, userId })
+        .onConflictDoNothing();
+      if (!event) return;
+
       await tx.delete(eventCompletionsTable).where(eq(eventCompletionsTable.eventId, id));
       await tx.delete(eventsTable).where(and(eq(eventsTable.id, id), eq(eventsTable.userId, userId)));
     });
