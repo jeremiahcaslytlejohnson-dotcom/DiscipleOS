@@ -9,7 +9,7 @@
 - [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.
 - [Mobile menu positioning](mobile-menu-positioning.md) — reserve a bottom action dock outside mobile scrolling content; keep the open navigation panel viewport-centered.
 - [Visual contract probes](visual-contract-probes.md) — assert shared surface roles in the rendered tab state; flattened layouts may intentionally have no item cards.
-- [Splash-aware visual verification](splash-aware-visual-verification.md) — immediate preview screenshots can capture the launch splash; wait for post-splash DOM state before judging the app surface.
+- [Splash-aware visual verification](splash-aware-visual-verification.md) — wait for splash removal; responsive matrices should navigate once per seeded state, then resize.
 - [Responsive disclosure probes](responsive-disclosure-probes.md) — keep mobile-only collapsed content out of geometry probes, while exposing the complete form from the tablet breakpoint upward.
 - [Account reading settings](account-settings.md) — store defaults separately and apply them only when starting a new ordinary reading plan.
 - [First-party auth boundary](first-party-auth-boundary.md) — passwordless email-code auth uses Postgres-backed httpOnly sessions; anonymous app-state sessions remain separate.

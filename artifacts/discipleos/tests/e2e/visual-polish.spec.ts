@@ -228,14 +228,15 @@ async function seedPlans(
   plans: unknown[],
   events: unknown[] = [],
   preserveExisting = false,
+  ownerId: string | null = null,
 ) {
   await page.addInitScript(
-    ({ seededPlans, seededEvents, preserve }) => {
+    ({ seededPlans, seededEvents, preserve, seededOwnerId }) => {
       if (preserve && localStorage.getItem("discipleos-data")) return;
       localStorage.setItem(
         "discipleos-data",
         JSON.stringify({
-          ownerId: null,
+          ownerId: seededOwnerId,
           plans: seededPlans,
           events: seededEvents,
           eventCompletions: {},
@@ -243,7 +244,12 @@ async function seedPlans(
         }),
       );
     },
-    { seededPlans: plans, seededEvents: events, preserve: preserveExisting },
+    {
+      seededPlans: plans,
+      seededEvents: events,
+      preserve: preserveExisting,
+      seededOwnerId: ownerId,
+    },
   );
 }
 
@@ -747,6 +753,112 @@ test("undoes a completed Calendar day while preserving its earned history", asyn
     earnedDayKeys: [today],
     dayCompletionDates: { [today]: today },
   });
+});
+
+test("keeps the Calendar Bible marker incomplete until every plan's readings for the day are complete", async ({
+  page,
+}) => {
+  const today = todayISO();
+  const firstPlan = {
+    ...makeOrdinaryPlan("calendar-marker-plan-a", "Morning Psalms"),
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "calendar-marker-a1", label: "Psalm 1" },
+          { key: "calendar-marker-a2", label: "Psalm 2" },
+        ],
+      },
+    ],
+    completed: { "calendar-marker-a1": true },
+  };
+  const secondPlan = {
+    ...makeOrdinaryPlan("calendar-marker-plan-b", "Evening Proverbs"),
+    assignments: [
+      {
+        date: today,
+        readings: [{ key: "calendar-marker-b1", label: "Proverbs 1" }],
+      },
+    ],
+    completed: { "calendar-marker-b1": true },
+  };
+  const plans = [firstPlan, secondPlan];
+
+  await stubHomeApi(page, plans);
+  await seedPlans(page, plans, [], true, "visual-polish-owner");
+  await page.route("**/api/reading/complete", async (route) => {
+    const payload = route.request().postDataJSON() as {
+      planId: string;
+      key: string;
+      completed: boolean;
+    };
+    const plan = plans.find((item) => item.id === payload.planId) as any;
+    if (plan) {
+      plan.completed = {
+        ...(plan.completed || {}),
+        [payload.key]: Boolean(payload.completed),
+      };
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  const openCalendarDate = async () => {
+    await page.locator(".launch-splash").waitFor({ state: "detached" });
+    await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+    await (await openDashboardNavigation(page))
+      .getByRole("button", { name: "Calendar", exact: true })
+      .click();
+    await expect(page.getByTestId("dashboard-calendar-content")).toBeVisible();
+    await page.getByTestId(`calendar-day-${today}`).click();
+    await expect(page.getByTestId("dashboard-calendar-activities")).toBeVisible();
+  };
+
+  const bibleMarker = page.getByTestId(`calendar-marker-${today}-bible`);
+  await page.goto("/");
+  await openCalendarDate();
+  await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
+
+  const firstPlanItem = page.getByTestId(`calendar-plan-item-${firstPlan.id}`);
+  const secondPlanItem = page.getByTestId(`calendar-plan-item-${secondPlan.id}`);
+  await expect(firstPlanItem.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+  await expect(secondPlanItem.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
+  await firstPlanItem.getByTestId(`calendar-plan-toggle-${firstPlan.id}`).click();
+  const secondReading = page
+    .getByTestId(`calendar-plan-readings-${firstPlan.id}`)
+    .getByRole("button", { name: "Psalm 2", exact: true });
+  await expect(secondReading).toHaveAttribute("aria-pressed", "false");
+  await secondReading.click();
+  await expect(secondReading).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => firstPlan.completed["calendar-marker-a2"]).toBe(true);
+  await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
+
+  await page.reload();
+  await openCalendarDate();
+  await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
+
+  await firstPlanItem.getByRole("button", { name: "Complete day", exact: true }).click();
+  await expect(firstPlanItem.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
+  await expect(bibleMarker).toHaveClass(/text-emerald-400/);
+  await expect.poll(() => firstPlan.completed["calendar-marker-a2"]).toBe(true);
+
+  await page.reload();
+  await openCalendarDate();
+  await expect(bibleMarker).toHaveClass(/text-emerald-400/);
+
+  await page.getByTestId(`calendar-plan-item-${firstPlan.id}`)
+    .getByRole("button", { name: "Undo day", exact: true })
+    .click();
+  await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
+  await expect.poll(() => firstPlan.completed["calendar-marker-a1"]).toBe(false);
+  await expect.poll(() => firstPlan.completed["calendar-marker-a2"]).toBe(false);
+
+  await page.reload();
+  await openCalendarDate();
+  await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
 });
 
 test("keeps Mountain Rhythm plans out of the Plans view", async ({ page }) => {
@@ -1870,14 +1982,16 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
   await page.addInitScript(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
 
   for (const state of states) {
+    await page.unrouteAll();
+    await stubHomeApi(page, state.plans, [dailyWalkEvent]);
+    await seedPlans(page, state.plans, [dailyWalkEvent], false, "visual-polish-owner");
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.locator(".launch-splash").waitFor({ state: "detached" });
+    await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+
     for (const width of [320, 360, 390, 430, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.unrouteAll();
-      await stubHomeApi(page, state.plans, [dailyWalkEvent]);
-      await seedPlans(page, state.plans, [dailyWalkEvent]);
-      await page.goto("/");
-        await page.evaluate(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
-        await page.reload();
 
       const assigned = page.getByTestId("dashboard-assigned-reading");
       const schedule = page.getByTestId("dashboard-schedule");
@@ -1987,6 +2101,9 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         await readingButton.click();
         await expect(readingButton).toHaveAttribute("class", before || "");
       }
+
+      await mountainToggle.click();
+      await expect(mountainToggle).toHaveAttribute("aria-expanded", "false");
     }
   }
 });

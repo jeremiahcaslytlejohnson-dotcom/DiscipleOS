@@ -3,11 +3,12 @@ const fetch = apiFetch;
 /**
  * Reconnect synchronization primitives for DiscipleOS.
  *
- * When the app is offline, API mutations fail silently (optimistic UI keeps
- * state intact). Each failed mutation is appended as a PendingOp to a
- * localStorage-backed queue. On reconnect, flushPendingOps() replays the queue
- * to the server in insertion order (push-before-pull), then the caller
- * re-hydrates from the server.
+ * When the app is offline, optimistic UI keeps local state intact. Mutations
+ * that must survive an interrupted request are stored as PendingOps in a
+ * localStorage-backed queue before sending; other failed mutations can be
+ * appended after failure. On reconnect, flushPendingOps() replays the queue to
+ * the server in insertion order (push-before-pull), then the caller re-hydrates
+ * from the server.
  *
  * Owned ops are idempotent on the API side (upserts by id, chapter-complete by
  * planId+key), so replaying is safe even if a previous attempt partially

@@ -359,6 +359,15 @@ function getCompletedMap(plan: any) {
   }, {});
 }
 
+function isPlanDayComplete(plan: any, dateISO: string) {
+  const assignment = plan?.assignments?.find((day) => day.date === dateISO);
+  const readings = assignment?.readings;
+  if (!Array.isArray(readings) || readings.length === 0) return false;
+
+  const completedMap = getCompletedMap(plan);
+  return readings.every((reading) => Boolean(completedMap[reading.key]));
+}
+
 function getEarnedDayKeys(plan: any) {
   const completedMap = getCompletedMap(plan);
   const earned = new Set(
@@ -833,13 +842,12 @@ const CALENDAR_ACTIVITY_MARKERS = [
 function getCalendarActivityMarkers(dayEvents: any[], eventCompletions: Record<string, boolean> = {}) {
   const presentTypes = new Set<string>();
   const completedTypes = new Set<string>();
-  const hasCompletedBibleReading = dayEvents.some(
-    (event) =>
-      event?.isPlan &&
-      !event?.isMountainRhythm &&
-      Number(event?.readingCount || 0) > 0 &&
-      Number(event?.completedCount || 0) === Number(event.readingCount),
+  const biblePlanEvents = dayEvents.filter(
+    (event) => event?.isPlan && !event?.isMountainRhythm,
   );
+  const hasCompletedBibleReading =
+    biblePlanEvents.length > 0 &&
+    biblePlanEvents.every((event) => event.dayCompleted === true);
   const hasMountainRhythm = dayEvents.some((event) => event?.isPlan && event?.isMountainRhythm);
   const hasCompletedMountainRhythm = dayEvents.some(
     (event) =>
@@ -1457,14 +1465,17 @@ export default function DiscipleOSApp() {
   const hasLoadedLocalDataRef = useRef(false);
   const didHydrateRef = useRef(false);
   const localDataRef = useRef(loadLocalDiscipleData());
-  // Pending offline writes — populated when a mutation's API call fails.
-  // Flushed on the next successful reconnect before re-hydrating from the server.
+  // Pending writes are persisted before their first request and replayed before
+  // server hydration, so a refresh or offline transition cannot drop a change.
   const pendingOpsStateRef = useRef(loadPendingOpsState());
   const pendingOpsRef = useRef(pendingOpsStateRef.current.ops);
   const pendingOpsOwnerRef = useRef(pendingOpsStateRef.current.ownerId);
   const serverOwnerRef = useRef<string | null>(null);
-  // In-flight guard — prevents concurrent sync runs triggered by overlapping events.
+  // Coalesce overlapping sync requests, then run once more so writes added
+  // during an in-flight push are not left queued or overwritten.
   const isSyncingRef = useRef(false);
+  const syncRequestedRef = useRef(false);
+  const syncWithServerRef = useRef<() => Promise<void>>(async () => {});
   const authIdentityRef = useRef({ isSignedIn, userId });
   const authGenerationRef = useRef(0);
   const authTransitionRef = useRef<"signed-in" | "signed-out" | null>(null);
@@ -1775,8 +1786,9 @@ export default function DiscipleOSApp() {
           isPlan: true,
           isMountainRhythm: isStructuredClimbPlan(plan),
           planId: plan.id,
-           readingCount: day.readings.length,
-           completedCount: day.readings.filter((reading) => !!completedMap[reading.key]).length,
+          readingCount: day.readings.length,
+          completedCount: day.readings.filter((reading) => !!completedMap[reading.key]).length,
+          dayCompleted: isPlanDayComplete(plan, day.date),
         });
       });
     });
@@ -1809,6 +1821,7 @@ export default function DiscipleOSApp() {
           completedCount: assignment.readings.filter(
             (reading) => !!completedMap[reading.key]
           ).length,
+          dayCompleted: isPlanDayComplete(plan, selectedCalendarDate),
         },
       ];
     });
@@ -2175,7 +2188,10 @@ export default function DiscipleOSApp() {
    * 3. On any network failure the current UI and localStorage are untouched.
    */
   const syncWithServer = useCallback(async () => {
-    if (isSyncingRef.current) return;
+    if (isSyncingRef.current) {
+      syncRequestedRef.current = true;
+      return;
+    }
     const syncGeneration = authGenerationRef.current;
     const syncIsSignedIn = isSignedIn;
     const syncUserId = userId;
@@ -2266,17 +2282,23 @@ export default function DiscipleOSApp() {
 
       // Step 1: flush offline writes to the server before pulling
       if (pendingOpsRef.current.length > 0) {
+        const opsToFlush = pendingOpsRef.current;
+        const flushingBatch = new Set(opsToFlush);
         const hadPendingReset = pendingOpsRef.current.some(
           (op) => op.type === "upsert-plan" && isResetPlan(op.payload)
         );
         const remaining = await flushPendingOps(
-          pendingOpsRef.current,
+          opsToFlush,
           syncIsCurrent,
         );
         if (!syncIsCurrent()) return;
-        pendingOpsRef.current = remaining;
-        savePendingOps(remaining, currentOwnerId);
-        const resetStillPending = remaining.some(
+        const addedDuringFlush = pendingOpsRef.current.filter(
+          (op) => !flushingBatch.has(op),
+        );
+        const nextPendingOps = [...remaining, ...addedDuringFlush];
+        pendingOpsRef.current = nextPendingOps;
+        savePendingOps(nextPendingOps, currentOwnerId);
+        const resetStillPending = nextPendingOps.some(
           (op) => op.type === "upsert-plan" && isResetPlan(op.payload)
         );
         if (hadPendingReset && !resetStillPending) {
@@ -2288,7 +2310,7 @@ export default function DiscipleOSApp() {
         // a server response that does not contain those changes would overwrite
         // local state with stale data. The failed ops will be retried on the next
         // reconnect trigger (online / focus / visibilitychange).
-        if (remaining.length > 0) return;
+        if (nextPendingOps.length > 0) return;
       }
 
       // Step 2: re-hydrate with the defensive hydration rule (only reached when
@@ -2306,80 +2328,78 @@ export default function DiscipleOSApp() {
           { cache: "no-store" },
         ),
       ]);
-      if (!syncIsCurrent()) return;
+      if (!syncIsCurrent() || pendingOpsRef.current.length > 0) return;
 
       const sessionEstablished = sessionData.established === true;
+      const [eventsData, plansData, rhythmData] = await Promise.all([
+        eventsRes.ok ? eventsRes.json() : Promise.resolve(null),
+        plansRes.ok ? plansRes.json() : Promise.resolve(null),
+        rhythmRes.ok ? rhythmRes.json() : Promise.resolve(null),
+      ]);
+      if (!syncIsCurrent() || pendingOpsRef.current.length > 0) return;
 
-      if (eventsRes.ok) {
-        const eventsData = await eventsRes.json();
-        if (eventsData.success && Array.isArray(eventsData.events)) {
-          const serverEvents = eventsData.events;
-          if (sessionEstablished || serverEvents.length > 0) {
-            setEvents(normalizeStoredEvents(serverEvents));
-          }
+      if (eventsData?.success && Array.isArray(eventsData.events)) {
+        const serverEvents = eventsData.events;
+        if (sessionEstablished || serverEvents.length > 0) {
+          setEvents(normalizeStoredEvents(serverEvents));
         }
       }
 
-      if (plansRes.ok) {
-        const plansData = await plansRes.json();
-        if (plansData.success && Array.isArray(plansData.plans)) {
-          const serverPlans = plansData.plans;
-          if (sessionEstablished || serverPlans.length > 0) {
-            const localPlansById = new Map(
-              localDataRef.current.plans.map((plan) => [plan.id, plan]),
-            );
-            const oversizedServerPlanIds = new Set(
-              serverPlans
-                .filter((plan) =>
-                  isOversizedReadingJourneyPlan(plan, BIBLE_BOOKS, estimateChapterMinutes),
-                )
-                .map((plan) => plan.id),
-            );
-            const normalizedPlans = serverPlans.map((serverPlan) =>
-              mergeLocalCompletionHistory(
-                normalizeStoredPlan(serverPlan),
-                localPlansById.get(serverPlan.id),
-              ),
-            );
-            setPlans(normalizedPlans);
-            if (oversizedServerPlanIds.size > 0) {
-             void Promise.all(
-                normalizedPlans
-                  .filter((plan) => oversizedServerPlanIds.has(plan.id))
-                  .map((plan) =>
-                    localOnlyAfterSignOutRef.current || !syncIsCurrent()
-                      ? Promise.resolve()
-                      : savePlanToServer(plan),
-                  ),
-              ).catch(() => {
-                console.warn("Could not persist repaired reading journey");
-              });
-            }
-            setSelectedPlanId((current) =>
-              resolveSelectedPlanId(normalizedPlans, current),
-            );
+      if (plansData?.success && Array.isArray(plansData.plans)) {
+        const serverPlans = plansData.plans;
+        if (sessionEstablished || serverPlans.length > 0) {
+          const localPlansById = new Map(
+            localDataRef.current.plans.map((plan) => [plan.id, plan]),
+          );
+          const oversizedServerPlanIds = new Set(
+            serverPlans
+              .filter((plan) =>
+                isOversizedReadingJourneyPlan(plan, BIBLE_BOOKS, estimateChapterMinutes),
+              )
+              .map((plan) => plan.id),
+          );
+          const normalizedPlans = serverPlans.map((serverPlan) =>
+            mergeLocalCompletionHistory(
+              normalizeStoredPlan(serverPlan),
+              localPlansById.get(serverPlan.id),
+            ),
+          );
+          localDataRef.current.plans = normalizedPlans;
+          setPlans(normalizedPlans);
+          if (oversizedServerPlanIds.size > 0) {
+            void Promise.all(
+              normalizedPlans
+                .filter((plan) => oversizedServerPlanIds.has(plan.id))
+                .map((plan) =>
+                  localOnlyAfterSignOutRef.current || !syncIsCurrent()
+                    ? Promise.resolve()
+                    : savePlanToServer(plan),
+                ),
+            ).catch(() => {
+              console.warn("Could not persist repaired reading journey");
+            });
           }
+          setSelectedPlanId((current) =>
+            resolveSelectedPlanId(normalizedPlans, current),
+          );
         }
       }
 
-      if (rhythmRes.ok) {
-        const rhythmData = await rhythmRes.json();
-        if (rhythmData.success) {
-          if (rhythmData.accessTier === "basic" || rhythmData.accessTier === "full") {
-            setRhythmAccessTier(rhythmData.accessTier);
+      if (rhythmData?.success) {
+        if (rhythmData.accessTier === "basic" || rhythmData.accessTier === "full") {
+          setRhythmAccessTier(rhythmData.accessTier);
+        }
+        const serverCompletions = {};
+        const persistedCompletions = Array.isArray(rhythmData.eventCompletions)
+          ? rhythmData.eventCompletions
+          : rhythmData.commitments || [];
+        persistedCompletions.forEach((completion) => {
+          if (completion.eventId && completion.occurrenceDate) {
+            serverCompletions[`${completion.eventId}:${completion.occurrenceDate}`] = Boolean(completion.completed);
           }
-          const serverCompletions = {};
-          const persistedCompletions = Array.isArray(rhythmData.eventCompletions)
-            ? rhythmData.eventCompletions
-            : rhythmData.commitments || [];
-          persistedCompletions.forEach((completion) => {
-            if (completion.eventId && completion.occurrenceDate) {
-              serverCompletions[`${completion.eventId}:${completion.occurrenceDate}`] = Boolean(completion.completed);
-            }
-          });
-          if (Object.keys(serverCompletions).length > 0) {
-            setEventCompletions((current) => ({ ...current, ...serverCompletions }));
-          }
+        });
+        if (Object.keys(serverCompletions).length > 0) {
+          setEventCompletions((current) => ({ ...current, ...serverCompletions }));
         }
       }
     } catch (err) {
@@ -2387,8 +2407,15 @@ export default function DiscipleOSApp() {
       console.warn("Server sync failed, retaining local data", err);
     } finally {
       isSyncingRef.current = false;
+      if (syncRequestedRef.current) {
+        syncRequestedRef.current = false;
+        window.setTimeout(() => {
+          void syncWithServerRef.current();
+        }, 0);
+      }
     }
   }, [isSignedIn, refreshAuth, userId]); // refs and state setters are stable; auth identity selects claim behavior
+  syncWithServerRef.current = syncWithServer;
 
   // On first sign-in, claim only the data tied to this browser's anonymous
   // session before reconciling against the signed-in account.
@@ -2613,62 +2640,73 @@ export default function DiscipleOSApp() {
   };
 
   const toggleChapterComplete = (planId, key) => {
-    let newValue = false;
+    const currentPlans = localDataRef.current.plans;
+    const currentPlan = currentPlans.find((plan) => plan.id === planId);
+    if (!currentPlan) return;
+
+    const completedMap = getCompletedMap(currentPlan);
+    const newValue = !Boolean(completedMap[key]);
+    const nextCompleted = { ...completedMap, [key]: newValue };
+    const assignment = currentPlan.assignments.find((day) =>
+      day.readings.some((reading) => reading.key === key),
+    );
+    const wasDayComplete =
+      assignment?.readings.length > 0 &&
+      assignment.readings.every((reading) => Boolean(completedMap[reading.key]));
     let earnedDay;
     let completionDate;
-    setPlans((prevPlans) =>
-      prevPlans.map((plan) => {
-        if (plan.id !== planId) return plan;
-        const completedMap = getCompletedMap(plan);
-        newValue = !completedMap[key];
-        const nextCompleted = { ...completedMap, [key]: newValue };
-        const assignment = plan.assignments.find((day) =>
-          day.readings.some((reading) => reading.key === key),
-        );
-        const wasDayComplete =
-          assignment?.readings.length > 0 &&
-          assignment.readings.every((reading) => Boolean(completedMap[reading.key]));
-        if (
-          assignment?.date &&
-          (wasDayComplete ||
-            (newValue &&
-              assignment.readings.every((reading) => Boolean(nextCompleted[reading.key]))))
-        ) {
-          earnedDay = assignment.date;
-          if (newValue) completionDate = todayISO();
-        }
-        const earnedDayKeys = getEarnedDayKeys(plan);
-        if (earnedDay) earnedDayKeys.add(earnedDay);
-        const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
-        if (earnedDay && completionDate && !dayCompletionDates[earnedDay]) {
-          dayCompletionDates[earnedDay] = completionDate;
-        }
-        return {
-          ...plan,
-          completed: nextCompleted,
-          earnedDayKeys: [...earnedDayKeys],
-          dayCompletionDates,
-        };
-      })
+    if (
+      assignment?.date &&
+      (wasDayComplete ||
+        (newValue &&
+          assignment.readings.every((reading) => Boolean(nextCompleted[reading.key]))))
+    ) {
+      earnedDay = assignment.date;
+      if (newValue) completionDate = todayISO();
+    }
+
+    const earnedDayKeys = getEarnedDayKeys(currentPlan);
+    if (earnedDay) earnedDayKeys.add(earnedDay);
+    const dayCompletionDates = { ...(currentPlan.dayCompletionDates || {}) };
+    if (earnedDay && completionDate && !dayCompletionDates[earnedDay]) {
+      dayCompletionDates[earnedDay] = completionDate;
+    }
+    const updatedPlan = {
+      ...currentPlan,
+      completed: nextCompleted,
+      earnedDayKeys: [...earnedDayKeys],
+      dayCompletionDates,
+    };
+    const nextPlans = currentPlans.map((plan) =>
+      plan.id === planId ? updatedPlan : plan,
     );
+    const nextLocalData = {
+      ...localDataRef.current,
+      ownerId: serverOwnerRef.current ?? localDataRef.current.ownerId,
+      plans: nextPlans,
+    };
+
+    // Write the optimistic state synchronously. The normal persistence effect
+    // still mirrors later changes, but a fast refresh must not beat that effect.
+    localDataRef.current = nextLocalData;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextLocalData));
+    } catch {
+      // Keep the in-memory optimistic state usable when browser storage is unavailable.
+    }
+    setPlans(nextPlans);
+
     if (!localOnlyAfterSignOutRef.current) {
-      fetch("/api/reading/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, key, completed: newValue, earnedDay, completionDate }),
-      }).then((response) => {
-        if (!response.ok) throw new Error("Failed to save reading progress");
-      }).catch(() => {
-        queuePendingOp({
-          type: "chapter-complete",
-          planId,
-          key,
-          completed: newValue,
-          earnedDay,
-          completionDate,
-          ts: Date.now(),
-        });
+      queuePendingOp({
+        type: "chapter-complete",
+        planId,
+        key,
+        completed: newValue,
+        earnedDay,
+        completionDate,
+        ts: Date.now(),
       });
+      void syncWithServer();
     }
   };
 
@@ -2676,8 +2714,7 @@ export default function DiscipleOSApp() {
     const currentPlan = plans.find((plan) => plan.id === planId);
     const currentAssignment = currentPlan?.assignments?.find((day) => day.date === dateISO);
     if (!currentPlan || !currentAssignment?.readings?.length) return;
-    const currentCompleted = getCompletedMap(currentPlan);
-    const allDone = currentAssignment.readings.every((reading) => !!currentCompleted[reading.key]);
+    const allDone = isPlanDayComplete(currentPlan, dateISO);
     if (allDone === newValue) return;
     const completionDate = newValue ? todayISO() : undefined;
     setPlans((prevPlans) =>
@@ -3225,7 +3262,7 @@ export default function DiscipleOSApp() {
     const isPlanItem = event.kind === "plan";
     const isPlanExpanded = isPlanItem && expandedCalendarPlanIds.has(event.planId);
     const planReadingsId = `calendar-plan-readings-${event.planId}-${selectedCalendarDate}`;
-    const allDone = isPlanItem && event.completedCount === event.readings.length;
+    const allDone = isPlanItem && event.dayCompleted;
     const eventCompletionEligible = !isPlanItem && isCompletableEvent(event);
     const eventCompleted =
       eventCompletionEligible &&
@@ -4492,6 +4529,8 @@ export default function DiscipleOSApp() {
                             <button
                               key={reading.key}
                               type="button"
+                              data-testid={`today-reading-${reading.key}`}
+                              aria-pressed={done}
                               onClick={() => toggleChapterComplete(plan.id, reading.key)}
                               className={cn(
                                 "discipleos-flat-row flex items-center justify-between px-3 py-3 text-left transition",
