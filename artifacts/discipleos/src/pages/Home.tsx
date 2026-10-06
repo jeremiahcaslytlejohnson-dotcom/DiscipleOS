@@ -3300,7 +3300,7 @@ export default function DiscipleOSApp() {
             <button
               type="button"
               onClick={() => markDayPlanComplete(event.planId, selectedCalendarDate, !allDone)}
-              className="discipleos-control--compact shrink-0 border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:border-[#D4A017]/30 hover:bg-[#D4A017]/10 hover:text-[#F4D77A]"
+              className="discipleos-control--compact discipleos-control--touch shrink-0 whitespace-nowrap border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 hover:border-[#D4A017]/30 hover:bg-[#D4A017]/10 hover:text-[#F4D77A]"
             >
               {allDone ? "Undo day" : "Complete day"}
             </button>
@@ -4462,7 +4462,7 @@ export default function DiscipleOSApp() {
                             disabled={dayComplete}
                             aria-label={dayComplete ? "Day complete" : "Complete day"}
                             className={cn(
-                              "discipleos-control--compact inline-flex min-h-11 items-center gap-1.5 border px-3 py-2 text-xs font-semibold transition",
+                              "discipleos-control--compact discipleos-control--touch inline-flex items-center gap-1.5 whitespace-nowrap border px-3 py-2 text-xs font-semibold transition",
                               dayComplete
                                 ? "cursor-default border-[#10B981]/35 bg-[#10B981]/10 text-[#86EFAC]"
                                 : "border-[#D4A017]/35 bg-[#D4A017]/10 text-[#F4D77A] hover:border-[#D4A017]/60 hover:bg-[#D4A017]/20",
@@ -5523,7 +5523,7 @@ export default function DiscipleOSApp() {
                       type="button"
                       data-testid="plans-create-button"
                       onClick={beginCreatePlan}
-                      className="discipleos-action inline-flex items-center justify-center gap-2 border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
+                      className="discipleos-action ml-auto inline-flex items-center justify-center gap-2 whitespace-nowrap border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
                     >
                       <Plus className="h-4 w-4" />
                       Add plan
@@ -5960,7 +5960,7 @@ export default function DiscipleOSApp() {
                               disabled={dayComplete}
                               aria-label={dayComplete ? "Day complete" : "Complete day"}
                               className={cn(
-                                "discipleos-control--compact inline-flex shrink-0 items-center gap-1.5 border px-2.5 py-1 text-xs font-semibold transition",
+                                "discipleos-control--compact discipleos-control--touch inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border px-2.5 py-1 text-xs font-semibold transition",
                                 dayComplete
                                   ? "cursor-default border-[#10B981]/35 bg-[#10B981]/10 text-[#86EFAC]"
                                   : "border-[#D4A017]/35 bg-[#D4A017]/10 text-[#F4D77A] hover:border-[#D4A017]/60 hover:bg-[#D4A017]/20",

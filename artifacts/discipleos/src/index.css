@@ -302,6 +302,10 @@ body:has(.launch-splash) {
   border-radius: 0.25rem;
 }
 
+.discipleos-control--touch {
+  min-height: 2.75rem;
+}
+
 .discipleos-control--icon {
   min-width: 2.5rem;
   min-height: 2.5rem;

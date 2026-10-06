@@ -484,6 +484,7 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
   let dayCompletionWrites = 0;
   await stubHomeApi(page, plan);
   await seedPlans(page, [plan], [], true);
+  await page.setViewportSize({ width: 320, height: 900 });
   page.on("request", (request) => {
     if (request.url().includes("/api/reading/day-complete") && request.method() === "POST") {
       dayCompletionWrites += 1;
@@ -492,10 +493,35 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
 
   await page.goto("/");
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  const todayReading = page.getByTestId("dashboard-assigned-reading");
+  const todayReadingToggle = todayReading.getByRole("button", { name: /Today’s Reading/ });
+  if (await todayReadingToggle.getAttribute("aria-expanded") !== "true") {
+    await todayReadingToggle.click();
+  }
+  const todayCompleteDay = page.getByTestId("today-complete-day-complete-day-plan");
+  const todayCompleteDayGeometry = await todayCompleteDay.evaluate((button) => ({
+    height: button.getBoundingClientRect().height,
+    scrollWidth: button.scrollWidth,
+    clientWidth: button.clientWidth,
+  }));
+  expect(todayCompleteDayGeometry.height).toBeGreaterThanOrEqual(44);
+  expect(todayCompleteDayGeometry.scrollWidth).toBeLessThanOrEqual(
+    todayCompleteDayGeometry.clientWidth + 1,
+  );
+
   await (await openDashboardNavigation(page)).getByRole("button", { name: "Plans", exact: true }).click();
   await page.getByTestId("planned-reading-card-complete-day-plan").click();
 
   const completeDay = page.getByTestId("button-complete-plan-day-1");
+  const planDetailCompleteDayGeometry = await completeDay.evaluate((button) => ({
+    height: button.getBoundingClientRect().height,
+    scrollWidth: button.scrollWidth,
+    clientWidth: button.clientWidth,
+  }));
+  expect(planDetailCompleteDayGeometry.height).toBeGreaterThanOrEqual(44);
+  expect(planDetailCompleteDayGeometry.scrollWidth).toBeLessThanOrEqual(
+    planDetailCompleteDayGeometry.clientWidth + 1,
+  );
   await expect(completeDay).toHaveText("Complete day");
   await completeDay.click();
   await expect(completeDay).toHaveText("Day complete");
@@ -554,7 +580,7 @@ test("collapses Calendar reading plans independently while keeping the summary a
   await stubHomeApi(page, [firstPlan, secondPlan], []);
   await seedPlans(page, [firstPlan, secondPlan]);
 
-  for (const width of [390, 1280]) {
+  for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
     const navigation = await openDashboardNavigation(page);
@@ -577,7 +603,15 @@ test("collapses Calendar reading plans independently while keeping the summary a
     await expect(firstRow).toContainText("bible");
     await expect(firstRow).toContainText(/6:45/);
     await expect(firstRow).toContainText("3 chapters assigned");
-    await expect(firstRow.getByRole("button", { name: /^(Complete|Undo) day$/ })).toBeVisible();
+    const firstCompleteDay = firstRow.getByRole("button", { name: /^(Complete|Undo) day$/ });
+    await expect(firstCompleteDay).toBeVisible();
+    const completeDayGeometry = await firstCompleteDay.evaluate((button) => ({
+      height: button.getBoundingClientRect().height,
+      scrollWidth: button.scrollWidth,
+      clientWidth: button.clientWidth,
+    }));
+    expect(completeDayGeometry.height).toBeGreaterThanOrEqual(44);
+    expect(completeDayGeometry.scrollWidth).toBeLessThanOrEqual(completeDayGeometry.clientWidth + 1);
     await expect(secondRow).toContainText("Prayer & Purpose");
     await expect(secondRow).toContainText("2 chapters assigned");
     await expect(secondRow.getByRole("button", { name: /^(Complete|Undo) day$/ })).toBeVisible();
@@ -611,6 +645,31 @@ test("collapses Calendar reading plans independently while keeping the summary a
     await expect(secondRow.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
     await expect(secondReadings).toBeHidden();
   }
+});
+
+test("keeps the Plans add action aligned at narrow mobile width", async ({ page }) => {
+  const plan = makeOrdinaryPlan("narrow-plan-alignment", "Morning Psalms");
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+  const plansPanel = page.getByTestId("dashboard-plans-list");
+  const header = plansPanel.locator(":scope > div").first();
+  const addPlan = page.getByTestId("plans-create-button");
+  await expect(addPlan).toBeVisible();
+
+  const alignment = await Promise.all([
+    header.evaluate((element) => element.getBoundingClientRect().right),
+    addPlan.evaluate((element) => element.getBoundingClientRect().right),
+  ]);
+  expect(alignment[1]).toBeCloseTo(alignment[0], 0);
+  expect(await addPlan.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+    await addPlan.evaluate((element) => element.clientWidth) + 1,
+  );
 });
 
 test("undoes a completed Calendar day while preserving its earned history", async ({ page }) => {

@@ -28,3 +28,9 @@ description: Key decisions and quirks from porting DiscipleOS from Vercel/Next.j
 **Frontend:** Single massive page component at artifacts/discipleos/src/pages/Home.tsx (~2976 lines). All state is in-memory / fetched from API. PWA service worker registered in production only.
 
 **How to apply:** Keep the CSS simple. If adding new components, use direct Tailwind classes matching the dark theme (#09090f, #090d12 backgrounds, white/10 borders, amber/gold accents).
+
+**Compact controls:** `.discipleos-control--compact` sets its own 36px minimum height, which can override Tailwind `min-h-*` utilities. Use the explicit `.discipleos-control--touch` modifier when a compact control needs a 44px target.
+
+**Why:** Browser geometry checks showed that `min-h-11` alone did not change a compact completion button from 36px.
+
+**How to apply:** Add the touch modifier only to compact actions that need a larger target; do not enlarge every compact input or button globally.
