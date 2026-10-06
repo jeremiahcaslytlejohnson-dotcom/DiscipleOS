@@ -1397,6 +1397,37 @@ test("shows assigned Bible readings as an icon alongside Calendar activity marke
   }
 });
 
+test("keeps the Calendar reminder toggle on one line with a touch-sized target", async ({ page }) => {
+  const plan = makeOrdinaryPlan("calendar-reminder-toggle-layout", "Calendar reading");
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const navigation = await openDashboardNavigation(page);
+    await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.getByTestId("calendar-add-event-control").click();
+
+    const form = page.getByTestId("calendar-event-form");
+    await form.getByTestId("calendar-activity-type-event").click();
+    await form.getByTestId("calendar-step-continue").click();
+    await form.getByTestId("calendar-date-tomorrow").click();
+    await form.getByTestId("calendar-step-continue").click();
+    await form.getByTestId("calendar-repeat-no").click();
+    await form.getByTestId("calendar-step-continue").click();
+
+    const reminderToggle = form.getByRole("button", { name: "Reminder on", exact: true });
+    await expect(reminderToggle).toBeVisible();
+    const layout = await reminderToggle.evaluate((button) => ({
+      height: button.getBoundingClientRect().height,
+      whiteSpace: getComputedStyle(button).whiteSpace,
+    }));
+    expect(layout.height).toBeGreaterThanOrEqual(44);
+    expect(layout.whiteSpace).toBe("nowrap");
+  }
+});
+
 test("keeps Calendar creation short, guided, and fully configurable", async ({ page }) => {
   const plan = makeOrdinaryPlan("calendar-density-plan", "Calendar reading");
   const event = {

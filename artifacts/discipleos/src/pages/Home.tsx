@@ -3047,7 +3047,7 @@ export default function DiscipleOSApp() {
             aria-pressed={eventForm.remind}
             onClick={() => setEventForm((prev) => ({ ...prev, remind: !prev.remind }))}
             className={cn(
-              "rounded-full border px-3 py-1.5 text-xs transition",
+              "min-h-[44px] shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition",
               eventForm.remind
                 ? "border-[#D4A017]/40 bg-[#D4A017]/15 text-[#F4D77A]"
                 : "border-white/10 bg-white/5 text-white/70",
