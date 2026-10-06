@@ -770,7 +770,7 @@ test("keeps the Calendar Bible marker incomplete until every plan's readings for
         ],
       },
     ],
-    completed: { "calendar-marker-a1": true },
+    completed: {},
   };
   const secondPlan = {
     ...makeOrdinaryPlan("calendar-marker-plan-b", "Evening Proverbs"),
@@ -827,13 +827,13 @@ test("keeps the Calendar Bible marker incomplete until every plan's readings for
   await expect(firstPlanItem.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
   await expect(secondPlanItem.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
   await firstPlanItem.getByTestId(`calendar-plan-toggle-${firstPlan.id}`).click();
-  const secondReading = page
+  const firstReading = page
     .getByTestId(`calendar-plan-readings-${firstPlan.id}`)
-    .getByRole("button", { name: "Psalm 2", exact: true });
-  await expect(secondReading).toHaveAttribute("aria-pressed", "false");
-  await secondReading.click();
-  await expect(secondReading).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(() => firstPlan.completed["calendar-marker-a2"]).toBe(true);
+    .getByRole("button", { name: "Psalm 1", exact: true });
+  await expect(firstReading).toHaveAttribute("aria-pressed", "false");
+  await firstReading.click();
+  await expect(firstReading).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => firstPlan.completed["calendar-marker-a1"]).toBe(true);
   await expect(bibleMarker).not.toHaveClass(/text-emerald-400/);
 
   await page.reload();
