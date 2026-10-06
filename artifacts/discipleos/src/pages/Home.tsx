@@ -491,6 +491,207 @@ function getPlanStats(plan: any) {
   };
 }
 
+function getPlanDayGroups(plan: any, today: string) {
+  const scheduledDays = (Array.isArray(plan?.assignments) ? plan.assignments : [])
+    .map((day: any, originalIndex: number) => ({ day, originalIndex }))
+    .sort((left: any, right: any) => {
+      const dateOrder = String(left.day?.date || "").localeCompare(
+        String(right.day?.date || ""),
+      );
+      return dateOrder || left.originalIndex - right.originalIndex;
+    })
+    .map(({ day }: any, dayIndex: number) => ({ day, dayIndex }));
+
+  return {
+    current: scheduledDays.filter(({ day }: any) => day.date === today),
+    past: scheduledDays.filter(({ day }: any) => day.date < today),
+    upcoming: scheduledDays.filter(({ day }: any) => day.date > today),
+  };
+}
+
+function PlanDayRow({
+  plan,
+  day,
+  dayIndex,
+  category,
+  expanded,
+  onToggleExpanded,
+  onToggleChapter,
+  onToggleDay,
+}: {
+  plan: any;
+  day: any;
+  dayIndex: number;
+  category: "current" | "past" | "upcoming";
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onToggleChapter: (planId: string, readingKey: string) => void;
+  onToggleDay: (planId: string, dateISO: string, completed: boolean) => void;
+}) {
+  const completedMap = getCompletedMap(plan);
+  const readings = Array.isArray(day?.readings) ? day.readings : [];
+  const completedReadings = readings.filter((reading: any) =>
+    Boolean(completedMap[reading.key]),
+  );
+  const dayComplete =
+    readings.length > 0 && completedReadings.length === readings.length;
+  const totalDayChapters = readings.reduce(
+    (sum: number, reading: any) =>
+      sum + Math.max(1, getReadingChapters(reading).length),
+    0,
+  );
+  const completedDayChapters = readings.reduce(
+    (sum: number, reading: any) =>
+      sum +
+      (completedMap[reading.key]
+        ? Math.max(1, getReadingChapters(reading).length)
+        : 0),
+    0,
+  );
+  const dayStatus = readings.length === 0
+    ? "No readings"
+    : dayComplete
+      ? "Complete"
+      : category === "past"
+        ? "Catch-up"
+        : completedReadings.length > 0
+          ? "In progress"
+          : category === "upcoming"
+            ? "Upcoming"
+            : "Not started";
+  const dayIdentifier = `${plan.id}-${day.date}`;
+  const dayReadingsId = `plan-day-readings-${dayIdentifier}`;
+  const statusClass = dayComplete
+    ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+    : dayStatus === "Catch-up"
+      ? "border-amber-400/25 bg-amber-400/10 text-amber-200"
+      : completedReadings.length > 0
+        ? "border-[#D4A017]/30 bg-[#D4A017]/10 text-[#F4D77A]"
+        : "border-white/10 bg-white/[0.03] text-white/60";
+
+  return (
+    <div
+      data-testid={`plan-day-section-${dayIdentifier}`}
+      className={cn(
+        "rounded-lg border p-3 sm:p-4",
+        category === "current"
+          ? "border-[#D4A017]/25 bg-[#D4A017]/[0.035]"
+          : "border-white/10 bg-white/[0.015]",
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <button
+          type="button"
+          data-testid={`plan-day-toggle-${dayIdentifier}`}
+          aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings, ${formatDate(day.date)}, ${dayStatus}, ${readings.length} readings, ${completedDayChapters} of ${totalDayChapters} chapters complete`}
+          aria-expanded={expanded}
+          aria-controls={dayReadingsId}
+          onClick={onToggleExpanded}
+          className="flex min-h-11 min-w-0 flex-1 items-start gap-2 rounded-md px-1 py-1 text-left transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "mt-0.5 h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
+              !expanded && "-rotate-90",
+            )}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-sm font-semibold text-[#F4D77A]">
+                Day {dayIndex + 1} of {plan.assignments.length}
+              </span>
+              <span
+                data-testid={`plan-day-date-${dayIdentifier}`}
+                className="text-sm text-white/80"
+              >
+                {formatDate(day.date)}
+              </span>
+              <span
+                data-testid={`plan-day-status-${dayIdentifier}`}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]",
+                  statusClass,
+                )}
+              >
+                {dayStatus}
+              </span>
+            </span>
+            <span
+              data-testid={`plan-day-progress-${dayIdentifier}`}
+              className="discipleos-meta-copy mt-1 block text-xs"
+            >
+              {readings.length} reading{readings.length === 1 ? "" : "s"} ·{" "}
+              {completedDayChapters}/{totalDayChapters} chapters complete · ~
+              {formatMinutes(getAssignmentMinutes(day))}
+            </span>
+            <span className="discipleos-meta-copy mt-1 flex items-center gap-1 text-xs">
+              <Clock3 className="h-3.5 w-3.5 shrink-0 text-[#D4A017]/70" />
+              Reading time: {formatTime(plan.readingTime || "07:00")}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          data-testid={`button-complete-plan-day-${dayIndex + 1}`}
+          onClick={() => onToggleDay(plan.id, day.date, !dayComplete)}
+          disabled={readings.length === 0}
+          aria-label={dayComplete ? "Undo day" : "Complete day"}
+          className={cn(
+            "discipleos-control--compact discipleos-control--touch inline-flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap border px-2.5 py-1 text-xs font-semibold transition",
+            dayComplete
+              ? "border-[#10B981]/35 bg-[#10B981]/10 text-[#86EFAC] hover:border-[#10B981]/60 hover:bg-[#10B981]/20"
+              : "border-[#D4A017]/35 bg-[#D4A017]/10 text-[#F4D77A] hover:border-[#D4A017]/60 hover:bg-[#D4A017]/20",
+          )}
+        >
+          {dayComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+          {dayComplete ? "Undo day" : "Complete day"}
+        </button>
+      </div>
+      <div
+        id={dayReadingsId}
+        data-testid={`plan-day-readings-${dayIdentifier}`}
+        hidden={!expanded}
+        className="discipleos-flat-list mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {readings.map((reading: any) => {
+          const done = Boolean(completedMap[reading.key]);
+          return (
+            <button
+              key={reading.key}
+              data-testid={`plan-reading-${reading.key}`}
+              aria-pressed={done}
+              onClick={() => onToggleChapter(plan.id, reading.key)}
+              className={cn(
+                "discipleos-flat-row flex items-center justify-between px-3 py-3 text-left transition",
+                done
+                  ? "border-[#10B981]/30 bg-[#10B981]/10"
+                  : "border-white/10 bg-transparent hover:bg-white/[0.04]",
+              )}
+            >
+              <div>
+                <div className="discipleos-safe-text font-medium">
+                  {reading.label || reading.book}
+                </div>
+                {reading.chapter ? (
+                  <div className="discipleos-meta-copy text-sm">
+                    Chapter {reading.chapter}
+                  </div>
+                ) : null}
+              </div>
+              {done ? (
+                <CheckCircle2 className="h-5 w-5 text-[#10B981]" />
+              ) : (
+                <Circle className="h-5 w-5 text-white/35" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function getTodaysReading(plan: any, date = todayISO()) {
   return plan.assignments.find((a) => a.date === date);
 }
@@ -1587,9 +1788,12 @@ export default function DiscipleOSApp() {
   const [expandedCalendarPlanIds, setExpandedCalendarPlanIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [expandedPlanDayKeys, setExpandedPlanDayKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [planDayExpansionOverrides, setPlanDayExpansionOverrides] = useState<
+    Map<string, boolean>
+  >(() => new Map());
+  const [expandedPlanDayGroupKeys, setExpandedPlanDayGroupKeys] = useState<
+    Set<string>
+  >(() => new Set());
 
   useEffect(() => {
     if (!isAuthLoaded) return;
@@ -1730,6 +1934,33 @@ export default function DiscipleOSApp() {
 
   const planStats = selectedPlan ? getPlanStats(selectedPlan) : null;
   const planViewStats = planViewSelectedPlan ? getPlanStats(planViewSelectedPlan) : null;
+  const planViewToday = todayISO();
+  const planViewDayGroups = getPlanDayGroups(planViewSelectedPlan, planViewToday);
+  const planViewPastCompleteCount = planViewSelectedPlan
+    ? planViewDayGroups.past.filter(({ day }) =>
+        isPlanDayComplete(planViewSelectedPlan, day.date),
+      ).length
+    : 0;
+  const planViewPastCatchUpCount = planViewSelectedPlan
+    ? planViewDayGroups.past.filter(({ day }) =>
+        Array.isArray(day.readings) &&
+        day.readings.length > 0 &&
+        !isPlanDayComplete(planViewSelectedPlan, day.date),
+      ).length
+    : 0;
+  const planViewUpcomingReadingCount = planViewDayGroups.upcoming.reduce(
+    (sum, { day }) => sum + (Array.isArray(day.readings) ? day.readings.length : 0),
+    0,
+  );
+  const planViewResetStatusMessage = !planViewSelectedPlan || !planViewStats
+    ? ""
+    : planViewDayGroups.current.length > 0
+      ? `Today is Day ${planViewDayGroups.current[0].dayIndex + 1} of ${planViewStats.totalDays}.`
+      : planViewStats.completedDays === planViewStats.totalDays
+        ? `${planViewStats.totalDays} of ${planViewStats.totalDays} Reset days complete.`
+        : planViewDayGroups.upcoming.length > 0
+          ? `Day ${planViewDayGroups.upcoming[0].dayIndex + 1} of ${planViewStats.totalDays} is next on ${formatDate(planViewDayGroups.upcoming[0].day.date)}.`
+          : `${planViewPastCatchUpCount} past ${planViewPastCatchUpCount === 1 ? "day remains" : "days remain"} for catch-up.`;
   const planPreview = useMemo(() => summarizePlanInput(form), [form]);
   const editPreview = useMemo(() => {
     if (!editingPlan) return null;
@@ -5922,9 +6153,7 @@ export default function DiscipleOSApp() {
                       <>
                           {isResetPlan(planViewSelectedPlan) ? (
                             <div className="mb-5 border-l-2 border-[#D4A017]/45 pl-4 text-sm text-[#F4D77A]">
-                              {planViewStats.completedDays === planViewStats.totalDays
-                                ? `${planViewStats.totalDays} of ${planViewStats.totalDays} Reset days complete.`
-                                : `Day ${planViewStats.completedDays + 1} of ${planViewStats.totalDays} is next.`}
+                              {planViewResetStatusMessage}
                             <span className="discipleos-secondary-copy ml-2">
                                 Chapter progress: {planViewStats.percent}%.
                              </span>
@@ -5978,168 +6207,170 @@ export default function DiscipleOSApp() {
                        </>
                     )}
 
-                    <div className="space-y-3">
-                        {planViewSelectedPlan.assignments.map((day, dayIndex) => {
-                          const completedMap = getCompletedMap(planViewSelectedPlan);
-                          const completedReadings = day.readings.filter(
-                            (reading) => Boolean(completedMap[reading.key]),
-                          );
-                          const dayComplete =
-                            day.readings.length > 0 &&
-                            completedReadings.length === day.readings.length;
-                          const totalDayChapters = day.readings.reduce(
-                            (sum, reading) => sum + Math.max(1, getReadingChapters(reading).length),
-                            0,
-                          );
-                          const completedDayChapters = day.readings.reduce(
-                            (sum, reading) =>
-                              sum +
-                              (completedMap[reading.key]
-                                ? Math.max(1, getReadingChapters(reading).length)
-                                : 0),
-                            0,
-                          );
-                          const dayStatus = dayComplete
-                            ? "Complete"
-                            : completedReadings.length > 0
-                              ? "In progress"
-                              : day.date > todayISO()
-                                ? "Upcoming"
-                                : day.readings.length === 0
-                                  ? "No readings"
-                                  : "Not started";
-                          const dayIdentifier = `${planViewSelectedPlan.id}-${day.date}`;
-                          const dayKey = `${planViewSelectedPlan.id}:${day.date}`;
-                          const isDayExpanded = expandedPlanDayKeys.has(dayKey);
-                          const dayReadingsId = `plan-day-readings-${dayIdentifier}`;
-
-                          return (
-                            <div
-                              key={day.date}
-                              data-testid={`plan-day-section-${dayIdentifier}`}
-                              className="border-t border-white/10 py-4 first:border-t-0 first:pt-0"
-                            >
-                              <div className="mb-3 flex items-start justify-between gap-3">
-                                <button
-                                  type="button"
-                                  data-testid={`plan-day-toggle-${dayIdentifier}`}
-                                  aria-label={`${isDayExpanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings, ${formatDate(day.date)}, ${dayStatus}, ${day.readings.length} readings, ${completedDayChapters} of ${totalDayChapters} chapters complete`}
-                                  aria-expanded={isDayExpanded}
-                                  aria-controls={dayReadingsId}
-                                  onClick={() =>
-                                    setExpandedPlanDayKeys((current) => {
-                                      const next = new Set(current);
-                                      if (next.has(dayKey)) next.delete(dayKey);
-                                      else next.add(dayKey);
+                    <div data-testid="plan-day-groups" className="space-y-4">
+                      <section
+                        data-testid="plan-day-group-current"
+                        className="rounded-xl border border-[#D4A017]/30 bg-[#D4A017]/[0.035] p-3 sm:p-4"
+                      >
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h3 className="text-base font-semibold text-white">Current Day</h3>
+                            <p className="discipleos-meta-copy mt-0.5 text-xs">
+                              {planViewDayGroups.current.length > 0
+                                ? `Today · ${formatDate(planViewToday)}`
+                                : "No reading scheduled today"}
+                            </p>
+                          </div>
+                          {planViewDayGroups.current.length > 0 ? (
+                            <span className="rounded-full border border-[#D4A017]/30 bg-[#D4A017]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#F4D77A]">
+                              Today
+                            </span>
+                          ) : null}
+                        </div>
+                        <div
+                          data-testid="plan-day-group-content-current"
+                          className="space-y-3"
+                        >
+                          {planViewDayGroups.current.length > 0 ? (
+                            planViewDayGroups.current.map(({ day, dayIndex }) => {
+                              const dayKey = `${planViewSelectedPlan.id}:${day.date}`;
+                              const isExpanded = planDayExpansionOverrides.has(dayKey)
+                                ? Boolean(planDayExpansionOverrides.get(dayKey))
+                                : true;
+                              return (
+                                <PlanDayRow
+                                  key={day.date}
+                                  plan={planViewSelectedPlan}
+                                  day={day}
+                                  dayIndex={dayIndex}
+                                  category="current"
+                                  expanded={isExpanded}
+                                  onToggleExpanded={() =>
+                                    setPlanDayExpansionOverrides((current) => {
+                                      const next = new Map(current);
+                                      next.set(dayKey, !isExpanded);
                                       return next;
                                     })
                                   }
-                                  className="flex min-h-11 min-w-0 flex-1 items-start gap-2 rounded-md px-1 py-1 text-left transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60"
-                                >
-                                  <ChevronDown
-                                    aria-hidden="true"
-                                    className={cn(
-                                      "mt-0.5 h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
-                                      !isDayExpanded && "-rotate-90",
-                                    )}
-                                  />
-                                  <span className="min-w-0 flex-1">
-                                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                      <span className="text-sm font-semibold text-[#F4D77A]">
-                                        Day {dayIndex + 1} of {planViewSelectedPlan.assignments.length}
-                                      </span>
-                                      <span
-                                        data-testid={`plan-day-date-${dayIdentifier}`}
-                                        className="text-sm text-white/80"
-                                      >
-                                        {formatDate(day.date)}
-                                      </span>
-                                      <span
-                                        data-testid={`plan-day-status-${dayIdentifier}`}
-                                        className={cn(
-                                          "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]",
-                                          dayComplete
-                                            ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
-                                            : completedReadings.length > 0
-                                              ? "border-[#D4A017]/30 bg-[#D4A017]/10 text-[#F4D77A]"
-                                              : "border-white/10 bg-white/[0.03] text-white/60",
-                                        )}
-                                      >
-                                        {dayStatus}
-                                      </span>
-                                    </span>
-                                    <span
-                                      data-testid={`plan-day-progress-${dayIdentifier}`}
-                                      className="discipleos-meta-copy mt-1 block text-xs"
-                                    >
-                                      {day.readings.length} reading{day.readings.length === 1 ? "" : "s"} ·{" "}
-                                      {completedDayChapters}/{totalDayChapters} chapters complete · ~
-                                      {formatMinutes(getAssignmentMinutes(day))}
-                                    </span>
-                                    <span className="discipleos-meta-copy mt-1 flex items-center gap-1 text-xs">
-                                      <Clock3 className="h-3.5 w-3.5 shrink-0 text-[#D4A017]/70" />
-                                      Reading time: {formatTime(planViewSelectedPlan.readingTime || "07:00")}
-                                    </span>
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  data-testid={`button-complete-plan-day-${dayIndex + 1}`}
-                                  onClick={() =>
-                                    markDayPlanComplete(
-                                      planViewSelectedPlan.id,
-                                      day.date,
-                                      !dayComplete,
-                                    )
-                                  }
-                                  disabled={day.readings.length === 0}
-                                  aria-label={dayComplete ? "Undo day" : "Complete day"}
-                                  className={cn(
-                                    "discipleos-control--compact discipleos-control--touch inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border px-2.5 py-1 text-xs font-semibold transition",
-                                    dayComplete
-                                      ? "border-[#10B981]/35 bg-[#10B981]/10 text-[#86EFAC] hover:border-[#10B981]/60 hover:bg-[#10B981]/20"
-                                      : "border-[#D4A017]/35 bg-[#D4A017]/10 text-[#F4D77A] hover:border-[#D4A017]/60 hover:bg-[#D4A017]/20",
-                                  )}
-                                >
-                                  {dayComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
-                                  {dayComplete ? "Undo day" : "Complete day"}
-                                </button>
-                              </div>
-                              <div
-                                id={dayReadingsId}
-                                data-testid={`plan-day-readings-${dayIdentifier}`}
-                                hidden={!isDayExpanded}
-                                className="discipleos-flat-list mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
-                              >
-                            {day.readings.map((reading) => {
-                              const done = !!completedMap[reading.key];
-                              return (
-                                <button
-                                  key={reading.key}
-                                  data-testid={`plan-reading-${reading.key}`}
-                                   aria-pressed={done}
-                                   onClick={() => toggleChapterComplete(planViewSelectedPlan.id, reading.key)}
-                                  className={cn(
-                                     "discipleos-flat-row flex items-center justify-between px-3 py-3 text-left transition",
-                                    done
-                                      ? "border-[#10B981]/30 bg-[#10B981]/10"
-                                      : "border-white/10 bg-transparent hover:bg-white/[0.04]"
-                                  )}
-                                >
-                                  <div>
-                                   <div className="discipleos-safe-text font-medium">{reading.label || reading.book}</div>
-                                    {reading.chapter ? (
-                                      <div className="discipleos-meta-copy text-sm">Chapter {reading.chapter}</div>
-                                    ) : null}
-                                  </div>
-                                  {done ? <CheckCircle2 className="h-5 w-5 text-[#10B981]" /> : <Circle className="h-5 w-5 text-white/35" />}
-                                </button>
+                                  onToggleChapter={toggleChapterComplete}
+                                  onToggleDay={markDayPlanComplete}
+                                />
                               );
-                            })}
-                              </div>
+                            })
+                          ) : (
+                            <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-4 text-sm text-white/65">
+                              There are no readings assigned for today. Past and upcoming days remain available below.
                             </div>
-                          );
-                        })}
+                          )}
+                        </div>
+                      </section>
+
+                      {[
+                        {
+                          id: "past",
+                          title: "Past Days",
+                          category: "past" as const,
+                          days: planViewDayGroups.past,
+                          summary: planViewDayGroups.past.length === 0
+                            ? "No past days"
+                            : `${planViewDayGroups.past.length} ${planViewDayGroups.past.length === 1 ? "day" : "days"} · ${planViewPastCompleteCount} complete · ${planViewPastCatchUpCount} to catch up`,
+                        },
+                        {
+                          id: "upcoming",
+                          title: "Upcoming Days",
+                          category: "upcoming" as const,
+                          days: planViewDayGroups.upcoming,
+                          summary: planViewDayGroups.upcoming.length === 0
+                            ? "No upcoming days"
+                            : `${planViewDayGroups.upcoming.length} ${planViewDayGroups.upcoming.length === 1 ? "day" : "days"} · ${planViewUpcomingReadingCount} ${planViewUpcomingReadingCount === 1 ? "reading" : "readings"} ahead`,
+                        },
+                      ].map((group) => {
+                        const groupKey = `${planViewSelectedPlan.id}:${group.id}`;
+                        const isExpanded = expandedPlanDayGroupKeys.has(groupKey);
+                        const contentId = `plan-day-group-content-${group.id}`;
+
+                        return (
+                          <section
+                            key={group.id}
+                            data-testid={`plan-day-group-${group.id}`}
+                            className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.015]"
+                          >
+                            <button
+                              type="button"
+                              data-testid={`plan-day-group-toggle-${group.id}`}
+                              aria-expanded={isExpanded}
+                              aria-controls={contentId}
+                              onClick={() =>
+                                setExpandedPlanDayGroupKeys((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(groupKey)) next.delete(groupKey);
+                                  else next.add(groupKey);
+                                  return next;
+                                })
+                              }
+                              className="flex min-h-14 w-full min-w-0 items-center justify-between gap-3 px-3 py-3 text-left transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#D4A017]/60 sm:px-4"
+                            >
+                              <span className="flex min-w-0 items-center gap-3">
+                                <ChevronDown
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
+                                    !isExpanded && "-rotate-90",
+                                  )}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block font-semibold text-white">
+                                    {group.title}
+                                  </span>
+                                  <span className="discipleos-meta-copy mt-0.5 block text-xs">
+                                    {group.summary}
+                                  </span>
+                                </span>
+                              </span>
+                            </button>
+                            <div
+                              id={contentId}
+                              data-testid={`plan-day-group-content-${group.id}`}
+                              hidden={!isExpanded}
+                              className="space-y-3 border-t border-white/10 p-3 sm:p-4"
+                            >
+                              {group.days.length > 0 ? (
+                                group.days.map(({ day, dayIndex }) => {
+                                  const dayKey = `${planViewSelectedPlan.id}:${day.date}`;
+                                  const isDayExpanded = Boolean(
+                                    planDayExpansionOverrides.get(dayKey) ?? false,
+                                  );
+                                  return (
+                                    <PlanDayRow
+                                      key={day.date}
+                                      plan={planViewSelectedPlan}
+                                      day={day}
+                                      dayIndex={dayIndex}
+                                      category={group.category}
+                                      expanded={isDayExpanded}
+                                      onToggleExpanded={() =>
+                                        setPlanDayExpansionOverrides((current) => {
+                                          const next = new Map(current);
+                                          next.set(dayKey, !isDayExpanded);
+                                          return next;
+                                        })
+                                      }
+                                      onToggleChapter={toggleChapterComplete}
+                                      onToggleDay={markDayPlanComplete}
+                                    />
+                                  );
+                                })
+                              ) : (
+                                <p className="discipleos-meta-copy px-1 py-2 text-sm">
+                                  {group.id === "past"
+                                    ? "There are no past days in this plan."
+                                    : "There are no future days in this plan."}
+                                </p>
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
                     </div>
                   </>
                 ) : null}

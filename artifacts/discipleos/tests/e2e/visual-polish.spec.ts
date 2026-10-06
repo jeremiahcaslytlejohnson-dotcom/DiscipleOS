@@ -12,6 +12,22 @@ function tomorrowISO() {
   return tomorrow.toISOString().slice(0, 10);
 }
 
+function addDaysToISO(dateISO: string, amount: number) {
+  const date = new Date(`${dateISO}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+async function browserTodayISO(page: Page) {
+  return page.evaluate(() => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
+}
+
 function makeOrdinaryPlan(
   id = "visual-polish-plan",
   name = "Morning Psalms",
@@ -713,11 +729,25 @@ test("collapses Plan details day readings independently while preserving complet
   const firstReadings = firstDay.getByTestId(`plan-day-readings-${firstIdentifier}`);
   const secondReadings = secondDay.getByTestId(`plan-day-readings-${secondIdentifier}`);
   const firstAction = firstDay.getByTestId("button-complete-plan-day-1");
+  const currentGroup = details.getByTestId("plan-day-group-current");
+  const pastGroupToggle = details.getByTestId("plan-day-group-toggle-past");
+  const pastGroupContent = details.getByTestId("plan-day-group-content-past");
+  const upcomingGroupToggle = details.getByTestId("plan-day-group-toggle-upcoming");
+  const upcomingGroupContent = details.getByTestId("plan-day-group-content-upcoming");
 
-  await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(currentGroup).toBeVisible();
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
   await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(firstReadings).toBeHidden();
+  await expect(firstReadings).toBeVisible();
+  await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(secondReadings).toBeHidden();
+  await expect(pastGroupToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(pastGroupContent).toBeHidden();
+  await expect(upcomingGroupToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(upcomingGroupContent).toBeHidden();
   await expect(firstDay.getByTestId(`plan-day-date-${firstIdentifier}`)).toBeVisible();
   await expect(firstToggle).toContainText("Day 1 of 2");
   await expect(firstDay.getByTestId(`plan-day-status-${firstIdentifier}`)).toHaveText("In progress");
@@ -728,24 +758,28 @@ test("collapses Plan details day readings independently while preserving complet
   await expect(secondDay.getByTestId(`plan-day-status-${secondIdentifier}`)).toHaveText("Upcoming");
   await expect(firstAction).toHaveText("Complete day");
   await expect(firstAction).toBeVisible();
-  await expect(secondDay.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
   await expect(details.getByText("33%", { exact: true })).toBeVisible();
 
   await firstToggle.click();
-  await expect(firstToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(firstReadings).toBeVisible();
-  await expect(firstReadings.getByRole("button", { name: "Psalm 1" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(firstToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(firstReadings).toBeHidden();
+
+  await upcomingGroupToggle.click();
+  await expect(upcomingGroupToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(upcomingGroupContent).toBeVisible();
+  await expect(secondDay.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
+  await expect(secondToggle).toHaveAttribute("aria-expanded", "false");
   await expect(secondReadings).toBeHidden();
 
   await secondToggle.click();
+  await expect(secondToggle).toHaveAttribute("aria-expanded", "true");
   await expect(secondReadings).toBeVisible();
+  await expect(firstReadings).toBeHidden();
+  await firstToggle.click();
   await expect(firstReadings).toBeVisible();
+  await expect(secondReadings).toBeVisible();
   await firstToggle.click();
   await expect(firstReadings).toBeHidden();
-  await expect(secondReadings).toBeVisible();
   await secondToggle.click();
   await expect(secondReadings).toBeHidden();
 
@@ -783,6 +817,168 @@ test("collapses Plan details day readings independently while preserving complet
     await expect(firstToggle).toBeVisible();
     await expect(firstAction).toBeVisible();
   }
+});
+
+test("groups current, catch-up, and upcoming plan days by schedule date after refresh", async ({ page }) => {
+  const today = await browserTodayISO(page);
+  const yesterday = addDaysToISO(today, -1);
+  const tomorrow = addDaysToISO(today, 1);
+  const plan = {
+    ...makeOrdinaryPlan("plan-day-groups-by-date", "Plan day groups"),
+    startDate: yesterday,
+    endDate: tomorrow,
+    durationDays: 3,
+    totalDays: 3,
+    assignments: [
+      {
+        date: yesterday,
+        readings: [
+          { key: "group-past-1", label: "Psalm 1" },
+          { key: "group-past-2", label: "Psalm 2" },
+        ],
+      },
+      {
+        date: today,
+        readings: [
+          { key: "group-current-1", label: "Psalm 3" },
+          { key: "group-current-2", label: "Psalm 4" },
+        ],
+      },
+      {
+        date: tomorrow,
+        readings: [{ key: "group-upcoming-1", label: "Psalm 5" }],
+      },
+    ],
+    completed: {
+      "group-past-1": true,
+      "group-current-1": true,
+    },
+  };
+  const dayCompletionWrites: Array<{ planId: string; date: string; completed: boolean }> = [];
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname.endsWith("/api/reading/day-complete") &&
+      request.method() === "POST"
+    ) {
+      const body = request.postDataJSON();
+      dayCompletionWrites.push({
+        planId: body.planId,
+        date: body.date,
+        completed: body.completed,
+      });
+    }
+  });
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+  await page.getByTestId(`planned-reading-card-${plan.id}`).click();
+
+  const details = page.getByTestId("dashboard-plan-details");
+  const currentIdentifier = `${plan.id}-${today}`;
+  const pastIdentifier = `${plan.id}-${yesterday}`;
+  const upcomingIdentifier = `${plan.id}-${tomorrow}`;
+  const currentDay = details.getByTestId(`plan-day-section-${currentIdentifier}`);
+  const pastDay = details.getByTestId(`plan-day-section-${pastIdentifier}`);
+  const upcomingDay = details.getByTestId(`plan-day-section-${upcomingIdentifier}`);
+  const currentToggle = currentDay.getByTestId(`plan-day-toggle-${currentIdentifier}`);
+  const currentReadings = currentDay.getByTestId(`plan-day-readings-${currentIdentifier}`);
+  const pastGroupToggle = details.getByTestId("plan-day-group-toggle-past");
+  const pastGroupContent = details.getByTestId("plan-day-group-content-past");
+  const upcomingGroupToggle = details.getByTestId("plan-day-group-toggle-upcoming");
+  const upcomingGroupContent = details.getByTestId("plan-day-group-content-upcoming");
+
+  await expect(details.getByText("40%", { exact: true })).toBeVisible();
+  await expect(currentToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(currentReadings).toBeVisible();
+  await expect(currentDay.getByTestId(`plan-day-status-${currentIdentifier}`)).toHaveText(
+    "In progress",
+  );
+  await expect(currentReadings.getByRole("button", { name: "Psalm 3" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(pastGroupToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(pastGroupContent).toBeHidden();
+  await expect(upcomingGroupToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(upcomingGroupContent).toBeHidden();
+
+  await pastGroupToggle.click();
+  await expect(pastGroupContent).toBeVisible();
+  const pastToggle = pastDay.getByTestId(`plan-day-toggle-${pastIdentifier}`);
+  const pastReadings = pastDay.getByTestId(`plan-day-readings-${pastIdentifier}`);
+  const pastAction = pastDay.getByTestId("button-complete-plan-day-1");
+  await expect(pastDay.getByTestId(`plan-day-status-${pastIdentifier}`)).toHaveText("Catch-up");
+  await expect(pastToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(pastReadings).toBeHidden();
+  await expect(pastAction).toHaveText("Complete day");
+  await expect(pastGroupToggle).toContainText("0 complete · 1 to catch up");
+
+  await pastAction.click();
+  await expect(pastDay.getByTestId(`plan-day-status-${pastIdentifier}`)).toHaveText("Complete");
+  await expect(pastGroupToggle).toContainText("1 complete · 0 to catch up");
+  await expect(currentToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(currentReadings).toBeVisible();
+  expect(dayCompletionWrites).toEqual([
+    { planId: plan.id, date: yesterday, completed: true },
+  ]);
+
+  await upcomingGroupToggle.click();
+  await expect(upcomingGroupContent).toBeVisible();
+  const upcomingToggle = upcomingDay.getByTestId(`plan-day-toggle-${upcomingIdentifier}`);
+  const upcomingReadings = upcomingDay.getByTestId(`plan-day-readings-${upcomingIdentifier}`);
+  await expect(upcomingDay.getByTestId(`plan-day-status-${upcomingIdentifier}`)).toHaveText(
+    "Upcoming",
+  );
+  await expect(upcomingToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(upcomingReadings).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+  await page.getByTestId(`planned-reading-card-${plan.id}`).click();
+
+  const refreshedDetails = page.getByTestId("dashboard-plan-details");
+  const refreshedCurrentDay = refreshedDetails.getByTestId(
+    `plan-day-section-${currentIdentifier}`,
+  );
+  const refreshedCurrentToggle = refreshedCurrentDay.getByTestId(
+    `plan-day-toggle-${currentIdentifier}`,
+  );
+  const refreshedCurrentReadings = refreshedCurrentDay.getByTestId(
+    `plan-day-readings-${currentIdentifier}`,
+  );
+  const refreshedPastToggle = refreshedDetails.getByTestId("plan-day-group-toggle-past");
+  const refreshedPastContent = refreshedDetails.getByTestId("plan-day-group-content-past");
+  const refreshedUpcomingToggle = refreshedDetails.getByTestId(
+    "plan-day-group-toggle-upcoming",
+  );
+  const refreshedUpcomingContent = refreshedDetails.getByTestId(
+    "plan-day-group-content-upcoming",
+  );
+
+  await expect(refreshedCurrentToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(refreshedCurrentReadings).toBeVisible();
+  await expect(refreshedPastToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(refreshedPastContent).toBeHidden();
+  await expect(refreshedUpcomingToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(refreshedUpcomingContent).toBeHidden();
+  await refreshedPastToggle.click();
+  await expect(
+    refreshedDetails.getByTestId(`plan-day-status-${pastIdentifier}`),
+  ).toHaveText("Complete");
+  await expect(refreshedPastToggle).toContainText("1 complete · 0 to catch up");
+  await refreshedUpcomingToggle.click();
+  await expect(
+    refreshedDetails.getByTestId(`plan-day-status-${upcomingIdentifier}`),
+  ).toHaveText("Upcoming");
 });
 
 test("keeps the Plans add action aligned at narrow mobile width", async ({ page }) => {
