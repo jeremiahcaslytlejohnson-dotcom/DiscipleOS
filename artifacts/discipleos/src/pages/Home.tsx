@@ -6023,7 +6023,7 @@ export default function DiscipleOSApp() {
                                 <button
                                   type="button"
                                   data-testid={`plan-day-toggle-${dayIdentifier}`}
-                                  aria-label={`${isDayExpanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings`}
+                                  aria-label={`${isDayExpanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings, ${formatDate(day.date)}, ${dayStatus}, ${day.readings.length} readings, ${completedDayChapters} of ${totalDayChapters} chapters complete`}
                                   aria-expanded={isDayExpanded}
                                   aria-controls={dayReadingsId}
                                   onClick={() =>

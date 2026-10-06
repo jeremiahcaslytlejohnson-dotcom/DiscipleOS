@@ -471,7 +471,7 @@ test("keeps audited secondary text readable across responsive DiscipleOS states"
   }
 });
 
-test("completes a plan day in one tap, persists it, and avoids duplicate writes", async ({ page }) => {
+test("completes a plan day in one tap, persists it, and exposes undo", async ({ page }) => {
   const today = todayISO();
   const plan = {
     ...makeOrdinaryPlan("complete-day-plan", "Complete Day Plan"),
@@ -530,12 +530,9 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
   );
   await expect(completeDay).toHaveText("Complete day");
   await completeDay.click();
-  await expect(completeDay).toHaveText("Day complete");
-  await expect(completeDay).toBeDisabled();
+  await expect(completeDay).toHaveText("Undo day");
+  await expect(completeDay).toBeEnabled();
   await expect(page.getByTestId("plan-reading-complete-day-2")).toHaveClass(/bg-\[#10B981\]\/10/);
-  expect(dayCompletionWrites).toBe(1);
-
-  await completeDay.click({ force: true });
   expect(dayCompletionWrites).toBe(1);
 
   await expect.poll(async () => {
@@ -546,8 +543,8 @@ test("completes a plan day in one tap, persists it, and avoids duplicate writes"
   await page.reload();
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await (await openDashboardNavigation(page)).getByRole("button", { name: "Plans", exact: true }).click();
-  await expect(page.getByTestId("button-complete-plan-day-1")).toHaveText("Day complete");
-  await expect(page.getByTestId("button-complete-plan-day-1")).toBeDisabled();
+  await expect(page.getByTestId("button-complete-plan-day-1")).toHaveText("Undo day");
+  await expect(page.getByTestId("button-complete-plan-day-1")).toBeEnabled();
   await expect(page.getByTestId("plan-reading-complete-day-3")).toHaveClass(/bg-\[#10B981\]\/10/);
   expect(dayCompletionWrites).toBe(1);
 });
@@ -646,9 +643,13 @@ test("collapses Calendar reading plans independently while keeping the summary a
     );
     await secondToggle.click();
     await expect(secondReadings).toBeHidden();
-    await expect(secondRow.getByRole("button", { name: "Complete day", exact: true })).toBeVisible();
-    await secondRow.getByRole("button", { name: "Complete day", exact: true }).click();
-    await expect(secondRow.getByRole("button", { name: "Undo day", exact: true })).toBeVisible();
+    const secondDayAction = secondRow.getByRole("button", { name: /^(Complete|Undo) day$/ });
+    await expect(secondDayAction).toBeVisible();
+    const actionBeforeClick = await secondDayAction.innerText();
+    await secondDayAction.click();
+    await expect(secondDayAction).toHaveText(
+      actionBeforeClick === "Undo day" ? "Complete day" : "Undo day",
+    );
     await expect(secondReadings).toBeHidden();
   }
 });
