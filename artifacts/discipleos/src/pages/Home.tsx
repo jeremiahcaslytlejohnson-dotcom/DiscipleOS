@@ -4884,30 +4884,34 @@ export default function DiscipleOSApp() {
                     const stats = getPlanStats(plan);
                     const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                     return (
-                      <div key={plan.id} className="discipleos-flat-row flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                        <div className="min-w-0">
-                          <div className="discipleos-safe-text font-medium">{plan.name}</div>
-                          <div
-                            className="discipleos-meta-copy mt-1 text-sm"
-                            style={{
-                              color: isUpToDate ? "#86EFAC" : "#F4D77A",
+                      <div
+                        key={plan.id}
+                        data-testid={`dashboard-progress-row-${plan.id}`}
+                        className="discipleos-flat-row py-3 first:pt-0 last:pb-0"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="discipleos-safe-text min-w-0 font-medium">{plan.name}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPlanId(plan.id);
+                              setActiveTab("plans");
                             }}
-                            data-testid={`dashboard-plan-status-${plan.id}`}
+                            className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
                           >
-                            {stats.percent}% complete · {stats.remainingChapters} chapters remaining
-                          </div>
+                            Open plan
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedPlanId(plan.id);
-                            setActiveTab("plans");
+                        <div
+                          className="discipleos-meta-copy mt-1 w-full text-center text-sm"
+                          style={{
+                            color: isUpToDate ? "#86EFAC" : "#F4D77A",
                           }}
-                          className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
+                          data-testid={`dashboard-plan-status-${plan.id}`}
                         >
-                          Open plan
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
+                          {stats.percent}% complete · {stats.remainingChapters} chapters remaining
+                        </div>
                       </div>
                     );
                   })
@@ -5905,34 +5909,12 @@ export default function DiscipleOSApp() {
                            <div className="flex min-w-0 items-start justify-between gap-3">
                              <div className="min-w-0 flex-1">
                                <div className="discipleos-safe-text text-lg font-semibold text-white">
-                                {plan.name}
-                              </div>
-
-                                <div className="discipleos-secondary-copy mt-2 text-sm">
-                                {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
-                              </div>
-
-                               <div className="discipleos-safe-text mt-2 text-xs leading-5 text-white/55">
-                                {isResetPlan(plan)
-                                  ? "20-day Reset"
-                                  : isNamedJourneyPlan(plan)
-                                    ? `${plan.journeyDays}-day journey`
-                                    : `${plan.selectedBooks.length} ${plan.selectedBooks.length === 1 ? "book" : "books"}`}
-                                {" · "}
-                                {stats.totalChapters} chapters · {stats.totalDays} days · {formatMinutes(stats.totalMinutes)} total
-                                {" · "}
-                                {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
-                                 <span
-                                   className="ml-2 text-[#F4D77A]"
-                                   style={{
-                                     color: isUpToDate ? "#86EFAC" : "#F4D77A",
-                                   }}
-                                   data-testid={`plan-card-status-${plan.id}`}
-                                 >
-                                   {stats.percent}% complete
-                                 </span>
-                              </div>
-                            </div>
+                                 {plan.name}
+                               </div>
+                               <div className="discipleos-secondary-copy mt-2 text-sm">
+                                 {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
+                               </div>
+                             </div>
 
                              <div className="flex shrink-0 items-center gap-2">
                               {!isResetPlan(plan) && !isNamedJourneyPlan(plan) && (
@@ -5958,6 +5940,29 @@ export default function DiscipleOSApp() {
                               </button>
                             </div>
                           </div>
+                           <div
+                             data-testid={`plan-card-progress-details-${plan.id}`}
+                             className="discipleos-safe-text mt-2 w-full text-center text-xs leading-5 text-white/55"
+                           >
+                             {isResetPlan(plan)
+                               ? "20-day Reset"
+                               : isNamedJourneyPlan(plan)
+                                 ? `${plan.journeyDays}-day journey`
+                                 : `${plan.selectedBooks.length} ${plan.selectedBooks.length === 1 ? "book" : "books"}`}
+                             {" · "}
+                             {stats.totalChapters} chapters · {stats.totalDays} days · {formatMinutes(stats.totalMinutes)} total
+                             {" · "}
+                             {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
+                             <span
+                               className="ml-2 text-[#F4D77A]"
+                               style={{
+                                 color: isUpToDate ? "#86EFAC" : "#F4D77A",
+                               }}
+                               data-testid={`plan-card-status-${plan.id}`}
+                             >
+                               {stats.percent}% complete
+                             </span>
+                           </div>
                         </div>
                       );
                     })

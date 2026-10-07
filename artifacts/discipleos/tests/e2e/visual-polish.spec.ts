@@ -2323,6 +2323,27 @@ test("colors original reading-plan progress summaries by schedule status", async
     "33% complete · 2 chapters remaining",
   );
   await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  const assertCenteredUniformWidths = async (
+    elements: Array<typeof dashboardUpToDate>,
+  ) => {
+    const layouts = await Promise.all(
+      elements.map((element) =>
+        element.evaluate((node) => ({
+          width: node.getBoundingClientRect().width,
+          textAlign: getComputedStyle(node).textAlign,
+        })),
+      ),
+    );
+    expect(layouts.map((layout) => layout.textAlign)).toEqual(
+      layouts.map(() => "center"),
+    );
+    const widths = layouts.map((layout) => layout.width);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+  };
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await assertCenteredUniformWidths([dashboardUpToDate, dashboardBehind]);
+  }
 
   await (await openDashboardNavigation(page))
     .getByRole("button", { name: "Plans", exact: true })
@@ -2340,10 +2361,23 @@ test("colors original reading-plan progress summaries by schedule status", async
   const cardBehind = behindCard.getByTestId(
     `plan-card-status-${behindPlan.id}`,
   );
+  const cardUpToDateDetails = upToDateCard.getByTestId(
+    `plan-card-progress-details-${upToDatePlan.id}`,
+  );
+  const cardBehindDetails = behindCard.getByTestId(
+    `plan-card-progress-details-${behindPlan.id}`,
+  );
   await expect(cardUpToDate).toHaveText("67% complete");
   await expect(cardUpToDate).toHaveCSS("color", "rgb(134, 239, 172)");
   await expect(cardBehind).toHaveText("33% complete");
   await expect(cardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await assertCenteredUniformWidths([
+      cardUpToDateDetails,
+      cardBehindDetails,
+    ]);
+  }
 });
 
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {
