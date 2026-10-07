@@ -2268,7 +2268,7 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
   }
 });
 
-test("shows schedule-aware status in reading-plan summary rows and cards", async ({ page }) => {
+test("colors original reading-plan progress summaries by schedule status", async ({ page }) => {
   const today = await browserTodayISO(page);
   const yesterday = addDaysToISO(today, -1);
   const tomorrow = addDaysToISO(today, 1);
@@ -2315,11 +2315,14 @@ test("shows schedule-aware status in reading-plan summary rows and cards", async
   const dashboardBehind = progress.getByTestId(
     `dashboard-plan-status-${behindPlan.id}`,
   );
-  await expect(dashboardUpToDate).toHaveText("Up to date");
+  await expect(dashboardUpToDate).toHaveText(
+    "67% complete · 1 chapters remaining",
+  );
   await expect(dashboardUpToDate).toHaveClass(/text-emerald-300/);
-  await expect(dashboardBehind).toHaveText("Not up to date");
+  await expect(dashboardBehind).toHaveText(
+    "33% complete · 2 chapters remaining",
+  );
   await expect(dashboardBehind).toHaveClass(/text-amber-300/);
-  await expect(progress).not.toContainText(/% complete|chapters remaining/i);
 
   await (await openDashboardNavigation(page))
     .getByRole("button", { name: "Plans", exact: true })
@@ -2337,12 +2340,10 @@ test("shows schedule-aware status in reading-plan summary rows and cards", async
   const cardBehind = behindCard.getByTestId(
     `plan-card-status-${behindPlan.id}`,
   );
-  await expect(cardUpToDate).toHaveText("Up to date");
+  await expect(cardUpToDate).toHaveText("67% complete");
   await expect(cardUpToDate).toHaveClass(/text-emerald-300/);
-  await expect(cardBehind).toHaveText("Not up to date");
+  await expect(cardBehind).toHaveText("33% complete");
   await expect(cardBehind).toHaveClass(/text-amber-300/);
-  await expect(upToDateCard).not.toContainText(/% complete|chapters remaining/i);
-  await expect(behindCard).not.toContainText(/% complete|chapters remaining/i);
 });
 
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {

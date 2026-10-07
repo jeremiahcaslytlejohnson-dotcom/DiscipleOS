@@ -4881,6 +4881,7 @@ export default function DiscipleOSApp() {
                   <div className="discipleos-empty-state text-sm">No ordinary reading plans yet.</div>
                 ) : (
                   ordinaryPlans.map((plan) => {
+                    const stats = getPlanStats(plan);
                     const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                     return (
                       <div key={plan.id} className="discipleos-flat-row flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
@@ -4888,12 +4889,12 @@ export default function DiscipleOSApp() {
                           <div className="discipleos-safe-text font-medium">{plan.name}</div>
                           <div
                             className={cn(
-                              "mt-1 text-sm font-medium",
+                              "discipleos-meta-copy mt-1 text-sm",
                               isUpToDate ? "text-emerald-300" : "text-amber-300",
                             )}
                             data-testid={`dashboard-plan-status-${plan.id}`}
                           >
-                            {isUpToDate ? "Up to date" : "Not up to date"}
+                            {stats.percent}% complete · {stats.remainingChapters} chapters remaining
                           </div>
                         </div>
                         <button
@@ -5923,12 +5924,12 @@ export default function DiscipleOSApp() {
                                 {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
                                  <span
                                    className={cn(
-                                     "ml-2 font-medium",
+                                     "ml-2",
                                      isUpToDate ? "text-emerald-300" : "text-amber-300",
                                    )}
                                    data-testid={`plan-card-status-${plan.id}`}
                                  >
-                                   {isUpToDate ? "Up to date" : "Not up to date"}
+                                   {stats.percent}% complete
                                  </span>
                               </div>
                             </div>
