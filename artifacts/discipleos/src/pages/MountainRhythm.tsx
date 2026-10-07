@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Compass,
   LockKeyhole,
@@ -186,6 +187,9 @@ export default function MountainRhythm() {
   const [feedback, setFeedback] = useState("");
   const [saveError, setSaveError] = useState("");
   const [pendingStartKind, setPendingStartKind] = useState<string | null>(null);
+  const [routeDayExpandedOverrides, setRouteDayExpandedOverrides] = useState<
+    Record<string, boolean>
+  >({});
   const autoStartedEntryRef = useRef(false);
 
   const structuredPlans = useMemo(
@@ -579,9 +583,20 @@ export default function MountainRhythm() {
       });
   }, [plans, queuePending]);
 
-  const currentRoute = (selectedPlan?.assignments || []).filter(
-    (day: any) => day.date <= today,
-  );
+  const currentRoute = (Array.isArray(selectedPlan?.assignments)
+    ? selectedPlan.assignments
+    : [])
+    .map((day: any, originalIndex: number) => ({
+      day,
+      dayNumber: originalIndex + 1,
+    }))
+    .filter(({ day }: any) => day.date <= today)
+    .sort((left: any, right: any) => {
+      const dateOrder = String(right.day?.date || "").localeCompare(
+        String(left.day?.date || ""),
+      );
+      return dateOrder || right.dayNumber - left.dayNumber;
+    });
   const currentStatus = score.todayPlanned
     ? score.todayPercentage >= 100 ? "Complete" : score.todayPercentage > 0 ? "In progress" : "Ready for today"
     : "No reading scheduled";
@@ -853,50 +868,102 @@ export default function MountainRhythm() {
                     </div>
                     <span className="rounded-full border border-[#D4A017]/30 bg-[#D4A017]/10 px-3 py-1 text-xs text-[#F4D77A]">{score.completedDays}/{score.journeyDays} days</span>
                   </div>
-                  <div className="mt-5 space-y-3">
-                    {currentRoute.map((day: any, index: number) => {
+                  <div className="mt-5 space-y-3" data-testid="mountain-rhythm-route-days">
+                    {currentRoute.map(({ day, dayNumber }: any, index: number) => {
                       const point = trailByDate.get(day.date);
                       const status = point?.status || "future";
                       const completed = selectedPlan.completed || {};
                       const allDone = day.readings.length > 0 &&
                         day.readings.every((reading: any) => Boolean(completed[reading.key]));
+                      const statusLabel = status === "future"
+                        ? "Upcoming"
+                        : status === "complete"
+                          ? "Complete"
+                          : status === "partial"
+                            ? "In progress"
+                            : "Next step";
+                      const routeDayKey = `${selectedPlan.id}:${day.date}`;
+                      const readingsId = `route-day-readings-${selectedPlan.id}-${day.date}`;
+                      const expanded =
+                        routeDayExpandedOverrides[routeDayKey] ?? (index === 0);
                       return (
-                        <div key={day.date} className={`discipleos-item-surface p-4 ${day.date === today ? "border-[#D4A017]/45 bg-[#D4A017]/[0.07]" : "border-white/10 bg-white/[0.025]"}`} data-testid={`route-day-${index + 1}`}>
+                        <div
+                          key={day.date}
+                          className={`discipleos-item-surface p-4 ${day.date === today ? "border-[#D4A017]/45 bg-[#D4A017]/[0.07]" : "border-white/10 bg-white/[0.025]"}`}
+                          data-testid={`route-day-${dayNumber}`}
+                          data-route-day-number={dayNumber}
+                        >
                           <div className="flex items-start justify-between gap-3">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/20 text-xs font-semibold text-[#F4D77A]">{index + 1}</div>
-                              <div className="min-w-0">
+                            <Button
+                              aria-expanded={expanded}
+                              aria-controls={readingsId}
+                              aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayNumber} readings, ${formatDate(day.date)}, ${statusLabel}, ${day.readings.length} readings, ${formatTime(day.estimatedMinutes)}`}
+                              data-testid={`route-day-toggle-${dayNumber}`}
+                              onClick={() =>
+                                setRouteDayExpandedOverrides((current) => ({
+                                  ...current,
+                                  [routeDayKey]: !expanded,
+                                }))
+                              }
+                              className="flex min-w-0 flex-1 items-start gap-3 rounded-md py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60"
+                            >
+                              <div
+                                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/20 text-xs font-semibold text-[#F4D77A]"
+                                data-testid={`route-day-number-${dayNumber}`}
+                              >
+                                {dayNumber}
+                              </div>
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
-                                  {formatDate(day.date)}
+                                  <span data-testid={`route-day-date-${dayNumber}`}>
+                                    {formatDate(day.date)}
+                                  </span>
                                   {day.date === today ? <span className="rounded-full bg-[#D4A017]/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#F4D77A]">Today</span> : null}
                                 </div>
-                                <div className="discipleos-meta-copy mt-1 text-xs">{day.readings.length} reading{day.readings.length === 1 ? "" : "s"} · {formatTime(day.estimatedMinutes)}</div>
+                                <div className="discipleos-meta-copy mt-1 text-xs">
+                                  {day.readings.length} reading{day.readings.length === 1 ? "" : "s"} · {formatTime(day.estimatedMinutes)}
+                                </div>
+                                <div
+                                  className="discipleos-secondary-copy mt-1 flex items-center gap-2 text-xs"
+                                  data-testid={`route-day-status-${dayNumber}`}
+                                >
+                                  <StatusMark status={status} />
+                                  <span>{statusLabel}</span>
+                                </div>
                               </div>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className={`mt-1 h-4 w-4 shrink-0 text-white/50 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+                              />
+                            </Button>
+                            <div className="flex shrink-0 items-center">
+                              {day.date <= today ? (
+                                <Button
+                                  onClick={() => completeDay(selectedPlan.id, day.date)}
+                                  className="discipleos-control--compact border border-[#D4A017]/25 bg-[#D4A017]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#F4D77A] hover:border-[#D4A017]/50 hover:bg-[#D4A017]/20"
+                                  data-testid={`button-complete-day-${dayNumber}`}
+                                >
+                                  {allDone ? "Undo day" : "Complete day"}
+                                </Button>
+                              ) : null}
                             </div>
-                               <div className="flex shrink-0 items-center gap-2 text-xs">
-                                 <div className="discipleos-secondary-copy flex items-center gap-2"><StatusMark status={status} /><span className="hidden sm:inline">{status === "future" ? "Upcoming" : status === "complete" ? "Complete" : status === "partial" ? "In progress" : "Next step"}</span></div>
-                                 {day.date <= today ? (
-                                   <Button
-                                     onClick={() => completeDay(selectedPlan.id, day.date)}
-                                     className="discipleos-control--compact border border-[#D4A017]/25 bg-[#D4A017]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#F4D77A] hover:border-[#D4A017]/50 hover:bg-[#D4A017]/20"
-                                     data-testid={`button-complete-day-${index + 1}`}
-                                   >
-                                     {allDone ? "Undo day" : "Complete day"}
-                                   </Button>
-                                 ) : null}
-                               </div>
                           </div>
-                           <div className="discipleos-flat-list mt-3 grid gap-2 sm:grid-cols-2">
+                          <div
+                            id={readingsId}
+                            data-testid={`route-day-readings-${dayNumber}`}
+                            hidden={!expanded}
+                            className="discipleos-flat-list mt-3 grid gap-2 sm:grid-cols-2"
+                          >
                             {day.readings.map((reading: any) => {
                               const done = Boolean(completed[reading.key]);
                               return (
                                 <Button
                                   key={reading.key}
                                   onClick={() => toggleReading(selectedPlan.id, reading.key)}
-                                   className={`discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-sm ${done ? "bg-emerald-300/10 text-emerald-100" : "bg-black/20 text-white/75 hover:bg-[#D4A017]/10"}`}
+                                  className={`discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-sm ${done ? "bg-emerald-300/10 text-emerald-100" : "bg-black/20 text-white/75 hover:bg-[#D4A017]/10"}`}
                                   data-testid={`button-reading-${reading.key}`}
                                 >
-                                   <span className="discipleos-safe-text">{reading.label || `${reading.book} ${reading.chapter}`}</span>
+                                  <span className="discipleos-safe-text">{reading.label || `${reading.book} ${reading.chapter}`}</span>
                                   {done ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Circle className="h-4 w-4 shrink-0 text-white/25" />}
                                 </Button>
                               );

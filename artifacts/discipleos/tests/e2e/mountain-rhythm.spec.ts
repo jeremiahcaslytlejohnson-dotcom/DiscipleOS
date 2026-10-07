@@ -804,6 +804,93 @@ for (const route of [
   });
 }
 
+test("shows the newest available Route to date day first and collapses earlier days independently", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+  });
+  const plan = makePlan({
+    id: "latest-route-day-first",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -2,
+    completedIndexes: [1],
+  });
+
+  await stubApi(page);
+  await seedLocalData(page, [plan], plan.id);
+  await openMountainRhythm(page);
+
+  const routeDays = page
+    .getByTestId("mountain-rhythm-route-days")
+    .locator("[data-route-day-number]");
+  await expect(routeDays).toHaveCount(3);
+  expect(
+    await routeDays.evaluateAll((days) =>
+      days.map((routeDay) => routeDay.getAttribute("data-route-day-number")),
+    ),
+  ).toEqual(["3", "2", "1"]);
+
+  await expect(page.getByTestId("route-day-toggle-3")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByTestId("route-day-readings-3")).toBeVisible();
+  for (const earlierDayNumber of [1, 2]) {
+    await expect(
+      page.getByTestId(`route-day-toggle-${earlierDayNumber}`),
+    ).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByTestId(`route-day-readings-${earlierDayNumber}`),
+    ).toBeHidden();
+  }
+
+  const completedEarlierDay = page.getByTestId("route-day-2");
+  await expect(
+    completedEarlierDay.getByTestId("route-day-number-2"),
+  ).toHaveText("2");
+  await expect(
+    completedEarlierDay.getByTestId("route-day-date-2"),
+  ).not.toBeEmpty();
+  await expect(
+    completedEarlierDay.getByTestId("route-day-toggle-2"),
+  ).toContainText("2 readings");
+  await expect(
+    completedEarlierDay.getByTestId("route-day-toggle-2"),
+  ).toContainText(/About \d+ min|A short reading/);
+  await expect(
+    completedEarlierDay.getByTestId("route-day-status-2"),
+  ).toHaveText("Complete");
+  await expect(
+    completedEarlierDay.getByTestId("button-complete-day-2"),
+  ).toHaveText("Undo day");
+
+  await page.getByTestId("route-day-toggle-2").click();
+  await expect(page.getByTestId("route-day-readings-2")).toBeVisible();
+  await expect(page.getByTestId("route-day-readings-1")).toBeHidden();
+  await page.getByTestId("route-day-toggle-1").click();
+  await expect(page.getByTestId("route-day-readings-1")).toBeVisible();
+  await expect(page.getByTestId("route-day-readings-2")).toBeVisible();
+  await page.getByTestId("route-day-toggle-2").click();
+  await expect(page.getByTestId("route-day-readings-2")).toBeHidden();
+  await expect(page.getByTestId("route-day-readings-1")).toBeVisible();
+  await expect(page.getByTestId("route-day-readings-3")).toBeVisible();
+
+  await expect(page.getByTestId("route-day-4")).toHaveCount(0);
+
+  await page.reload();
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("route-day-readings-3")).toBeVisible();
+  await expect(page.getByTestId("route-day-readings-2")).toBeHidden();
+  await expect(page.getByTestId("route-day-readings-1")).toBeHidden();
+  await expect(page.getByTestId("route-day-4")).toHaveCount(0);
+});
+
 test("updates Today’s reading for a partial day without awarding ascent", async ({
   page,
 }) => {
@@ -1033,6 +1120,7 @@ test("keeps on-schedule consistency separate from current reading checkboxes", a
   await expect(journeyMetric).toContainText("57.1%");
   await expect(rhythmMetric).toContainText("80%");
 
+  await page.getByTestId("route-day-toggle-2").click();
   const missedDayReadings = page
     .getByTestId("route-day-2")
     .locator('button[data-testid^="button-reading-"]');
