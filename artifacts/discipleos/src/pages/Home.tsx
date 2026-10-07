@@ -509,6 +509,13 @@ function getPlanDayGroups(plan: any, today: string) {
   };
 }
 
+function isPlanCaughtUpThroughToday(plan: any, today: string) {
+  const { past, current } = getPlanDayGroups(plan, today);
+  return [...past, ...current].every(({ day }: any) =>
+    isPlanDayComplete(plan, day.date),
+  );
+}
+
 function PlanDayRow({
   plan,
   day,
@@ -4874,13 +4881,19 @@ export default function DiscipleOSApp() {
                   <div className="discipleos-empty-state text-sm">No ordinary reading plans yet.</div>
                 ) : (
                   ordinaryPlans.map((plan) => {
-                    const stats = getPlanStats(plan);
+                    const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                     return (
                       <div key={plan.id} className="discipleos-flat-row flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                         <div className="min-w-0">
                           <div className="discipleos-safe-text font-medium">{plan.name}</div>
-                          <div className="discipleos-meta-copy mt-1 text-sm">
-                            {stats.percent}% complete · {stats.remainingChapters} chapters remaining
+                          <div
+                            className={cn(
+                              "mt-1 text-sm font-medium",
+                              isUpToDate ? "text-emerald-300" : "text-amber-300",
+                            )}
+                            data-testid={`dashboard-plan-status-${plan.id}`}
+                          >
+                            {isUpToDate ? "Up to date" : "Not up to date"}
                           </div>
                         </div>
                         <button
@@ -5873,6 +5886,7 @@ export default function DiscipleOSApp() {
                   ) : (
                     planViewPlans.map((plan) => {
                       const stats = getPlanStats(plan);
+                       const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                       const isActive = planViewSelectedPlan?.id === plan.id;
 
                       return (
@@ -5907,7 +5921,15 @@ export default function DiscipleOSApp() {
                                 {stats.totalChapters} chapters · {stats.totalDays} days · {formatMinutes(stats.totalMinutes)} total
                                 {" · "}
                                 {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
-                                <span className="ml-2 text-[#F4D77A]">{stats.percent}% complete</span>
+                                 <span
+                                   className={cn(
+                                     "ml-2 font-medium",
+                                     isUpToDate ? "text-emerald-300" : "text-amber-300",
+                                   )}
+                                   data-testid={`plan-card-status-${plan.id}`}
+                                 >
+                                   {isUpToDate ? "Up to date" : "Not up to date"}
+                                 </span>
                               </div>
                             </div>
 

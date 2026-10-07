@@ -2268,6 +2268,83 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
   }
 });
 
+test("shows schedule-aware status in reading-plan summary rows and cards", async ({ page }) => {
+  const today = await browserTodayISO(page);
+  const yesterday = addDaysToISO(today, -1);
+  const tomorrow = addDaysToISO(today, 1);
+  const upToDatePlan = {
+    ...makeOrdinaryPlan("up-to-date-summary-plan", "Old Testament"),
+    startDate: yesterday,
+    endDate: tomorrow,
+    durationDays: 3,
+    totalDays: 3,
+    assignments: [
+      { date: yesterday, readings: [{ key: "up-to-date-yesterday", label: "Genesis 1" }] },
+      { date: today, readings: [{ key: "up-to-date-today", label: "Genesis 2" }] },
+      { date: tomorrow, readings: [{ key: "up-to-date-tomorrow", label: "Genesis 3" }] },
+    ],
+    completed: {
+      "up-to-date-yesterday": true,
+      "up-to-date-today": true,
+    },
+  };
+  const behindPlan = {
+    ...makeOrdinaryPlan("behind-summary-plan", "P and P"),
+    startDate: yesterday,
+    endDate: tomorrow,
+    durationDays: 3,
+    totalDays: 3,
+    assignments: [
+      { date: yesterday, readings: [{ key: "behind-yesterday", label: "Psalm 1" }] },
+      { date: today, readings: [{ key: "behind-today", label: "Psalm 2" }] },
+      { date: tomorrow, readings: [{ key: "behind-tomorrow", label: "Psalm 3" }] },
+    ],
+    completed: { "behind-yesterday": true },
+  };
+
+  await stubHomeApi(page, [upToDatePlan, behindPlan]);
+  await seedPlans(page, [upToDatePlan, behindPlan]);
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+
+  const progress = page.getByTestId("dashboard-progress");
+  await progress.getByRole("button", { name: /^Progress/ }).click();
+  const dashboardUpToDate = progress.getByTestId(
+    `dashboard-plan-status-${upToDatePlan.id}`,
+  );
+  const dashboardBehind = progress.getByTestId(
+    `dashboard-plan-status-${behindPlan.id}`,
+  );
+  await expect(dashboardUpToDate).toHaveText("Up to date");
+  await expect(dashboardUpToDate).toHaveClass(/text-emerald-300/);
+  await expect(dashboardBehind).toHaveText("Not up to date");
+  await expect(dashboardBehind).toHaveClass(/text-amber-300/);
+  await expect(progress).not.toContainText(/% complete|chapters remaining/i);
+
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+  const plansList = page.getByTestId("dashboard-plans-list");
+  const upToDateCard = plansList.getByTestId(
+    `planned-reading-card-${upToDatePlan.id}`,
+  );
+  const behindCard = plansList.getByTestId(
+    `planned-reading-card-${behindPlan.id}`,
+  );
+  const cardUpToDate = upToDateCard.getByTestId(
+    `plan-card-status-${upToDatePlan.id}`,
+  );
+  const cardBehind = behindCard.getByTestId(
+    `plan-card-status-${behindPlan.id}`,
+  );
+  await expect(cardUpToDate).toHaveText("Up to date");
+  await expect(cardUpToDate).toHaveClass(/text-emerald-300/);
+  await expect(cardBehind).toHaveText("Not up to date");
+  await expect(cardBehind).toHaveClass(/text-amber-300/);
+  await expect(upToDateCard).not.toContainText(/% complete|chapters remaining/i);
+  await expect(behindCard).not.toContainText(/% complete|chapters remaining/i);
+});
+
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {
   test.setTimeout(90_000);
   const morningPlan = makeOrdinaryPlan("today-morning", "Morning Psalms");
