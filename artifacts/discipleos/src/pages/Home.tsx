@@ -4888,10 +4888,10 @@ export default function DiscipleOSApp() {
                         <div className="min-w-0">
                           <div className="discipleos-safe-text font-medium">{plan.name}</div>
                           <div
-                            className={cn(
-                              "discipleos-meta-copy mt-1 text-sm",
-                              isUpToDate ? "text-emerald-300" : "text-amber-300",
-                            )}
+                            className="discipleos-meta-copy mt-1 text-sm"
+                            style={{
+                              color: isUpToDate ? "#86EFAC" : "#F4D77A",
+                            }}
                             data-testid={`dashboard-plan-status-${plan.id}`}
                           >
                             {stats.percent}% complete · {stats.remainingChapters} chapters remaining
@@ -5923,10 +5923,10 @@ export default function DiscipleOSApp() {
                                 {" · "}
                                 {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
                                  <span
-                                   className={cn(
-                                     "ml-2",
-                                     isUpToDate ? "text-emerald-300" : "text-amber-300",
-                                   )}
+                                   className="ml-2 text-[#F4D77A]"
+                                   style={{
+                                     color: isUpToDate ? "#86EFAC" : "#F4D77A",
+                                   }}
                                    data-testid={`plan-card-status-${plan.id}`}
                                  >
                                    {stats.percent}% complete

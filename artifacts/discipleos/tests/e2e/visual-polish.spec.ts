@@ -2318,11 +2318,11 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(dashboardUpToDate).toHaveText(
     "67% complete · 1 chapters remaining",
   );
-  await expect(dashboardUpToDate).toHaveClass(/text-emerald-300/);
+  await expect(dashboardUpToDate).toHaveCSS("color", "rgb(134, 239, 172)");
   await expect(dashboardBehind).toHaveText(
     "33% complete · 2 chapters remaining",
   );
-  await expect(dashboardBehind).toHaveClass(/text-amber-300/);
+  await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
 
   await (await openDashboardNavigation(page))
     .getByRole("button", { name: "Plans", exact: true })
@@ -2341,9 +2341,9 @@ test("colors original reading-plan progress summaries by schedule status", async
     `plan-card-status-${behindPlan.id}`,
   );
   await expect(cardUpToDate).toHaveText("67% complete");
-  await expect(cardUpToDate).toHaveClass(/text-emerald-300/);
+  await expect(cardUpToDate).toHaveCSS("color", "rgb(134, 239, 172)");
   await expect(cardBehind).toHaveText("33% complete");
-  await expect(cardBehind).toHaveClass(/text-amber-300/);
+  await expect(cardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
 });
 
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {
