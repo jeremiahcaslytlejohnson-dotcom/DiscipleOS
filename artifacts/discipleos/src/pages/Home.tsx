@@ -6267,15 +6267,6 @@ export default function DiscipleOSApp() {
 
                       {[
                         {
-                          id: "past",
-                          title: "Past Days",
-                          category: "past" as const,
-                          days: planViewDayGroups.past,
-                          summary: planViewDayGroups.past.length === 0
-                            ? "No past days"
-                            : `${planViewDayGroups.past.length} ${planViewDayGroups.past.length === 1 ? "day" : "days"} · ${planViewPastCompleteCount} complete · ${planViewPastCatchUpCount} to catch up`,
-                        },
-                        {
                           id: "upcoming",
                           title: "Upcoming Days",
                           category: "upcoming" as const,
@@ -6283,6 +6274,15 @@ export default function DiscipleOSApp() {
                           summary: planViewDayGroups.upcoming.length === 0
                             ? "No upcoming days"
                             : `${planViewDayGroups.upcoming.length} ${planViewDayGroups.upcoming.length === 1 ? "day" : "days"} · ${planViewUpcomingReadingCount} ${planViewUpcomingReadingCount === 1 ? "reading" : "readings"} ahead`,
+                        },
+                        {
+                          id: "past",
+                          title: "Past Days",
+                          category: "past" as const,
+                          days: planViewDayGroups.past,
+                          summary: planViewDayGroups.past.length === 0
+                            ? "No past days"
+                            : `${planViewDayGroups.past.length} ${planViewDayGroups.past.length === 1 ? "day" : "days"} · ${planViewPastCompleteCount} complete · ${planViewPastCatchUpCount} to catch up`,
                         },
                       ].map((group) => {
                         const groupKey = `${planViewSelectedPlan.id}:${group.id}`;

@@ -880,6 +880,16 @@ test("groups current, catch-up, and upcoming plan days by schedule date after re
   await page.getByTestId(`planned-reading-card-${plan.id}`).click();
 
   const details = page.getByTestId("dashboard-plan-details");
+  const orderedDayGroups = details.locator('section[data-testid^="plan-day-group-"]');
+  expect(
+    await orderedDayGroups.evaluateAll((groups) =>
+      groups.map((group) => group.getAttribute("data-testid")),
+    ),
+  ).toEqual([
+    "plan-day-group-current",
+    "plan-day-group-upcoming",
+    "plan-day-group-past",
+  ]);
   const currentIdentifier = `${plan.id}-${today}`;
   const pastIdentifier = `${plan.id}-${yesterday}`;
   const upcomingIdentifier = `${plan.id}-${tomorrow}`;
