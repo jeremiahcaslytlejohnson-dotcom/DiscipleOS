@@ -4462,12 +4462,8 @@ export default function DiscipleOSApp() {
             <AccountControls />
           </header>
 
-          <div className={cn("min-w-0 max-w-2xl", hasReturningExperience ? "mt-1" : "mt-8 sm:mt-10")}>
-            {hasReturningExperience ? (
-              <p className="discipleos-secondary-copy text-sm leading-6 sm:text-base">
-                Today’s reading <span className="text-white/35">·</span> keep taking the next faithful step
-              </p>
-            ) : (
+          {!hasReturningExperience && (
+            <div className="min-w-0 max-w-2xl mt-8 sm:mt-10">
               <>
                 <p className="max-w-[620px] text-4xl font-bold leading-[0.94] tracking-[-0.035em] text-white sm:text-6xl">
                   <span className="block">Discipline that</span>
@@ -4478,8 +4474,8 @@ export default function DiscipleOSApp() {
                   Build steady habits in Scripture, prayer, and your daily walk with God.
                 </p>
               </>
-            )}
-          </div>
+            </div>
+          )}
         </section>
 
           <div

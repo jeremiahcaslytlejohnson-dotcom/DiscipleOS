@@ -2206,6 +2206,22 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
 
     await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
     await expect(page.getByTestId("dashboard-verse-of-day")).toBeVisible();
+    const headerSection = page.locator(".discipleos-content--home > section").first();
+    await expect(headerSection.getByText("keep taking the next faithful step")).toHaveCount(0);
+    const headerSectionLayout = await headerSection.evaluate((element) => {
+      const header = element.querySelector("header");
+      const style = window.getComputedStyle(element);
+      return {
+        sectionHeight: element.getBoundingClientRect().height,
+        headerHeight: header?.getBoundingClientRect().height ?? 0,
+        verticalPadding:
+          Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom),
+      };
+    });
+    expect(headerSectionLayout.sectionHeight).toBeCloseTo(
+      headerSectionLayout.headerHeight + headerSectionLayout.verticalPadding,
+      1,
+    );
     await expect(page.getByTestId("dashboard-today-content").getByText("Today’s Walk", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("dashboard-stats")).toHaveCount(0);
 
