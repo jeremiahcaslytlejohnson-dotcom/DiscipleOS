@@ -21,3 +21,4 @@
 - [Calendar reading disclosure tests](calendar-reading-disclosure-tests.md) — test disclosure separately from completion state; plan rows may render as already complete.
 - [Feedback operations](feedback-operations.md) — feedback is permanent in Postgres; owner access is server-gated and notification failures never roll back saved rows.
 - [Plan-day grouping](plan-day-grouping.md) — classify assignments by local schedule date; overdue incomplete days stay in Past Days as catch-up rather than shifting the current day.
+- [Git credential safety](git-credential-safety.md) — keep GitHub tokens out of remote URLs; Replit blocks local `.git` writes unless explicitly enabled.
