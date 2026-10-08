@@ -4900,7 +4900,7 @@ export default function DiscipleOSApp() {
                           </button>
                         </div>
                         <div
-                          className="discipleos-meta-copy mt-1 w-full text-center text-sm"
+                          className="discipleos-meta-copy mt-1 w-full text-left text-sm"
                           style={{
                             color: isUpToDate ? "#86EFAC" : "#F4D77A",
                           }}
@@ -5950,7 +5950,7 @@ export default function DiscipleOSApp() {
                              {" · "}
                              {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
                              <span
-                                className="mt-1 block w-full text-center text-[#F4D77A]"
+                                className="mt-1 block w-full text-left text-[#F4D77A]"
                                style={{
                                  color: isUpToDate ? "#86EFAC" : "#F4D77A",
                                }}

@@ -2355,8 +2355,9 @@ test("colors original reading-plan progress summaries by schedule status", async
     )).toBeLessThanOrEqual(2);
     expect(actionBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
   };
-  const assertCenteredUniformWidths = async (
+  const assertAlignmentUniformWidths = async (
     elements: Array<typeof dashboardUpToDate>,
+    expectedAlignment: "left" | "center",
   ) => {
     const layouts = await Promise.all(
       elements.map((element) =>
@@ -2367,14 +2368,17 @@ test("colors original reading-plan progress summaries by schedule status", async
       ),
     );
     expect(layouts.map((layout) => layout.textAlign)).toEqual(
-      layouts.map(() => "center"),
+      layouts.map(() => expectedAlignment),
     );
     const widths = layouts.map((layout) => layout.width);
     expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
   };
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await assertCenteredUniformWidths([dashboardUpToDate, dashboardBehind]);
+    await assertAlignmentUniformWidths(
+      [dashboardUpToDate, dashboardBehind],
+      "left",
+    );
     await assertStableProgressRow(upToDatePlan);
     await assertStableProgressRow(behindPlan);
   }
@@ -2407,16 +2411,16 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(cardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await assertCenteredUniformWidths([
-      cardUpToDateDetails,
-      cardBehindDetails,
-    ]);
+    await assertAlignmentUniformWidths(
+      [cardUpToDateDetails, cardBehindDetails],
+      "center",
+    );
     for (const [status, details] of [
       [cardUpToDate, cardUpToDateDetails],
       [cardBehind, cardBehindDetails],
     ] as const) {
       await expect(status).toHaveCSS("display", "block");
-      await expect(status).toHaveCSS("text-align", "center");
+      await expect(status).toHaveCSS("text-align", "left");
       const [statusBox, detailsBox] = await Promise.all([
         status.boundingBox(),
         details.boundingBox(),
