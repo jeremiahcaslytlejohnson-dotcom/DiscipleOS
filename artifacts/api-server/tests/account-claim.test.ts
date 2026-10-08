@@ -349,4 +349,107 @@ describe("Account claim", () => {
 
     await browser.post("/api/reading/plans").send(reset).expect(403);
   });
+
+  it("allows an owned locked reset to be canceled but not a new canceled reset to be inserted", async () => {
+    const app = createApp(createPgSessionStore());
+    const browser = request.agent(app);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const userId = `user_cancel_locked_reset_${suffix}`;
+    const planId = `existing-reset-to-cancel-${suffix}`;
+    const otherJourneyId = `existing-seven-day-climb-${suffix}`;
+    const today = getPlanDateInTimeZone("UTC", new Date());
+    const startDate = addDays(today, -1);
+    const otherJourney = makeClimb(otherJourneyId, startDate);
+    const plan = {
+      id: planId,
+      templateKey: "20-day-reset",
+      name: "20-Day Reset",
+      journeyKey: "20-day-reset",
+      journeyType: "20-day-reset",
+      journeyDays: 20,
+      durationDays: 20,
+      totalDays: 20,
+      startDate,
+      endDate: addDays(startDate, 19),
+      timeZone: "UTC",
+      assignments: Array.from({ length: 20 }, (_, index) => ({
+        date: addDays(startDate, index),
+        readings: [{ key: `${planId}-reading-${index}` }],
+      })),
+      completed: {},
+      earnedDayKeys: [],
+    };
+
+    authUser.id = userId;
+    await db.insert(readingPlansTable).values({
+      id: planId,
+      userId,
+      templateKey: "20-day-reset",
+      data: plan,
+      updatedAt: new Date(),
+    });
+    await db.insert(readingPlansTable).values({
+      id: otherJourneyId,
+      userId,
+      templateKey: "7-day-climb",
+      data: otherJourney,
+      updatedAt: new Date(),
+    });
+
+    try {
+      const cancelledPlan = {
+        ...plan,
+        structuredLifecycle: "cancelled",
+        cancelledAt: new Date().toISOString(),
+      };
+      await browser.post("/api/reading/plans").send(cancelledPlan).expect(200);
+      const [savedPlan] = await db
+        .select({ data: readingPlansTable.data })
+        .from(readingPlansTable)
+        .where(eq(readingPlansTable.id, planId))
+        .limit(1);
+      expect(savedPlan?.data).toMatchObject({
+        structuredLifecycle: "cancelled",
+        cancelledAt: cancelledPlan.cancelledAt,
+        earnedDayKeys: [],
+      });
+
+      await browser
+        .post("/api/reading/plans")
+        .send({ ...cancelledPlan, id: `new-canceled-reset-${suffix}` })
+        .expect(403);
+      await browser
+        .post("/api/reading/plans")
+        .send({ ...cancelledPlan, id: otherJourneyId })
+        .expect(403);
+      const [unchangedJourney] = await db
+        .select({ data: readingPlansTable.data })
+        .from(readingPlansTable)
+        .where(eq(readingPlansTable.id, otherJourneyId))
+        .limit(1);
+      expect(unchangedJourney?.data).toMatchObject({
+        journeyKey: "7-day-climb",
+        startDate,
+        completed: {},
+      });
+    } finally {
+      await db
+        .delete(readingPlansTable)
+        .where(
+          and(
+            eq(readingPlansTable.id, planId),
+            eq(readingPlansTable.userId, userId),
+          ),
+        );
+      await db
+        .delete(readingPlansTable)
+        .where(
+          and(
+            eq(readingPlansTable.id, otherJourneyId),
+            eq(readingPlansTable.userId, userId),
+          ),
+        );
+      authUser.id = null;
+    }
+  });
 });

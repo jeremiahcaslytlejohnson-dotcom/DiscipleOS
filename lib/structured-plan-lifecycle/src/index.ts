@@ -5,7 +5,12 @@ export const STRUCTURED_PLAN_DAYS = {
 } as const;
 
 export type StructuredPlanKind = keyof typeof STRUCTURED_PLAN_DAYS;
-export type StructuredPlanLifecycle = "active" | "completed" | "expired" | "invalid";
+export type StructuredPlanLifecycle =
+  | "active"
+  | "completed"
+  | "expired"
+  | "cancelled"
+  | "invalid";
 
 export const DEFAULT_PLAN_TIME_ZONE = "America/New_York";
 
@@ -238,6 +243,10 @@ export function getStructuredPlanLifecycle(
     allDaysCurrentlyComplete
   ) {
     return "completed";
+  }
+
+  if (record.structuredLifecycle === "cancelled") {
+    return "cancelled";
   }
 
   const currentDate = isISODate(today)

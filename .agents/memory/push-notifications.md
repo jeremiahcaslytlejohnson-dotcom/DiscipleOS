@@ -64,6 +64,12 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - A successful Web Push provider response proves provider acceptance, not that an operating system displayed the notification.
   **Why:** Device display/receipt is outside the server's observable delivery boundary; even a saved successful-send row cannot confirm that the user saw it.
   **How to apply:** Report provider acceptance per registration, distinguish it from device receipt, and treat a missing send record as “no success recorded” rather than proof that the provider never accepted it.
+- Bound each event reminder's provider TTL to the time remaining before the scheduled event, while keeping the existing due-selection window unchanged. A shorter TTL limits queued stale delivery but cannot revoke a push already accepted by the provider.
+  **Why:** The provider's long default can leave an event reminder queued beyond its useful time; changing TTL alone does not establish the cause of a particular notification.
+  **How to apply:** Calculate a capped per-occurrence TTL with a small safety margin, and keep provider acceptance distinct from device display.
+- Do not infer send time from a notification's displayed timestamp or clear valid reminders during investigation. Correlate the event occurrence, owner, subscription, and scheduler/provider evidence before claiming a stale-reminder or ownership defect.
+  **Why:** A display time does not establish when a push was sent or accepted, and broad cleanup can remove valid user reminders.
+  **How to apply:** Preserve reminders unless a specific defect is confirmed; state which parts of an incident are evidence and which remain hypotheses.
 
 ## Deployment health and database pool errors
 - Keep `/api` and `/api/healthz` on the same database-readiness handler before session middleware, and handle idle pool errors without wrapping or suppressing query failures.

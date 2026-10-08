@@ -58,6 +58,23 @@ describe("structured plan lifecycle", () => {
     expect(isActiveStructuredPlan(plan, "2026-08-03")).toBe(false);
   });
 
+  it.each([
+    ["7-day-climb", 7],
+    ["20-day-reset", 20],
+    ["40-day-climb", 40],
+  ] as const)("keeps a canceled %s in history but no longer active", (kind) => {
+    const plan = {
+      ...makePlan(`cancelled-${kind}`, kind),
+      structuredLifecycle: "cancelled",
+      cancelledAt: "2026-08-03T14:00:00.000Z",
+    };
+
+    expect(getStructuredPlanLifecycle(plan, "2026-08-03")).toBe("cancelled");
+    expect(isActiveStructuredPlan(plan, "2026-08-03")).toBe(false);
+    expect(findActiveStructuredPlan([plan], "2026-08-03")).toBeNull();
+    expect(plan.earnedDayKeys).toEqual([]);
+  });
+
   it("recognizes a currently fully checked structured route as completed", () => {
     const plan = makePlan("checked");
     plan.completed = Object.fromEntries(

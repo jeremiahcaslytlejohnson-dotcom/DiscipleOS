@@ -139,6 +139,25 @@ function localDayBounds(dateISO: string, timeZone: string) {
   };
 }
 
+const MAX_PUSH_TTL_SECONDS = 2_419_200;
+const PUSH_TTL_SAFETY_MARGIN_SECONDS = 1;
+
+export function reminderPushTtlSeconds(
+  reminderMinutes: number,
+  elapsedMinutesSinceDue: number,
+  now: Date,
+): number {
+  const secondsUntilEvent =
+    (reminderMinutes - elapsedMinutesSinceDue) * 60 -
+    now.getUTCSeconds() -
+    PUSH_TTL_SAFETY_MARGIN_SECONDS;
+  if (!Number.isFinite(secondsUntilEvent)) return 0;
+  return Math.max(
+    0,
+    Math.min(MAX_PUSH_TTL_SECONDS, Math.floor(secondsUntilEvent)),
+  );
+}
+
 function reminderDueTime(eventTime: string, reminderMinutes: number): string | null {
   const [hours, minutes] = eventTime.split(":").map(Number);
   if (![hours, minutes, reminderMinutes].every(Number.isFinite)) return null;
@@ -378,6 +397,11 @@ export async function sendDueReminders(
     ) &&
       dueOccurrenceDate !== null &&
       occursOnDueOccurrence;
+    const pushTtlSeconds = reminderPushTtlSeconds(
+      reminderMinutes,
+      elapsedMinutesSinceDue ?? 0,
+      runNow,
+    );
     const nearDueWindow =
       elapsedMinutesSinceDue !== null &&
       elapsedMinutesSinceDue >= -1 &&
@@ -495,6 +519,7 @@ export async function sendDueReminders(
               eventKey,
               occurrenceDate,
               deviceKey,
+              pushTtlSeconds,
             },
             "Push delivery attempt started",
           );
@@ -514,6 +539,7 @@ export async function sendDueReminders(
                 url: "/",
                 tag: `discipleos-${event.id}-${occurrenceDate}`,
               }),
+              { TTL: pushTtlSeconds },
             );
             providerStatusCode = response.statusCode;
           } catch (error) {

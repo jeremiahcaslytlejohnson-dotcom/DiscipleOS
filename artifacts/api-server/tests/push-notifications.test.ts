@@ -816,6 +816,7 @@ describe("5b — Deleted reminder eligibility", () => {
     const payload = JSON.parse(callsForOwner[0][1] as string);
     expect(payload.title).toBe("Active scripture review");
     expect(payload.title).not.toBe("Deleted evening prayer");
+    expect(callsForOwner[0][2]).toEqual({ TTL: 0 });
   });
 });
 

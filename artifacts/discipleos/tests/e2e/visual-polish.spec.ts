@@ -2339,6 +2339,22 @@ test("colors original reading-plan progress summaries by schedule status", async
     "33% complete · 2 chapters remaining",
   );
   await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  const assertStableProgressRow = async (plan: { id: string; name: string }) => {
+    const row = page.getByTestId(`dashboard-progress-row-${plan.id}`);
+    const name = row.getByText(plan.name, { exact: true });
+    const action = row.getByRole("button", { name: /^Open plan/ });
+    const [nameBox, actionBox] = await Promise.all([
+      name.boundingBox(),
+      action.boundingBox(),
+    ]);
+    expect(nameBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(Math.abs(
+      (nameBox!.y + nameBox!.height / 2) -
+      (actionBox!.y + actionBox!.height / 2),
+    )).toBeLessThanOrEqual(2);
+    expect(actionBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
+  };
   const assertCenteredUniformWidths = async (
     elements: Array<typeof dashboardUpToDate>,
   ) => {
@@ -2359,6 +2375,8 @@ test("colors original reading-plan progress summaries by schedule status", async
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await assertCenteredUniformWidths([dashboardUpToDate, dashboardBehind]);
+    await assertStableProgressRow(upToDatePlan);
+    await assertStableProgressRow(behindPlan);
   }
 
   await (await openDashboardNavigation(page))
@@ -2393,6 +2411,20 @@ test("colors original reading-plan progress summaries by schedule status", async
       cardUpToDateDetails,
       cardBehindDetails,
     ]);
+    for (const [status, details] of [
+      [cardUpToDate, cardUpToDateDetails],
+      [cardBehind, cardBehindDetails],
+    ] as const) {
+      await expect(status).toHaveCSS("display", "block");
+      await expect(status).toHaveCSS("text-align", "center");
+      const [statusBox, detailsBox] = await Promise.all([
+        status.boundingBox(),
+        details.boundingBox(),
+      ]);
+      expect(statusBox).not.toBeNull();
+      expect(detailsBox).not.toBeNull();
+      expect(statusBox!.y).toBeGreaterThan(detailsBox!.y);
+    }
   }
 });
 

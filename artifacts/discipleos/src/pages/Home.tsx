@@ -4885,7 +4885,7 @@ export default function DiscipleOSApp() {
                         data-testid={`dashboard-progress-row-${plan.id}`}
                         className="discipleos-flat-row py-3 first:pt-0 last:pb-0"
                       >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                           <div className="discipleos-safe-text min-w-0 font-medium">{plan.name}</div>
                           <button
                             type="button"
@@ -5950,7 +5950,7 @@ export default function DiscipleOSApp() {
                              {" · "}
                              {plan.readingMode === "random" ? "Randomized" : "Consecutive"} · {formatTime(plan.readingTime || "07:00")}
                              <span
-                               className="ml-2 text-[#F4D77A]"
+                                className="mt-1 block w-full text-center text-[#F4D77A]"
                                style={{
                                  color: isUpToDate ? "#86EFAC" : "#F4D77A",
                                }}

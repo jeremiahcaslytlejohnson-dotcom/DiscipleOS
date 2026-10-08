@@ -76,3 +76,9 @@ Active, completed, and expired structured-plan lifecycle must use one shared cli
 **Why:** A completed or past-dated climb must not block a genuinely new instance or return as the active climb after refresh, sync, or account claim, while prior progress records remain intact.
 
 **How to apply:** Use the shared lifecycle helper when selecting active climbs, enforcing the one-active-climb API boundary, and claiming anonymous plans. Keep ordinary plans outside this lifecycle and never delete or overwrite a prior plan when starting a new climb.
+
+A confirmed cancellation is terminal for that owned climb instance but does not delete the plan or its reading history. It may update only the same stored journey kind, and cannot create or repurpose a locked journey. Canceling the active climb frees the active slot for a new climb. Calendar events and their reminders remain separate and unchanged.
+
+**Why:** Users need to stop a climb without erasing progress or affecting unrelated plans and reminders.
+
+**How to apply:** Persist cancellation through the normal plan-save path, show canceled instances with past climbs, and leave ordinary plans and Calendar data untouched.

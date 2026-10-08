@@ -7,6 +7,7 @@ import {
   getNamedJourneyDuration,
 } from "../auth/capabilities";
 import {
+  getStructuredPlanLifecycle,
   getStructuredPlanKind,
   isActiveStructuredPlan,
 } from "@workspace/structured-plan-lifecycle";
@@ -128,7 +129,45 @@ router.post("/reading/plans", async (req, res) => {
       return;
     }
     if (namedJourneyDuration) {
-      if (!canStartNamedJourney(req, plan.journeyKey || plan.journeyType)) {
+      const requiresNamedJourneyAccess = !canStartNamedJourney(
+        req,
+        plan.journeyKey || plan.journeyType,
+      );
+      let canPersistCancellation = false;
+      if (
+        requiresNamedJourneyAccess &&
+        getStructuredPlanLifecycle(plan) === "cancelled"
+      ) {
+        const [ownedExistingPlan] = await db
+          .select({
+            id: readingPlansTable.id,
+            data: readingPlansTable.data,
+            templateKey: readingPlansTable.templateKey,
+          })
+          .from(readingPlansTable)
+          .where(
+            and(
+              eq(readingPlansTable.id, plan.id),
+              eq(readingPlansTable.userId, userId),
+            ),
+          )
+          .limit(1);
+        if (ownedExistingPlan) {
+          const previousPlan = normalizePlan({
+            ...(ownedExistingPlan.data as Record<string, unknown>),
+            id: ownedExistingPlan.id,
+            templateKey: ownedExistingPlan.templateKey,
+          });
+          const previousLifecycle = getStructuredPlanLifecycle(previousPlan);
+          canPersistCancellation =
+            getStructuredJourneyKey(previousPlan) === getStructuredJourneyKey(plan) &&
+            (previousLifecycle === "active" ||
+              previousLifecycle === "expired" ||
+              previousLifecycle === "cancelled");
+        }
+      }
+
+      if (requiresNamedJourneyAccess && !canPersistCancellation) {
             const lockedJourneyLabel = plan.journeyKey === "20-day-reset"
               ? "20-Day Reset"
               : "40-Day Climb";
@@ -209,31 +248,35 @@ router.post("/reading/plans", async (req, res) => {
         };
       }
 
-      if (isActiveStructuredPlan(plan)) {
+      const isActivePlan = isActiveStructuredPlan(plan);
+      const isCancellation = getStructuredPlanLifecycle(plan) === "cancelled";
+      if (isActivePlan || isCancellation) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${"structured-climb:" + userId}, 0))`,
         );
-        const existingPlans = await tx
-          .select({ id: readingPlansTable.id, data: readingPlansTable.data, templateKey: readingPlansTable.templateKey })
-          .from(readingPlansTable)
-          .where(eq(readingPlansTable.userId, userId));
-        const anotherActiveClimb = existingPlans.find((row) => {
-          if (row.id === plan.id) return false;
-          const rowPlan = normalizePlan({ ...(row.data as Record<string, unknown>), id: row.id, templateKey: row.templateKey });
-          return isActiveStructuredPlan(rowPlan);
-        });
-        if (anotherActiveClimb) {
-          const otherPlan = normalizePlan({
-            ...(anotherActiveClimb.data as Record<string, unknown>),
-            id: anotherActiveClimb.id,
-            templateKey: anotherActiveClimb.templateKey,
+        if (isActivePlan) {
+          const existingPlans = await tx
+            .select({ id: readingPlansTable.id, data: readingPlansTable.data, templateKey: readingPlansTable.templateKey })
+            .from(readingPlansTable)
+            .where(eq(readingPlansTable.userId, userId));
+          const anotherActiveClimb = existingPlans.find((row) => {
+            if (row.id === plan.id) return false;
+            const rowPlan = normalizePlan({ ...(row.data as Record<string, unknown>), id: row.id, templateKey: row.templateKey });
+            return isActiveStructuredPlan(rowPlan);
           });
-          const otherJourneyKey = getStructuredJourneyKey(otherPlan);
-          const message =
-            otherJourneyKey === "20-day-reset"
-              ? "A 20-Day Reset is already active"
-              : "A structured climb is already active";
-          throw Object.assign(new Error(message), { status: 409 });
+          if (anotherActiveClimb) {
+            const otherPlan = normalizePlan({
+              ...(anotherActiveClimb.data as Record<string, unknown>),
+              id: anotherActiveClimb.id,
+              templateKey: anotherActiveClimb.templateKey,
+            });
+            const otherJourneyKey = getStructuredJourneyKey(otherPlan);
+            const message =
+              otherJourneyKey === "20-day-reset"
+                ? "A 20-Day Reset is already active"
+                : "A structured climb is already active";
+            throw Object.assign(new Error(message), { status: 409 });
+          }
         }
       }
 

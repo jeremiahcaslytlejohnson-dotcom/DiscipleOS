@@ -187,6 +187,9 @@ export default function MountainRhythm() {
   const [feedback, setFeedback] = useState("");
   const [saveError, setSaveError] = useState("");
   const [pendingStartKind, setPendingStartKind] = useState<string | null>(null);
+  const [pendingCancelClimbPlanId, setPendingCancelClimbPlanId] = useState<
+    string | null
+  >(null);
   const [routeDayExpandedOverrides, setRouteDayExpandedOverrides] = useState<
     Record<string, boolean>
   >({});
@@ -476,6 +479,51 @@ export default function MountainRhythm() {
     void startClimb(kind);
   }, [activeClimb, startClimb]);
 
+  const cancelActiveClimb = useCallback(async () => {
+    const plan = activeClimb;
+    if (!plan || plan.id !== pendingCancelClimbPlanId) {
+      setPendingCancelClimbPlanId(null);
+      return;
+    }
+
+    const cancelledPlan = {
+      ...plan,
+      structuredLifecycle: "cancelled",
+      cancelledAt: new Date().toISOString(),
+    };
+    setSaveError("");
+    setPlans((current) =>
+      current.map((item) => (item.id === plan.id ? cancelledPlan : item)),
+    );
+    setSelectedPlanId(null);
+    setPendingCancelClimbPlanId(null);
+    setFeedback("Climb canceled. Your reading history remains in Past climbs.");
+
+    try {
+      await savePlan(cancelledPlan);
+    } catch (error: any) {
+      if (error?.status === 403) {
+        setPlans((current) =>
+          current.map((item) => (item.id === plan.id ? plan : item)),
+        );
+        setSelectedPlanId(plan.id);
+        setFeedback("");
+        setSaveError(
+          "This climb could not be canceled for this account. Your saved reading history is unchanged.",
+        );
+        return;
+      }
+      setSaveError(
+        "Cancellation is saved on this device and will sync when the connection returns.",
+      );
+      queuePending({
+        type: "upsert-plan",
+        payload: cancelledPlan,
+        ts: Date.now(),
+      });
+    }
+  }, [activeClimb, pendingCancelClimbPlanId, queuePending, savePlan]);
+
   useEffect(() => {
     if (
       isLoading ||
@@ -625,10 +673,13 @@ export default function MountainRhythm() {
         .filter(Boolean),
     [structuredPlans],
   );
-  const expiredClimbs = useMemo(
+  const pastClimbs = useMemo(
     () =>
       structuredPlans
-        .filter((plan) => getStructuredPlanLifecycle(plan) === "expired")
+        .filter((plan) => {
+          const lifecycle = getStructuredPlanLifecycle(plan);
+          return lifecycle === "expired" || lifecycle === "cancelled";
+        })
         .sort((a, b) => String(b.startDate || "").localeCompare(String(a.startDate || ""))),
     [structuredPlans],
   );
@@ -674,7 +725,10 @@ export default function MountainRhythm() {
             </p>
           </section>
 
-          <section className="mt-8 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+          <section
+            data-testid="mountain-rhythm-overview-grid"
+            className="mt-8 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
+          >
             <div className="min-w-0">
               <MountainRhythmCard score={score} loading={isLoading} />
             </div>
@@ -718,6 +772,59 @@ export default function MountainRhythm() {
                   );
                 })}
               </div>
+              {activeClimb ? (
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="button-request-cancel-active-climb"
+                    onClick={() => setPendingCancelClimbPlanId(activeClimb.id)}
+                    className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                  >
+                    Cancel active climb
+                  </Button>
+                </div>
+              ) : null}
+              {pendingCancelClimbPlanId === activeClimb?.id ? (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="cancel-active-climb-title"
+                  data-testid="dialog-cancel-active-climb"
+                  className="mt-4 border-l-2 border-[#D4A017]/45 pl-4"
+                >
+                  <div
+                    id="cancel-active-climb-title"
+                    className="text-sm font-semibold text-white"
+                  >
+                    Cancel this climb?
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/65">
+                    This stops the active climb. Completed reading history and
+                    ordinary plans stay saved. Calendar events and their
+                    reminders are not changed, and you can start another climb
+                    later.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPendingCancelClimbPlanId(null)}
+                      className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                    >
+                      Keep this climb
+                    </Button>
+                    <Button
+                      type="button"
+                      data-testid="button-confirm-cancel-active-climb"
+                      onClick={() => void cancelActiveClimb()}
+                      className="min-h-11 bg-[#D4A017] text-[#16130C] hover:bg-[#E6B92A]"
+                    >
+                      Confirm cancellation
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {pendingStartKind === "20-day-reset" ? (
                   <div
                     className="mt-4 border-l-2 border-[#D4A017]/45 pl-4"
@@ -819,23 +926,23 @@ export default function MountainRhythm() {
                   </div>
                 </section>
               ) : null}
-              {expiredClimbs.length > 0 ? (
+              {pastClimbs.length > 0 ? (
                 <section
                   className="mt-4 border-t border-white/10 pt-4"
-                  data-testid="mountain-rhythm-expired-climbs"
+                  data-testid="mountain-rhythm-past-climbs"
                 >
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
                     Past climbs
                   </div>
                   <div className="mt-3 space-y-2">
-                    {expiredClimbs.map((plan) => (
+                    {pastClimbs.map((plan) => (
                       <div
                         key={plan.id}
                         className="border-b border-white/10 bg-black/10 px-3 py-3"
                         data-testid={`past-climb-${plan.id}`}
                       >
                         <div className="text-sm font-semibold text-white">
-                          {plan.name || "Structured climb"} · Expired
+                          {plan.name || "Structured climb"} · {getStructuredPlanLifecycle(plan) === "cancelled" ? "Canceled" : "Expired"}
                         </div>
                         <div className="discipleos-secondary-copy text-xs">
                           {plan.startDate && plan.endDate
@@ -855,7 +962,10 @@ export default function MountainRhythm() {
 
           {selectedPlan ? (
             <>
-               <section className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+               <section
+                 data-testid="mountain-rhythm-details-grid"
+                 className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
+               >
                  <div data-testid="mountain-rhythm-route" className="min-w-0">
                      <div className="flex min-w-0 items-center justify-between gap-3">
                      <div className="min-w-0">

@@ -60,9 +60,11 @@ function makePlan({
 async function stubApi(
   page: Page,
   sessionInfo: Record<string, unknown> = { success: true, established: false },
+  options: { failPlanPosts?: boolean } = {},
 ) {
   await page.route("**/api/**", async (route) => {
-    const pathname = new URL(route.request().url()).pathname;
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
 
     if (pathname.endsWith("/session/info")) {
       await route.fulfill({
@@ -74,6 +76,14 @@ async function stubApi(
     }
 
     if (pathname.endsWith("/reading/plans")) {
+      if (request.method() === "POST" && options.failPlanPosts) {
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ success: false, error: "Temporary sync failure" }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -224,17 +234,21 @@ async function seedLocalData(
   page: Page,
   plans: unknown[],
   selectedPlanId: string | null,
-  options: { ownerId?: string | null; pendingOps?: unknown[] } = {},
+  options: {
+    ownerId?: string | null;
+    pendingOps?: unknown[];
+    events?: unknown[];
+  } = {},
 ) {
   await page.addInitScript(
-    ({ plans: seededPlans, selectedId, ownerId, pendingOps }) => {
+    ({ plans: seededPlans, selectedId, ownerId, pendingOps, events }) => {
       if (localStorage.getItem("discipleos-seed-applied") === "true") return;
       localStorage.setItem(
         "discipleos-data",
         JSON.stringify({
           ownerId,
           plans: seededPlans,
-          events: [],
+          events,
           eventCompletions: {},
           selectedPlanId: selectedId,
         }),
@@ -252,6 +266,7 @@ async function seedLocalData(
       selectedId: selectedPlanId,
       ownerId: options.ownerId ?? null,
       pendingOps: options.pendingOps,
+      events: options.events ?? [],
     },
   );
 }
@@ -444,6 +459,216 @@ test("starts a fresh 7-Day Climb after an expired one and keeps it selected afte
     }, freshPlan.id),
   ).toBe(true);
 
+});
+
+test("cancels a device-only climb after confirmation without deleting history or reminders", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
+  });
+  const activePlan = makePlan({
+    id: "device-cancelled-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    completedIndexes: [0],
+  });
+  const ordinaryPlan = {
+    id: "device-ordinary-plan",
+    name: "Ordinary reading plan",
+    assignments: [],
+    completed: {},
+  };
+  const calendarReminder = {
+    id: "device-calendar-reminder",
+    title: "Prayer night",
+    type: "prayer",
+    date: today,
+    time: "19:00",
+    remind: true,
+    reminderMinutes: 10,
+    repeat: "none",
+  };
+
+  await stubApi(page, { success: true, established: false }, { failPlanPosts: true });
+  await seedLocalData(page, [activePlan, ordinaryPlan], activePlan.id, {
+    events: [calendarReminder],
+  });
+  await openMountainRhythm(page);
+
+  await page.getByTestId("button-request-cancel-active-climb").click();
+  const dialog = page.getByTestId("dialog-cancel-active-climb");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep this climb" }).click();
+  await expect(page.getByTestId("mountain-rhythm-route")).toBeVisible();
+
+  await page.getByTestId("button-request-cancel-active-climb").click();
+  await page.getByTestId("button-confirm-cancel-active-climb").click();
+  await expect(page.getByTestId("mountain-rhythm-route")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
+    "7-Day Climb · Canceled",
+  );
+
+  const canceledState = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  const canceledPlan = canceledState.plans.find(
+    (plan: any) => plan.id === activePlan.id,
+  );
+  expect(canceledState.selectedPlanId).toBeNull();
+  expect(canceledPlan.structuredLifecycle).toBe("cancelled");
+  expect(canceledPlan.completed).toEqual(activePlan.completed);
+  expect(canceledPlan.earnedDayKeys).toEqual(activePlan.earnedDayKeys);
+  expect(canceledState.plans.find((plan: any) => plan.id === ordinaryPlan.id)).toMatchObject(
+    ordinaryPlan,
+  );
+  expect(canceledState.events).toEqual([calendarReminder]);
+  const pendingCancellation = await page.evaluate(() => {
+    const pending = JSON.parse(localStorage.getItem("discipleos:pendingOps") || "{}");
+    return pending.ops?.find(
+      (op: any) =>
+        op.type === "upsert-plan" &&
+        op.payload?.id === "device-cancelled-climb" &&
+        op.payload?.structuredLifecycle === "cancelled",
+    );
+  });
+  expect(pendingCancellation).toBeTruthy();
+
+  await page.reload();
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
+    "7-Day Climb · Canceled",
+  );
+  const reloadedState = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  expect(reloadedState.plans.find((plan: any) => plan.id === activePlan.id).structuredLifecycle)
+    .toBe("cancelled");
+  expect(reloadedState.events).toEqual([calendarReminder]);
+
+  await page.getByTestId("button-choose-7-day-climb").click();
+  await expect(page.getByTestId("mountain-rhythm-route")).toBeVisible();
+  const restartedState = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  expect(restartedState.plans).toHaveLength(3);
+  expect(restartedState.plans.find((plan: any) => plan.id === activePlan.id).structuredLifecycle)
+    .toBe("cancelled");
+  expect(restartedState.events).toEqual([calendarReminder]);
+});
+
+test("persists a signed-in climb cancellation without deleting plans or reading history", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
+  });
+  const activePlan = makePlan({
+    id: "account-cancelled-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    completedIndexes: [0, 1],
+  });
+  const ordinaryPlan = {
+    id: "account-ordinary-plan",
+    name: "Ordinary reading plan",
+    assignments: [],
+    completed: {},
+  };
+
+  await stubAuthenticatedApi(page, ordinaryPlan, [activePlan]);
+  await seedLocalData(page, [activePlan, ordinaryPlan], activePlan.id, {
+    ownerId: "authenticated-mountain-user",
+  });
+  await openMountainRhythm(page);
+  await page.getByTestId("button-request-cancel-active-climb").click();
+  await page.getByTestId("button-confirm-cancel-active-climb").click();
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
+    "7-Day Climb · Canceled",
+  );
+
+  await page.reload();
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
+    "7-Day Climb · Canceled",
+  );
+  const persistedState = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  const persistedClimb = persistedState.plans.find(
+    (plan: any) => plan.id === activePlan.id,
+  );
+  expect(persistedClimb.structuredLifecycle).toBe("cancelled");
+  expect(persistedClimb.completed).toEqual(activePlan.completed);
+  expect(persistedClimb.earnedDayKeys).toEqual(activePlan.earnedDayKeys);
+  expect(persistedState.plans.find((plan: any) => plan.id === ordinaryPlan.id)).toMatchObject(
+    ordinaryPlan,
+  );
+});
+
+test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async ({
+  page,
+}) => {
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
+  });
+  const activePlan = makePlan({
+    id: "aligned-mountain-columns",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
+  await stubApi(page);
+  await seedLocalData(page, [activePlan], activePlan.id);
+  await openMountainRhythm(page);
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await page.evaluate(() => {
+      const boxes = (testId: string) =>
+        Array.from(
+          document.querySelector(`[data-testid="${testId}"]`)?.children || [],
+        ).map((child) => {
+          const box = child.getBoundingClientRect();
+          return { x: box.x, y: box.y, width: box.width, height: box.height };
+        });
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        overview: boxes("mountain-rhythm-overview-grid"),
+        details: boxes("mountain-rhythm-details-grid"),
+      };
+    });
+    expect(layout.documentWidth).toBeLessThanOrEqual(width + 1);
+    expect(layout.overview).toHaveLength(2);
+    expect(layout.details).toHaveLength(2);
+
+    if (width >= 1024) {
+      for (const index of [0, 1]) {
+        expect(Math.abs(layout.overview[index].x - layout.details[index].x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(layout.overview[index].width - layout.details[index].width)).toBeLessThanOrEqual(1);
+      }
+    } else {
+      expect(layout.overview[1].y).toBeGreaterThanOrEqual(
+        layout.overview[0].y + layout.overview[0].height - 1,
+      );
+      expect(layout.details[1].y).toBeGreaterThanOrEqual(
+        layout.details[0].y + layout.details[0].height - 1,
+      );
+    }
+  }
 });
 
 test("does not replace an unsynced fresh climb with an expired server record", async ({
