@@ -8,7 +8,9 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "wouter";
+import GuidedClimbPreview from "./GuidedClimbPreview";
 
 type PlanForm = {
   selectedBooks: string[];
@@ -45,6 +47,7 @@ type FirstPlanOnboardingProps = {
   onEndDateChange: (date: string) => void;
   onUseSuggestedEndDate: () => void;
   onCreatePlan: () => void;
+  onStartGuidedClimb: () => void;
   isSignedIn: boolean;
 };
 
@@ -79,8 +82,10 @@ export default function FirstPlanOnboarding({
   onEndDateChange,
   onUseSuggestedEndDate,
   onCreatePlan,
+  onStartGuidedClimb,
   isSignedIn,
 }: FirstPlanOnboardingProps) {
+  const [isGuidedClimbPreviewOpen, setIsGuidedClimbPreviewOpen] = useState(false);
   const hasBooks = form.selectedBooks.length > 0;
   const canContinue =
     step === 0 ||
@@ -131,6 +136,30 @@ export default function FirstPlanOnboarding({
                 We’ll help you choose what to read, find a daily pace you can
                 keep, and set a clear finish line.
               </p>
+            </div>
+            <div
+              data-testid="first-plan-guided-climb-option"
+              className="border border-[#D4A017]/30 bg-[#D4A017]/[0.06] p-4 sm:p-5"
+            >
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#F4D77A]">
+                Optional · Guided Climb Set 1 · 27 days
+              </div>
+              <h3 className="mt-2 text-lg font-semibold text-white">
+                Find Your Footing
+              </h3>
+              <p className="discipleos-secondary-copy mt-1 text-sm leading-6">
+                A ready-made beginner plan with a clear finish after Day 27.
+                You can stop there; no future set is required.
+              </p>
+              <button
+                type="button"
+                data-testid="first-plan-guided-climb-preview"
+                onClick={() => setIsGuidedClimbPreviewOpen(true)}
+                className="discipleos-action mt-4 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/45 bg-[#211A0D] px-4 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+              >
+                Preview the 27-day plan
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
             <button
               type="button"
@@ -511,6 +540,14 @@ export default function FirstPlanOnboarding({
           </div>
         </div>
       ) : null}
+      <GuidedClimbPreview
+        open={isGuidedClimbPreviewOpen}
+        onClose={() => setIsGuidedClimbPreviewOpen(false)}
+        onStart={() => {
+          setIsGuidedClimbPreviewOpen(false);
+          onStartGuidedClimb();
+        }}
+      />
     </>
   );
 }

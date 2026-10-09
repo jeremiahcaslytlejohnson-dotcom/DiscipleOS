@@ -4,6 +4,7 @@
 - [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
 - [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.
 - [Mountain Rhythm](mountain-rhythm.md) — Journey progress and on-schedule consistency are separate; late catch-up counts for progress but not its missed day.
+- [Guided Climb boundaries](guided-climb-boundaries.md) — Each curated set stands alone; Set 1 ends after Day 27 and offers optional Mountain Rhythm or Free Climb paths.
 - [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
 - [Browser smoke tests](browser-smoke-tests.md) — Playwright needs Chromium plus Nix-declared GLib/graphics libraries in this workspace.
 - [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.

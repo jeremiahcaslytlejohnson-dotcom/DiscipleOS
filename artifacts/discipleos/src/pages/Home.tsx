@@ -23,6 +23,12 @@ import {
 } from "../lib/reading-schedule";
 import InstallButton from "../install-button";
 import FirstPlanOnboarding from "../components/FirstPlanOnboarding";
+import GuidedClimbPreview from "../components/GuidedClimbPreview";
+import {
+  buildGuidedClimbSetOnePlan,
+  isGuidedClimbSetOneComplete,
+  isGuidedClimbSetOnePlan,
+} from "../lib/guided-climb";
 import {
   type PendingOp,
   addPendingOp,
@@ -632,6 +638,14 @@ function PlanDayRow({
               {completedDayChapters}/{totalDayChapters} chapters complete · ~
               {formatMinutes(getAssignmentMinutes(day))}
             </span>
+            {day.guidedLoad === "heavier" ? (
+              <span
+                data-testid={`plan-day-load-${dayIdentifier}`}
+                className="mt-1 inline-flex rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2 py-0.5 text-[10px] font-medium text-amber-100"
+              >
+                Heavier day · {totalDayChapters} chapters
+              </span>
+            ) : null}
             <span className="discipleos-meta-copy mt-1 flex items-center gap-1 text-xs">
               <Clock3 className="h-3.5 w-3.5 shrink-0 text-[#D4A017]/70" />
               Reading time: {formatTime(plan.readingTime || "07:00")}
@@ -1737,6 +1751,7 @@ export default function DiscipleOSApp() {
   const [customMinutes, setCustomMinutes] = useState("");
   const planSessionStartedRef = useRef(false);
   const [isBookPickerOpen, setIsBookPickerOpen] = useState(false);
+  const [isGuidedClimbPreviewOpen, setIsGuidedClimbPreviewOpen] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -1893,6 +1908,10 @@ export default function DiscipleOSApp() {
     fetchVerseOfTheDay().then(setVerseOfTheDay);
   }, []);
   const ordinaryPlans = useMemo(() => plans.filter(isOrdinaryPlan), [plans]);
+  const selectedGuidedClimbIsComplete = isGuidedClimbSetOneComplete(
+    selectedPlan,
+    getCompletedMap(selectedPlan),
+  );
 
   const todaysPlans = useMemo(() => {
     const today = todayISO();
@@ -2787,6 +2806,37 @@ export default function DiscipleOSApp() {
     setForm((prev) => ({ ...prev, name: "" }));
   };
 
+  const startGuidedClimb = () => {
+    const readingWpm = Number(form.readingWpm) || DEFAULT_READING_WPM;
+    const startDate = todayISO();
+    const plan = buildGuidedClimbSetOnePlan({
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`,
+      startDate,
+      bookCatalog: BIBLE_BOOKS,
+      readingTime: form.readingTime || "07:00",
+      readingWpm,
+      dailyMinutes: Number(form.dailyMinutes) || 20,
+      estimateChapterMinutes: (book, chapter) =>
+        estimateChapterMinutesAtWpm(book, chapter, readingWpm),
+    });
+
+    setPlans((previous) => [plan, ...previous]);
+    if (!localOnlyAfterSignOutRef.current) {
+      savePlanToServer(plan).catch(() => {
+        queuePendingOp({ type: "upsert-plan", payload: plan, ts: Date.now() });
+      });
+    }
+    setSelectedPlanId(plan.id);
+    setEditingPlanId(null);
+    setPlanCreatedFeedback(null);
+    setIsGuidedClimbPreviewOpen(false);
+    setIsNavigationOpen(false);
+    setActiveTab("today");
+  };
+
   const beginCreatePlan = () => {
     planSessionStartedRef.current = true;
     const scheduleDefaults = applyReadingDefaultsToPlanForm(readingDefaults);
@@ -2811,6 +2861,7 @@ export default function DiscipleOSApp() {
   };
 
   const beginEditPlan = (plan) => {
+    if (isGuidedClimbSetOnePlan(plan)) return;
     setEditingPlanId(plan.id);
     setSelectedPlanId(plan.id);
     setActiveTab("plans");
@@ -2833,6 +2884,7 @@ export default function DiscipleOSApp() {
 
   const savePlanEdit = () => {
     if (!editingPlan) return;
+    if (isGuidedClimbSetOnePlan(editingPlan)) return;
 
     const isTimeBased = editForm.paceMode === "time";
     const assignments = isTimeBased
@@ -4443,6 +4495,7 @@ export default function DiscipleOSApp() {
             }
             onUseSuggestedEndDate={useOnboardingSuggestedEndDate}
             onCreatePlan={() => createPlan({ onboarding: true })}
+            onStartGuidedClimb={startGuidedClimb}
             isSignedIn={isSignedIn}
           />
         </div>
@@ -4658,6 +4711,44 @@ export default function DiscipleOSApp() {
               <VerseOfTheDay verse={verseOfTheDay} />
             </div>
 
+            {selectedGuidedClimbIsComplete ? (
+              <section
+                data-testid="guided-climb-complete"
+                role="region"
+                aria-label="Guided Climb Set 1 complete"
+                className="mx-4 border border-emerald-300/25 bg-emerald-300/[0.06] p-4 sm:mx-5 sm:p-5"
+              >
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                  Guided Climb Set 1 complete
+                </div>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  {selectedPlan?.name || "Find Your Footing"}
+                </h2>
+                <p className="discipleos-secondary-copy mt-2 max-w-2xl text-sm leading-6">
+                  You finished all 27 days. This set ends here, and nothing
+                  continues automatically. You can stop here or choose an
+                  optional next step.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href="/mountain-rhythm"
+                    data-testid="guided-climb-choice-mountain-rhythm"
+                    className="discipleos-action inline-flex min-h-11 items-center justify-center border border-[#D4A017]/40 bg-[#211A0D] px-4 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+                  >
+                    Explore Mountain Rhythm
+                  </Link>
+                  <button
+                    type="button"
+                    data-testid="guided-climb-choice-free-climb"
+                    onClick={beginCreatePlan}
+                    className="discipleos-action inline-flex min-h-11 items-center justify-center border border-white/15 bg-white/[0.04] px-4 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Set up a Free Climb
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             <ResponsiveSection
               testId="dashboard-assigned-reading"
               title="Today’s Reading"
@@ -4733,6 +4824,14 @@ export default function DiscipleOSApp() {
                           <div className="discipleos-meta-copy mt-2 text-sm">
                             {todayReading.readings.length} reading{todayReading.readings.length === 1 ? "" : "s"} · ~{formatMinutes(getAssignmentMinutes(todayReading))}
                           </div>
+                          {todayReading.guidedLoad === "heavier" ? (
+                            <div
+                              data-testid={`today-guided-load-${plan.id}`}
+                              className="mt-1 inline-flex rounded-full border border-amber-300/25 bg-amber-300/[0.07] px-2 py-1 text-[10px] font-medium text-amber-100"
+                            >
+                              Heavier day · {todayReading.readings.length} chapters
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-2">
                           <button
@@ -5812,6 +5911,14 @@ export default function DiscipleOSApp() {
                       <BookMarked className="discipleos-section-heading__icon" />
                       Planned reading
                     </div>
+                     <button
+                       type="button"
+                       data-testid="plans-guided-climb-button"
+                       onClick={() => setIsGuidedClimbPreviewOpen(true)}
+                       className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+                     >
+                       Guided Climb
+                     </button>
                     <button
                       type="button"
                       data-testid="plans-create-button"
@@ -5822,6 +5929,12 @@ export default function DiscipleOSApp() {
                       Add plan
                     </button>
                   </div>
+
+                   <GuidedClimbPreview
+                     open={isGuidedClimbPreviewOpen}
+                     onClose={() => setIsGuidedClimbPreviewOpen(false)}
+                     onStart={startGuidedClimb}
+                   />
 
                   {planCreatedFeedback ? (
                     <div
@@ -5913,7 +6026,9 @@ export default function DiscipleOSApp() {
                              </div>
 
                              <div className="flex shrink-0 items-center gap-2">
-                              {!isResetPlan(plan) && !isNamedJourneyPlan(plan) && (
+                               {!isResetPlan(plan) &&
+                                 !isNamedJourneyPlan(plan) &&
+                                 !isGuidedClimbSetOnePlan(plan) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -5944,6 +6059,8 @@ export default function DiscipleOSApp() {
                                ? "20-day Reset"
                                : isNamedJourneyPlan(plan)
                                  ? `${plan.journeyDays}-day journey`
+                                  : isGuidedClimbSetOnePlan(plan)
+                                    ? "Guided Climb · Set 1"
                                  : `${plan.selectedBooks.length} ${plan.selectedBooks.length === 1 ? "book" : "books"}`}
                              {" · "}
                              {stats.totalChapters} chapters · {stats.totalDays} days · {formatMinutes(stats.totalMinutes)} total

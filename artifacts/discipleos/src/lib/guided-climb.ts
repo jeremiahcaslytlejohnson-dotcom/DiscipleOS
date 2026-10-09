@@ -9,7 +9,11 @@ export type GuidedClimbReadingRange = {
 
 export type GuidedClimbDraftDay = {
   day: number;
-  readings: GuidedClimbReadingRange[];
+  readings: readonly GuidedClimbReadingRange[];
+};
+
+type GuidedClimbAssignment = ScheduleAssignment & {
+  guidedLoad?: "heavier";
 };
 
 export const GUIDED_CLIMB_SET_ONE = {
@@ -174,7 +178,7 @@ export function buildGuidedClimbSetOnePlan({
     );
   }
 
-  const assignments: ScheduleAssignment[] = GUIDED_CLIMB_SET_ONE.days.map(
+  const assignments: GuidedClimbAssignment[] = GUIDED_CLIMB_SET_ONE.days.map(
     (draftDay) => {
       const readings = draftDay.readings.flatMap((range) =>
         Array.from(
@@ -250,7 +254,7 @@ export function isGuidedClimbSetOneComplete(
       (day: any) =>
         Array.isArray(day.readings) &&
         day.readings.length > 0 &&
-        day.readings.every((reading: any) => completedMap[reading.key] === true),
+        day.readings.every((reading: any) => Boolean(completedMap[reading.key])),
     )
   );
 }
