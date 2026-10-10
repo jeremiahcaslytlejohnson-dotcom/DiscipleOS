@@ -292,7 +292,7 @@ async function openCreatePlanFromEmptyState(page: Page, width: number) {
   await buildPage.goto("/");
   const navigation = await openDashboardNavigation(buildPage);
   await navigation.getByRole("button", { name: "Plans", exact: true }).click();
-  await buildPage.getByTestId("plans-empty-create-button").click();
+  await buildPage.getByTestId("reading-path-free-climb-action").click();
   await expect(buildPage.getByTestId("dashboard-build-form")).toBeVisible();
   return buildPage;
 }
@@ -2815,10 +2815,16 @@ test("shows one contained empty Plans state without an abandoned detail column",
 
     const emptyState = page.getByTestId("dashboard-plans-empty-state");
     await expect(emptyState).toHaveCount(1);
-    await expect(emptyState.getByText("No reading plans yet.", { exact: true })).toHaveCount(1);
+    await expect(emptyState.getByTestId("reading-path-guided")).toBeVisible();
+    await expect(emptyState.getByTestId("reading-path-mountain-rhythm")).toBeVisible();
+    await expect(emptyState.getByTestId("reading-path-free-climb")).toBeVisible();
     await expect(page.getByText("No reading plan selected yet", { exact: false })).toHaveCount(0);
     await expect(page.getByTestId("dashboard-plan-details")).toHaveCount(0);
-    await expect(page.getByTestId("plans-empty-create-button")).toBeVisible();
+    await expect(page.getByTestId("reading-path-free-climb-action")).toBeVisible();
+    await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
+      "href",
+      "/mountain-rhythm",
+    );
 
     const layout = await page.evaluate(() => {
       const empty = document.querySelector('[data-testid="dashboard-plans-empty-state"]');
@@ -2838,11 +2844,11 @@ test("shows one contained empty Plans state without an abandoned detail column",
     expect(layout.empty?.left ?? -1).toBeGreaterThanOrEqual(12);
     expect(layout.empty?.right ?? Infinity).toBeLessThanOrEqual(width - 12);
     expect(layout.empty?.height ?? 0).toBeGreaterThan(80);
-    expect(layout.empty?.height ?? Infinity).toBeLessThan(260);
+    expect(layout.empty?.height ?? Infinity).toBeLessThan(1000);
     expect(layout.list?.left ?? -1).toBeGreaterThanOrEqual(12);
     expect(layout.list?.right ?? Infinity).toBeLessThanOrEqual(width - 12);
 
-    await page.getByTestId("plans-empty-create-button").click();
+    await page.getByTestId("reading-path-free-climb-action").click();
     await expect(page.getByTestId("dashboard-build-form")).toBeVisible();
   }
 });

@@ -3,7 +3,7 @@ import {
   buildGuidedClimbSetOnePlan,
   validateGuidedClimbSetOneDraft,
 } from "../../src/lib/guided-climb";
-import { todayISO } from "../../src/lib/local-date";
+import { addDaysISO, todayISO } from "../../src/lib/local-date";
 
 const GUIDED_BOOK_CATALOG = [
   { name: "Genesis", chapters: 50 },
@@ -179,34 +179,14 @@ test("Set 1 retains the exact 27-day schedule and is complete without a continua
   expect(plan.assignments[26].date).toBe(plan.endDate);
 });
 
-test("new readers can preview and start Find Your Footing from first-plan onboarding", async ({ page }) => {
+test("new readers can start Discover Scripture directly from first-plan choices", async ({ page }) => {
   const savedPlans = await stubAppApi(page);
   await page.setViewportSize({ width: 600, height: 460 });
   await page.goto("/");
 
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
-  await page.getByTestId("first-plan-guided-climb-preview").click();
-
-  const preview = page.getByTestId("guided-climb-preview");
-  await expect(preview).toBeVisible();
-  await expect(page.getByRole("button", { name: "Feedback", exact: true })).toBeHidden();
-  await expect(page.getByTestId("guided-climb-preview-day-1")).toContainText(
-    "Genesis 1",
-  );
-  await expect(
-    page.getByTestId("guided-climb-estimated-reading-time-day-1"),
-  ).toHaveText("≈ 4 min");
-  await expect(page.getByTestId("guided-climb-preview-day-27")).toContainText(
-    "Genesis 50 · Matthew 27–28",
-  );
-  await expect(
-    page.getByTestId("guided-climb-estimated-reading-time-day-27"),
-  ).toHaveText("≈ 15 min");
-  expect(await page.getByText("Heavier · 4 chapters", { exact: true }).count()).toBe(7);
-
-  await page.getByTestId("guided-climb-preview-day-27").scrollIntoViewIfNeeded();
-  await expect(page.getByTestId("guided-climb-preview-day-27")).toBeVisible();
-  await page.getByTestId("guided-climb-start").click();
+  await expect(page.getByTestId("reading-path-guided")).toContainText("27-day");
+  await page.getByTestId("reading-path-guided-action").click();
 
   await expect(page.getByTestId("first-plan-onboarding")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
@@ -216,7 +196,7 @@ test("new readers can preview and start Find Your Footing from first-plan onboar
   await expect.poll(() => savedPlans.length).toBe(1);
 
   const savedPlan = savedPlans[0];
-  expect(savedPlan.name).toBe("Find Your Footing");
+  expect(savedPlan.name).toBe("Discover Scripture");
   expect(savedPlan.selectedBooks).toEqual([
     "Genesis",
     "Matthew",
@@ -230,6 +210,52 @@ test("new readers can preview and start Find Your Footing from first-plan onboar
       day.readings.map((reading: any) => reading.label),
     ),
   ).toEqual(EXPECTED_DAILY_RANGES.map((ranges) => ranges.flatMap(expandRange)));
+});
+
+test("a plan-less user with an active Mountain Rhythm keeps it and sees all paths", async ({
+  page,
+}) => {
+  const startDate = todayISO();
+  const activeClimb = {
+    id: "active-mountain-rhythm",
+    name: "7-Day Climb",
+    journeyKey: "7-day-climb",
+    journeyType: "7-day-climb",
+    journeyDays: 7,
+    durationDays: 7,
+    totalDays: 7,
+    startDate,
+    endDate: addDaysISO(startDate, 6),
+    assignments: Array.from({ length: 7 }, (_, index) => ({
+      date: addDaysISO(startDate, index),
+      readings: [{ key: `active-climb-${index}`, label: `Genesis ${index + 1}` }],
+    })),
+    completed: {},
+    earnedDayKeys: [],
+  };
+  const savedPlans = await stubAppApi(page, [activeClimb]);
+  await page.goto("/");
+
+  await expect(page.getByTestId("first-plan-onboarding")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
+
+  await expect(page.getByTestId("dashboard-plans-empty-state")).toBeVisible();
+  await expect(page.getByTestId("active-mountain-rhythm-note")).toContainText(
+    "Your 7-Day Climb in Mountain Rhythm is still in progress",
+  );
+  await expect(page.getByTestId("reading-path-guided")).toBeVisible();
+  await expect(page.getByTestId("reading-path-mountain-rhythm")).toBeVisible();
+  await expect(page.getByTestId("reading-path-free-climb")).toBeVisible();
+  await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
+    "href",
+    "/mountain-rhythm",
+  );
+  expect(savedPlans).toHaveLength(0);
+  await page.getByTestId("reading-path-mountain-rhythm-action").click();
+  await expect(page).toHaveURL(/\/mountain-rhythm$/);
+  await expect(page.getByRole("heading", { name: "Mountain Rhythm" })).toBeVisible();
+  expect(savedPlans).toHaveLength(0);
 });
 
 test("returning readers can add Guided Climb without replacing an existing plan", async ({ page }) => {
@@ -275,7 +301,7 @@ test("returning readers can add Guided Climb without replacing an existing plan"
 
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await expect.poll(() => savedPlans.length).toBe(1);
-  expect(savedPlans[0].name).toBe("Find Your Footing");
+  expect(savedPlans[0].name).toBe("Discover Scripture");
   expect(savedPlans[0].id).not.toBe(existingPlan.id);
 
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();

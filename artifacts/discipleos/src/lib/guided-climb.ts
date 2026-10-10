@@ -21,7 +21,7 @@ export const GUIDED_CLIMB_SET_ONE = {
   series: "Guided Climb",
   set: 1,
   slug: "find-your-footing",
-  name: "Find Your Footing",
+  name: "Discover Scripture",
   durationDays: 27,
   selectedBooks: ["Genesis", "Matthew", "Psalms", "Proverbs"],
   days: [
@@ -252,6 +252,12 @@ export function isGuidedClimbSetOnePlan(plan: any) {
     plan?.guidedClimb?.set === GUIDED_CLIMB_SET_ONE.set &&
     plan?.guidedClimb?.slug === GUIDED_CLIMB_SET_ONE.slug
   );
+}
+
+export function getGuidedClimbPlanDisplayName(plan: any) {
+  return isGuidedClimbSetOnePlan(plan)
+    ? GUIDED_CLIMB_SET_ONE.name
+    : String(plan?.name || "");
 }
 
 export function isGuidedClimbSetOneComplete(

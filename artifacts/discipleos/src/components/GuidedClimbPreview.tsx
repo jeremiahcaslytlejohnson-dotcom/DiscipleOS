@@ -113,7 +113,7 @@ export default function GuidedClimbPreview({
             onClick={onStart}
             className="discipleos-action min-h-11 bg-[#C8921D] px-5 font-semibold text-black hover:bg-[#D4A017]"
           >
-            Start Find Your Footing
+            Start Discover Scripture
           </button>
         </footer>
       </section>

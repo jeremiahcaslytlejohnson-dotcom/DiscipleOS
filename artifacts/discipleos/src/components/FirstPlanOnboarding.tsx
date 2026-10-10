@@ -1,16 +1,14 @@
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   CalendarDays,
   Check,
   Clock3,
   Sparkles,
   X,
 } from "lucide-react";
-import { useState } from "react";
 import { Link } from "wouter";
-import GuidedClimbPreview from "./GuidedClimbPreview";
+import ReadingPathChoices from "./ReadingPathChoices";
 
 type PlanForm = {
   selectedBooks: string[];
@@ -85,7 +83,6 @@ export default function FirstPlanOnboarding({
   onStartGuidedClimb,
   isSignedIn,
 }: FirstPlanOnboardingProps) {
-  const [isGuidedClimbPreviewOpen, setIsGuidedClimbPreviewOpen] = useState(false);
   const hasBooks = form.selectedBooks.length > 0;
   const canContinue =
     step === 0 ||
@@ -113,7 +110,7 @@ export default function FirstPlanOnboarding({
       <div className="mb-6 flex items-center justify-between gap-4 px-1">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#F4D77A]">
           <Sparkles className="h-4 w-4" />
-          {step === 0 ? "A simple place to begin" : `Step ${step} of 5`}
+          {step === 0 ? "Choose your path" : `Step ${step} of 5`}
         </div>
         {step > 0 ? (
           <div className="text-xs text-white/45">
@@ -124,52 +121,11 @@ export default function FirstPlanOnboarding({
 
       <section className="discipleos-functional-surface overflow-hidden p-5 shadow-[0_18px_60px_rgba(0,0,0,0.3)] sm:p-8">
         {step === 0 ? (
-          <div className="space-y-7">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D4A017]/35 bg-[#D4A017]/12 text-[#F4D77A]">
-              <BookOpen className="h-7 w-7" />
-            </div>
-            <div>
-              <h2 className="max-w-xl text-3xl font-bold leading-tight tracking-[-0.03em] text-white sm:text-5xl">
-                Let’s build a Bible reading plan that fits your life.
-              </h2>
-              <p className="mt-4 max-w-xl text-base leading-7 text-white/70 sm:text-lg">
-                We’ll help you choose what to read, find a daily pace you can
-                keep, and set a clear finish line.
-              </p>
-            </div>
-            <div
-              data-testid="first-plan-guided-climb-option"
-              className="border border-[#D4A017]/30 bg-[#D4A017]/[0.06] p-4 sm:p-5"
-            >
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#F4D77A]">
-                Optional · Guided Climb Set 1 · 27 days
-              </div>
-              <h3 className="mt-2 text-lg font-semibold text-white">
-                Find Your Footing
-              </h3>
-              <p className="discipleos-secondary-copy mt-1 text-sm leading-6">
-                A ready-made beginner plan with a clear finish after Day 27.
-                You can stop there; no future set is required.
-              </p>
-              <button
-                type="button"
-                data-testid="first-plan-guided-climb-preview"
-                onClick={() => setIsGuidedClimbPreviewOpen(true)}
-                className="discipleos-action mt-4 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/45 bg-[#211A0D] px-4 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
-              >
-                Preview the 27-day plan
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-            <button
-              type="button"
-              data-testid="first-plan-create-action"
-              onClick={() => onStepChange(1)}
-              className="discipleos-action inline-flex min-h-12 w-full items-center justify-center gap-2 bg-[#C8921D] px-5 text-base font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px sm:w-auto sm:min-w-64"
-            >
-              Create My Reading Plan
-              <ArrowRight className="h-5 w-5" />
-            </button>
+          <div className="space-y-6">
+            <ReadingPathChoices
+              onStartGuidedClimb={onStartGuidedClimb}
+              onStartFreeClimb={() => onStepChange(1)}
+            />
             {!isSignedIn ? (
               <div className="max-w-xl text-sm leading-6 text-white/55">
                 Want to keep your plan synced across devices?{" "}
@@ -540,14 +496,6 @@ export default function FirstPlanOnboarding({
           </div>
         </div>
       ) : null}
-      <GuidedClimbPreview
-        open={isGuidedClimbPreviewOpen}
-        onClose={() => setIsGuidedClimbPreviewOpen(false)}
-        onStart={() => {
-          setIsGuidedClimbPreviewOpen(false);
-          onStartGuidedClimb();
-        }}
-      />
     </>
   );
 }

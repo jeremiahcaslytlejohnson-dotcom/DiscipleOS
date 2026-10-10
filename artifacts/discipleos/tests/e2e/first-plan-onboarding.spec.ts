@@ -102,7 +102,12 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
   await expect(page.getByTestId("dashboard-navigation")).toHaveCount(0);
   await expect(page.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
 
-  await page.getByTestId("first-plan-create-action").click();
+  await expect(page.getByRole("heading", { name: "How would you like to start?" })).toBeVisible();
+  await expect(page.getByTestId("reading-path-guided")).toContainText("Discover Scripture");
+  await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
+    "Build a lasting reading habit",
+  );
+  await page.getByTestId("reading-path-free-climb-action").click();
   await expect(page.getByTestId("first-plan-choose-books")).toContainText(
     "Choose Books",
   );

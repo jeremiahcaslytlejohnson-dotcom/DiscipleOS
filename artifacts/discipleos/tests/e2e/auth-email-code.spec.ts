@@ -79,7 +79,7 @@ async function createLocalPlan(page: Page, name: string) {
   ).toBeVisible();
 
   if (await firstPlanOnboarding.isVisible()) {
-    await page.getByTestId("first-plan-create-action").click();
+  await page.getByTestId("reading-path-free-climb-action").click();
     await page.getByTestId("first-plan-preset-newTestament").click();
     await firstPlanOnboarding.getByRole("button", { name: "Continue", exact: true }).click();
     await page.getByTestId("first-plan-minutes-20").click();
@@ -106,7 +106,7 @@ async function createLocalPlan(page: Page, name: string) {
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await openDashboardNavigation(page)
     .then((navigation) => navigation.getByRole("button", { name: "Plans", exact: true }).click());
-  await page.getByTestId("plans-empty-create-button").click();
+  await page.getByTestId("reading-path-free-climb-action").click();
   await page.getByPlaceholder("Plan name").fill(name);
   await page.getByRole("button", { name: "Reading selection & order" }).click();
   await page.getByRole("button", { name: "New Testament" }).click();

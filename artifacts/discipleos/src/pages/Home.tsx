@@ -25,9 +25,11 @@ import {
 import InstallButton from "../install-button";
 import FirstPlanOnboarding from "../components/FirstPlanOnboarding";
 import GuidedClimbPreview from "../components/GuidedClimbPreview";
+import ReadingPathChoices from "../components/ReadingPathChoices";
 import EstimatedReadingTime from "../components/EstimatedReadingTime";
 import {
   buildGuidedClimbSetOnePlan,
+  getGuidedClimbPlanDisplayName,
   isGuidedClimbSetOneComplete,
   isGuidedClimbSetOnePlan,
 } from "../lib/guided-climb";
@@ -2048,7 +2050,7 @@ export default function DiscipleOSApp() {
         if (!map[day.date]) map[day.date] = [];
         map[day.date].push({
           id: `plan-${plan.id}-${day.date}`,
-          title: plan.name,
+          title: getGuidedClimbPlanDisplayName(plan),
           type: "bible",
           date: day.date,
           time: plan.readingTime || "07:00",
@@ -2082,7 +2084,7 @@ export default function DiscipleOSApp() {
           id: `dayview-${plan.id}-${selectedCalendarDate}`,
           kind: "plan",
           type: "bible",
-          title: plan.name,
+          title: getGuidedClimbPlanDisplayName(plan),
           planId: plan.id,
           date: selectedCalendarDate,
           time: plan.readingTime || "07:00",
@@ -4363,6 +4365,10 @@ export default function DiscipleOSApp() {
     { key: "plans", label: "Plans", icon: BookOpen },
   ];
   const hasReturningExperience = plans.length > 0;
+  const activeMountainRhythmLabel =
+    selectedRhythmPlanId && mountainRhythm.journeyDays > 0
+      ? mountainRhythm.journeyLabel
+      : null;
   const hasExistingActivity =
     events.length > 0 || Object.keys(eventCompletions).length > 0;
   const showFirstPlanOnboarding =
@@ -4750,7 +4756,7 @@ export default function DiscipleOSApp() {
                   Guided Climb Set 1 complete
                 </div>
                 <h2 className="mt-2 text-xl font-semibold text-white">
-                  {selectedPlan?.name || "Find Your Footing"}
+                  {getGuidedClimbPlanDisplayName(selectedPlan) || "Discover Scripture"}
                 </h2>
                 <p className="discipleos-secondary-copy mt-2 max-w-2xl text-sm leading-6">
                   You finished all 27 days. This set ends here, and nothing
@@ -4852,7 +4858,7 @@ export default function DiscipleOSApp() {
                       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="inline-block max-w-full whitespace-normal [overflow-wrap:anywhere] rounded-full border border-[#D4A017]/35 bg-[#D4A017]/15 px-3 py-1 text-xs font-medium text-[#F4D77A]">
-                            {plan.name}
+                            {getGuidedClimbPlanDisplayName(plan)}
                           </div>
                           <div className="discipleos-meta-copy mt-2 text-sm">
                             {todayReading.readings.length} reading{todayReading.readings.length === 1 ? "" : "s"} ·{" "}
@@ -5022,7 +5028,7 @@ export default function DiscipleOSApp() {
                         className="discipleos-flat-row py-3 first:pt-0 last:pb-0"
                       >
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                          <div className="discipleos-safe-text min-w-0 font-medium">{plan.name}</div>
+                          <div className="discipleos-safe-text min-w-0 font-medium">{getGuidedClimbPlanDisplayName(plan)}</div>
                           <button
                             type="button"
                             onClick={() => {
@@ -5955,23 +5961,27 @@ export default function DiscipleOSApp() {
                       <BookMarked className="discipleos-section-heading__icon" />
                       Planned reading
                     </div>
-                     <button
-                       type="button"
-                       data-testid="plans-guided-climb-button"
-                       onClick={() => setIsGuidedClimbPreviewOpen(true)}
-                       className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
-                     >
-                       Guided Climb
-                     </button>
-                    <button
-                      type="button"
-                      data-testid="plans-create-button"
-                      onClick={beginCreatePlan}
-                      className="discipleos-action ml-auto inline-flex items-center justify-center gap-2 whitespace-nowrap border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add plan
-                    </button>
+                     {planViewPlans.length > 0 ? (
+                       <>
+                         <button
+                           type="button"
+                           data-testid="plans-guided-climb-button"
+                           onClick={() => setIsGuidedClimbPreviewOpen(true)}
+                           className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+                         >
+                           Guided Climb
+                         </button>
+                         <button
+                           type="button"
+                           data-testid="plans-create-button"
+                           onClick={beginCreatePlan}
+                           className="discipleos-action ml-auto inline-flex items-center justify-center gap-2 whitespace-nowrap border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
+                         >
+                           <Plus className="h-4 w-4" />
+                           Add plan
+                         </button>
+                       </>
+                     ) : null}
                   </div>
 
                    <GuidedClimbPreview
@@ -6026,20 +6036,14 @@ export default function DiscipleOSApp() {
                   {planViewPlans.length === 0 ? (
                    <div
                      data-testid="dashboard-plans-empty-state"
-                     className="discipleos-empty-state flex min-w-0 flex-wrap items-center justify-between gap-4 text-sm"
+                      className="discipleos-empty-state min-w-0 text-sm"
                    >
-                       <div className="min-w-0 flex-1">
-                         <div className="font-medium text-white">No reading plans yet.</div>
-                         <div className="mt-1">Create a plan to start building your daily rhythm.</div>
-                       </div>
-                       <button
-                         type="button"
-                         data-testid="plans-empty-create-button"
-                         onClick={beginCreatePlan}
-                         className="discipleos-action inline-flex shrink-0 items-center justify-center border border-[#D4A017]/45 bg-[#C8921D] px-4 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
-                       >
-                         Create a plan
-                       </button>
+                      <ReadingPathChoices
+                        title="Choose a reading path"
+                        onStartGuidedClimb={startGuidedClimb}
+                        onStartFreeClimb={beginCreatePlan}
+                        activeMountainRhythmLabel={activeMountainRhythmLabel}
+                      />
                     </div>
                   ) : (
                     planViewPlans.map((plan) => {
@@ -6062,7 +6066,7 @@ export default function DiscipleOSApp() {
                            <div className="flex min-w-0 items-start justify-between gap-3">
                              <div className="min-w-0 flex-1">
                                <div className="discipleos-safe-text text-lg font-semibold text-white">
-                                 {plan.name}
+                                 {getGuidedClimbPlanDisplayName(plan)}
                                </div>
                                <div className="discipleos-secondary-copy mt-2 text-sm">
                                  {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
