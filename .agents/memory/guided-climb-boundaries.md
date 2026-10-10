@@ -15,3 +15,10 @@ Show the Discover Scripture introduction before the first Guided Climb start; re
 **Why:** The user asked for a brief orientation before Day 1 and a way to revisit it without interrupting repeat visits or existing progress.
 
 **How to apply:** Keep the introduction separate from plan creation; if Set 1 already exists, its primary action returns to Today’s Walk rather than creating or resetting a plan.
+
+## Reminder lifecycle
+Removing Set 1 must also remove only its generated daily Calendar reminder, including reminders created by older versions, while leaving other Calendar events untouched.
+
+**Why:** The reminder is stored as a separate event, and older saved reminders used random IDs rather than a plan link; a broad title-only match could delete a user-created event.
+
+**How to apply:** Keep new reminder IDs plan-specific and retain strict matching against the generated reminder details for legacy records. Delete through the existing event deletion path so tombstones and offline replay remain effective; avoid a schema change solely for this link.

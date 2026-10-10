@@ -63,9 +63,25 @@ function makeGuidedPlan(startDate = todayISO()) {
   });
 }
 
-async function stubAppApi(page: Page, initialPlans: any[] = []) {
+async function stubAppApi(
+  page: Page,
+  initialPlans: any[] = [],
+  options: {
+    authenticated?: boolean;
+    initialEvents?: any[];
+    eventCalls?: { saved: any[]; deletedIds: string[] };
+    failFirstEventDelete?: boolean;
+  } = {},
+) {
   const savedPlans: any[] = [];
-  await page.addInitScript(() => localStorage.clear());
+  const serverPlans = [...initialPlans];
+  const serverEvents = [...(options.initialEvents || [])];
+  let eventDeleteAttempts = 0;
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("guided-climb-e2e-initialized")) return;
+    localStorage.clear();
+    sessionStorage.setItem("guided-climb-e2e-initialized", "1");
+  });
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
@@ -74,7 +90,12 @@ async function stubAppApi(page: Page, initialPlans: any[] = []) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ authenticated: false, user: null }),
+        body: JSON.stringify({
+          authenticated: Boolean(options.authenticated),
+          user: options.authenticated
+            ? { id: "guided-climb-test-user", email: "climb@example.test" }
+            : null,
+        }),
       });
       return;
     }
@@ -85,8 +106,8 @@ async function stubAppApi(page: Page, initialPlans: any[] = []) {
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          established: initialPlans.length > 0,
-          authenticated: false,
+          established: initialPlans.length > 0 || Boolean(options.authenticated),
+          authenticated: Boolean(options.authenticated),
           userId: "guided-climb-test-user",
         }),
       });
@@ -103,19 +124,52 @@ async function stubAppApi(page: Page, initialPlans: any[] = []) {
         });
         return;
       }
+      if (request.method() === "DELETE") {
+        const { id } = request.postDataJSON();
+        const index = serverPlans.findIndex((plan) => plan.id === id);
+        if (index >= 0) serverPlans.splice(index, 1);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, plans: initialPlans }),
+        body: JSON.stringify({ success: true, plans: serverPlans }),
       });
       return;
     }
 
     if (pathname.endsWith("/events")) {
+      if (request.method() === "POST") {
+        const event = request.postDataJSON();
+        options.eventCalls?.saved.push(event);
+        const index = serverEvents.findIndex((item) => item.id === event.id);
+        if (index >= 0) serverEvents[index] = event;
+        else serverEvents.push(event);
+      } else if (request.method() === "DELETE") {
+        const { id } = request.postDataJSON();
+        options.eventCalls?.deletedIds.push(id);
+        const failThisDelete =
+          options.failFirstEventDelete && eventDeleteAttempts++ === 0;
+        if (!failThisDelete) {
+          const index = serverEvents.findIndex((item) => item.id === id);
+          if (index >= 0) serverEvents.splice(index, 1);
+        }
+        await route.fulfill({
+          status: failThisDelete ? 503 : 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: !failThisDelete }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, events: [] }),
+        body: JSON.stringify({ success: true, events: serverEvents }),
       });
       return;
     }
@@ -414,6 +468,159 @@ test("read time can be set while reminder opt-in remains optional", async ({ pag
   await intro.getByTestId("guided-climb-start").click();
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   expect(savedPlans[0].readingTime).toBe("06:45");
+});
+
+test("signed-in readers get a daily reminder only after permission and subscription succeed", async ({
+  page,
+}) => {
+  const eventCalls = { saved: [] as any[], deletedIds: [] as string[] };
+  const savedPlans = await stubAppApi(page, [], {
+    authenticated: true,
+    eventCalls,
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: {
+        permission: "default",
+        requestPermission: async () => "granted",
+      },
+    });
+    const applicationServerKey = new Uint8Array(65).fill(1);
+    const subscription = {
+      endpoint: "https://push.example.test/subscription",
+      expirationTime: null,
+      options: { applicationServerKey },
+      toJSON: () => ({
+        endpoint: "https://push.example.test/subscription",
+        expirationTime: null,
+        keys: { p256dh: "cHVi", auth: "YXV0aA" },
+      }),
+      unsubscribe: async () => true,
+    };
+    const registration = {
+      pushManager: {
+        getSubscription: async () => null,
+        subscribe: async () => subscription,
+      },
+      showNotification: async () => undefined,
+    };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        register: async () => registration,
+        ready: Promise.resolve(registration),
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("reading-path-guided-action").click();
+  const intro = page.getByTestId("guided-climb-preview");
+  await intro.getByTestId("guided-climb-reading-time").fill("08:15");
+  await intro.getByTestId("guided-climb-reminder-toggle").check();
+  await intro.getByTestId("guided-climb-start").click();
+
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await expect.poll(() => savedPlans.length).toBe(1);
+  await expect.poll(() => eventCalls.saved.length).toBe(1);
+  expect(savedPlans[0].readingTime).toBe("08:15");
+  expect(eventCalls.saved[0]).toMatchObject({
+    id: `guided-climb-reminder:${savedPlans[0].id}`,
+    title: "Discover Scripture reading",
+    date: savedPlans[0].startDate,
+    time: "08:15",
+    remind: true,
+    reminderMinutes: 0,
+    repeat: "daily",
+    repeatUntil: savedPlans[0].endDate,
+    countsTowardRhythm: false,
+  });
+});
+
+test("denied notification permission does not create a Guided Climb reminder", async ({
+  page,
+}) => {
+  const eventCalls = { saved: [] as any[], deletedIds: [] as string[] };
+  const savedPlans = await stubAppApi(page, [], {
+    authenticated: true,
+    eventCalls,
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: {
+        permission: "denied",
+        requestPermission: async () => "denied",
+      },
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("reading-path-guided-action").click();
+  const intro = page.getByTestId("guided-climb-preview");
+  await intro.getByTestId("guided-climb-reading-time").fill("06:30");
+  await intro.getByTestId("guided-climb-reminder-toggle").check();
+  await intro.getByTestId("guided-climb-start").click();
+
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await expect.poll(() => savedPlans.length).toBe(1);
+  expect(savedPlans[0].readingTime).toBe("06:30");
+  expect(eventCalls.saved).toHaveLength(0);
+});
+
+test("removing Guided Climb deletes only its reminder and preserves unrelated events", async ({
+  page,
+}) => {
+  const plan = makeGuidedPlan();
+  const guidedReminder = {
+    id: "legacy-guided-reminder",
+    title: "Discover Scripture reading",
+    type: "event",
+    date: plan.startDate,
+    time: plan.readingTime,
+    notes: "Daily reading reminder for Guided Climb: Discover Scripture.",
+    remind: true,
+    reminderMinutes: 0,
+    repeat: "daily",
+    repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    repeatUntil: plan.endDate,
+    countsTowardRhythm: false,
+  };
+  const unrelatedEvent = {
+    ...guidedReminder,
+    id: "unrelated-event",
+    title: "Morning prayer",
+    notes: "Personal prayer reminder",
+  };
+  const deletedIds: string[] = [];
+  await stubAppApi(page, [plan], {
+    initialEvents: [guidedReminder, unrelatedEvent],
+    eventCalls: { saved: [], deletedIds },
+    failFirstEventDelete: true,
+  });
+
+  await page.goto("/");
+  await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
+  await page.getByTestId(`plan-delete-${plan.id}`).click();
+  await expect.poll(() => deletedIds.length).toBe(1);
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("discipleos:pendingOps") || "{}");
+      return state.ops?.some(
+        (op: any) => op.type === "delete-event" && op.id === "legacy-guided-reminder",
+      );
+    }),
+  ).toBe(true);
+
+  await page.reload();
+  await expect.poll(() => deletedIds.length).toBe(2);
+  expect(deletedIds).toEqual(["legacy-guided-reminder", "legacy-guided-reminder"]);
+  await page.getByTestId("dashboard-navigation-row").getByText("Calendar", { exact: true }).click();
+  await expect(page.getByText("Morning prayer", { exact: true })).toBeVisible();
+  await expect(page.getByText("Discover Scripture reading", { exact: true })).toHaveCount(0);
 });
 
 test("Day 27 completion offers Mountain Rhythm or a Free Climb, with no required next set", async ({ page }) => {

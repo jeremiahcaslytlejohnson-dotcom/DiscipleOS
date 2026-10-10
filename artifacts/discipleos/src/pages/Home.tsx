@@ -2901,9 +2901,7 @@ export default function DiscipleOSApp() {
     }
     if (guidedClimbReminderEnabled && reminderReady) {
       const reminderEvent = {
-        id: typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`,
+        id: `guided-climb-reminder:${plan.id}`,
         title: "Discover Scripture reading",
         type: "event",
         date: plan.startDate,
@@ -4266,6 +4264,28 @@ export default function DiscipleOSApp() {
   };
 
   const deletePlan = (planId: string) => {
+    const planToDelete = plans.find((plan) => plan.id === planId);
+    if (planToDelete && isGuidedClimbSetOnePlan(planToDelete)) {
+      // Older app versions used random event IDs, so also recognize their
+      // exact generated reminder signature for safe cleanup after an upgrade.
+      const reminderNote =
+        "Daily reading reminder for Guided Climb: Discover Scripture.";
+      const matchingReminderEvents = events.filter((event) => {
+        const generatedReminder =
+          event.type === "event" &&
+          event.title === "Discover Scripture reading" &&
+          event.date === planToDelete.startDate &&
+          event.time === planToDelete.readingTime &&
+          event.notes === reminderNote &&
+          event.remind === true &&
+          event.reminderMinutes === 0 &&
+          event.repeat === "daily" &&
+          event.repeatUntil === planToDelete.endDate;
+        return generatedReminder;
+      });
+      matchingReminderEvents.forEach((event) => deleteEvent(event.id));
+    }
+
     setPlans((prev) => prev.filter((plan) => plan.id !== planId));
     if (!localOnlyAfterSignOutRef.current) {
       fetch("/api/reading/plans", {
@@ -6200,6 +6220,7 @@ export default function DiscipleOSApp() {
                               )}
 
                               <button
+                                data-testid={`plan-delete-${plan.id}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deletePlan(plan.id);
