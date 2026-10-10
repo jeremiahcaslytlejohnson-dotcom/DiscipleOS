@@ -466,9 +466,9 @@ test("keeps audited secondary text readable across responsive DiscipleOS states"
       };
     });
     expect(palette).not.toBeNull();
-    expect(palette.muted).toBe("rgb(193, 204, 216)");
-    expect(palette.gold).toBe("rgb(244, 215, 122)");
-    expect(palette.outline).toBe("rgba(244, 215, 122, 0.5)");
+    expect(palette.muted).toBe("rgb(201, 205, 211)");
+    expect(palette.gold).toBe("rgb(244, 197, 66)");
+    expect(palette.outline).toBe("rgb(244, 197, 66)");
 
     const todayAudit = await auditSecondaryText(page, `Today ${width}px`);
     expect(todayAudit.count).toBeGreaterThan(0);
@@ -2385,7 +2385,7 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(dashboardBehind).toHaveText(
     "33% complete · 2 chapters remaining",
   );
-  await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 197, 66)");
   const assertStableProgressRow = async (plan: { id: string; name: string }) => {
     const row = page.getByTestId(`dashboard-progress-row-${plan.id}`);
     const name = row.getByText(plan.name, { exact: true });
@@ -2455,7 +2455,7 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(cardUpToDate).toHaveText("67% complete");
   await expect(cardUpToDate).toHaveCSS("color", "rgb(134, 239, 172)");
   await expect(cardBehind).toHaveText("33% complete");
-  await expect(cardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  await expect(cardBehind).toHaveCSS("color", "rgb(244, 197, 66)");
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await assertAlignmentUniformWidths(

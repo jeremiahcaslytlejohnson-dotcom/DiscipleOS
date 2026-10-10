@@ -280,7 +280,7 @@ test("development first-launch preview shows the chooser without mutating saved 
   await expect(page.getByTestId("first-launch-preview-notice")).toBeVisible();
   await expect(page.getByTestId("first-launch-preview-notice")).toHaveCSS(
     "color",
-    "rgb(241, 245, 249)",
+    "rgb(201, 205, 211)",
   );
   expect(
     Number.parseFloat(
@@ -311,6 +311,36 @@ test("development first-launch preview shows the chooser without mutating saved 
     "aria-disabled",
     "true",
   );
+  for (const card of [
+    page.getByTestId("reading-path-guided-action"),
+    page.getByTestId("reading-path-mountain-rhythm-action"),
+    page.getByTestId("reading-path-free-climb-action"),
+  ]) {
+    await expect(card).toHaveCSS("opacity", "1");
+    const textColors = await card.evaluate((element) => {
+      const title = element.querySelector<HTMLElement>('[data-testid$="-title"]');
+      const description = element.querySelector<HTMLElement>('[data-testid$="-description"]');
+      const accent = element.querySelector<HTMLElement>("svg");
+      return {
+        title: title && getComputedStyle(title).color,
+        description: description && getComputedStyle(description).color,
+        accent: accent && getComputedStyle(accent).color,
+      };
+    });
+    expect(textColors.title).toBe("rgb(245, 246, 248)");
+    expect(textColors.description).toBe("rgb(201, 205, 211)");
+    expect(textColors.accent).toBe("rgb(244, 197, 66)");
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
+  await expect(page.getByTestId("reading-path-guided-action")).toHaveCSS("opacity", "1");
+  await expect(
+    page.getByTestId("reading-path-guided-title"),
+  ).toHaveCSS("color", "rgb(245, 246, 248)");
+  await expect(
+    page.getByTestId("reading-path-guided-action").locator("svg").first(),
+  ).toHaveCSS("color", "rgb(244, 197, 66)");
+  await expect(page.getByTestId("reading-path-guided-action")).toContainText("Discover Scripture");
   await expect(page.getByTestId("first-plan-sign-in-link")).toHaveCount(0);
   expect(planWriteCount).toBe(0);
   expect(eventWriteCount).toBe(0);

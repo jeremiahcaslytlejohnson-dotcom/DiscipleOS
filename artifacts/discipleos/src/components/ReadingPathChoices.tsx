@@ -179,7 +179,7 @@ export default function ReadingPathChoices({
                   onClick={(event) => {
                     if (previewOnly) event.preventDefault();
                   }}
-                  className={`${cardClass} ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                  className={`${cardClass} ${previewOnly ? "cursor-default" : ""}`}
                 >
                   {MobileContent}
                 </Link>
@@ -193,7 +193,7 @@ export default function ReadingPathChoices({
                       ? onStartGuidedClimb
                       : onStartFreeClimb
                   }
-                  className={`${cardClass} ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                  className={`${cardClass} ${previewOnly ? "cursor-default" : ""}`}
                 >
                   {MobileContent}
                 </button>

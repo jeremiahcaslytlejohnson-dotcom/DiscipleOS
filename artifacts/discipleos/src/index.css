@@ -10,19 +10,19 @@
   --card-foreground: 40 25% 96%;
   --popover: 207 25% 11%;
   --popover-foreground: 40 25% 96%;
-  --primary: 43 80% 57%;
+  --primary: 45 89% 61%;
   --primary-foreground: 210 24% 7%;
   --secondary: 164 22% 20%;
   --secondary-foreground: 40 25% 96%;
   --muted: 207 18% 17%;
-  --muted-foreground: 210 18% 74%;
-  --accent: 43 80% 57%;
+  --muted-foreground: 210 7% 81%;
+  --accent: 45 89% 61%;
   --accent-foreground: 210 24% 7%;
   --destructive: 0 62% 46%;
   --destructive-foreground: 40 25% 96%;
   --border: 207 19% 24%;
   --input: 207 19% 24%;
-  --ring: 43 88% 68%;
+  --ring: 45 89% 61%;
   --font-sans: 'DM Sans', sans-serif;
   --font-mono: 'Space Mono', monospace;
   --discipleos-content-max: 80rem;
@@ -33,10 +33,12 @@
   --discipleos-control-height: 2.75rem;
   --discipleos-functional-background: rgba(7, 12, 16, 0.82);
   --discipleos-functional-border: rgba(255, 255, 255, 0.12);
-  --discipleos-accent-text: #f4d77a;
-  --discipleos-accent-border: rgba(244, 215, 122, 0.5);
-  --discipleos-secondary-text: #d6dee8;
-  --discipleos-meta-text: #c1ccd8;
+  --discipleos-accent-text: #f4c542;
+  --discipleos-accent-hover: #ffd85e;
+  --discipleos-accent-border: #f4c542;
+  --discipleos-heading-text: #f5f6f8;
+  --discipleos-secondary-text: #c9cdd3;
+  --discipleos-meta-text: #c9cdd3;
   --discipleos-min-inset: 0.75rem;
 }
 
@@ -261,68 +263,69 @@ body:has(.launch-splash) {
   color: var(--discipleos-meta-text);
 }
 
-/* Shared contrast calibration for legacy opacity-based text and gold utilities. */
+/* Shared contrast calibration for legacy opacity-based text and gold utilities.
+   The document scope also catches portalled dialogs outside the main shell. */
 @layer utilities {
-  .discipleos-shell :where(
+  :is(#root, body) :where(
     .text-white\/25,
     .text-white\/30,
     .text-white\/35,
     .text-white\/40,
     .text-white\/45
   ) {
-    color: var(--discipleos-meta-text);
-  }
-
-  .discipleos-shell :where(
-    .text-white\/50,
-    .text-white\/55,
-    .text-white\/60
-  ) {
     color: var(--discipleos-secondary-text);
   }
 
-  .discipleos-shell :where(
+  :is(#root, body) :where(
+    .text-white\/50,
+    .text-white\/55,
+    .text-white\/60,
     .text-white\/65,
     .text-white\/70,
     .text-white\/75
   ) {
-    color: #e2e8f0;
+    color: var(--discipleos-secondary-text);
   }
 
-  .discipleos-shell :where(
-    [class~="text-[#D4A017]"],
-    [class~="text-[#D4A017]/70"],
-    [class~="text-[#D4A017]/75"]
+  :is(#root, body) :where(.text-white\/80, .text-white\/85) {
+    color: var(--discipleos-heading-text);
+  }
+
+  :is(#root, body) :where(
+    [class*="text-[#F1F5F9]"],
+    [class*="text-[#E2E8F0]"]
+  ) {
+    color: var(--discipleos-secondary-text);
+  }
+
+  :is(#root, body) :where(
+    [class*="text-[#D4A017]"],
+    [class*="text-[#F4D77A]"],
+    [class*="text-[#F2D37B]"]
   ) {
     color: var(--discipleos-accent-text);
   }
 
-  .discipleos-shell :where(
-    [class~="border-[#D4A017]/20"],
-    [class~="border-[#D4A017]/25"],
-    [class~="border-[#D4A017]/30"],
-    [class~="border-[#D4A017]/35"],
-    [class~="border-[#D4A017]/40"],
-    [class~="border-[#D4A017]/45"],
-    [class~="border-[#D4A017]/50"],
-    [class~="border-[#D4A017]/55"],
-    [class~="border-[#D4A017]/60"],
-    [class~="border-[#D4A017]/70"]
-  ) {
+  :is(#root, body) :where([class*="border-[#D4A017]"], [class*="hover:border-[#D4A017]"]) {
     border-color: var(--discipleos-accent-border);
   }
 
-  .discipleos-shell :where(
-    [class~="hover:border-[#D4A017]/30"],
-    [class~="hover:border-[#D4A017]/35"],
-    [class~="hover:border-[#D4A017]/40"],
-    [class~="hover:border-[#D4A017]/45"],
-    [class~="hover:border-[#D4A017]/50"],
-    [class~="hover:border-[#D4A017]/55"],
-    [class~="hover:border-[#D4A017]/60"]
-  ):hover {
-    border-color: var(--discipleos-accent-border);
+  :is(#root, body) :where([class~="bg-[#C8921D]"]) {
+    background-color: var(--discipleos-accent-text);
   }
+
+  :is(#root, body) :where([class~="hover:bg-[#D4A017]"]):hover {
+    background-color: var(--discipleos-accent-hover);
+  }
+
+  :is(#root, body) :where([class*="hover:border-[#D4A017]"]):hover {
+    border-color: var(--discipleos-accent-text);
+  }
+
+  .discipleos-path-card [data-testid$="-title"] {
+    color: var(--discipleos-heading-text);
+  }
+
 }
 
 .discipleos-empty-state {
@@ -336,11 +339,18 @@ body:has(.launch-splash) {
 
 .discipleos-page-title {
   margin-top: 1rem;
-  color: #fff;
+  color: var(--discipleos-heading-text);
   font-size: 2.25rem;
   line-height: 1.05;
   font-weight: 600;
   letter-spacing: -0.045em;
+}
+
+.discipleos-auth-input:focus,
+.discipleos-feedback-form select:focus,
+.discipleos-feedback-form textarea:focus {
+  border-color: var(--discipleos-accent-text);
+  box-shadow: 0 0 0 2px rgba(244, 197, 66, 0.3);
 }
 
 .discipleos-form-control {
@@ -428,7 +438,7 @@ body:has(.launch-splash) {
 
 .discipleos-auth-heading h1 {
   margin: 0;
-  color: #f8f4e8;
+  color: var(--discipleos-heading-text);
   font-size: 1.5rem;
   line-height: 1.25;
   font-weight: 700;
@@ -437,7 +447,7 @@ body:has(.launch-splash) {
 
 .discipleos-auth-heading p {
   margin: 0.625rem 0 0;
-  color: rgba(248, 244, 232, 0.65);
+  color: var(--discipleos-secondary-text);
   font-size: 0.875rem;
   line-height: 1.5;
   text-align: center;
@@ -468,12 +478,13 @@ body:has(.launch-splash) {
 }
 
 .discipleos-auth-input::placeholder {
-  color: rgba(248, 244, 232, 0.42);
+  color: var(--discipleos-secondary-text);
+  opacity: 1;
 }
 
 .discipleos-auth-input:focus {
-  border-color: #d4a017;
-  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.2);
+  border-color: var(--discipleos-accent-text);
+  box-shadow: 0 0 0 2px rgba(244, 197, 66, 0.3);
 }
 
 .discipleos-auth-code-input {
@@ -484,9 +495,9 @@ body:has(.launch-splash) {
 .discipleos-auth-button {
   min-height: var(--discipleos-control-height);
   margin-top: 0.5rem;
-  border: 1px solid #d4a017;
+  border: 1px solid var(--discipleos-accent-text);
   border-radius: 0.375rem;
-  background: #c8921d;
+  background: var(--discipleos-accent-text);
   color: #090d12;
   cursor: pointer;
   font: inherit;
@@ -495,7 +506,7 @@ body:has(.launch-splash) {
 }
 
 .discipleos-auth-button:hover:not(:disabled) {
-  background: #d4a017;
+  background: var(--discipleos-accent-hover);
 }
 
 .discipleos-auth-button:disabled {
@@ -513,7 +524,7 @@ body:has(.launch-splash) {
 .discipleos-auth-secondary-actions button,
 .discipleos-auth-footer a,
 .discipleos-auth-local-link {
-  color: #e0b449;
+  color: var(--discipleos-accent-text);
   font-size: 0.8125rem;
 }
 
@@ -543,7 +554,7 @@ body:has(.launch-splash) {
 
 .discipleos-auth-footer {
   margin-top: 1.5rem;
-  color: rgba(248, 244, 232, 0.65);
+  color: var(--discipleos-secondary-text);
   font-size: 0.8125rem;
   text-align: center;
 }
@@ -557,7 +568,7 @@ body:has(.launch-splash) {
 .discipleos-auth-local-link {
   display: block;
   margin-top: 1rem;
-  color: rgba(248, 244, 232, 0.55);
+  color: var(--discipleos-accent-text);
   text-align: center;
 }
 
@@ -761,10 +772,10 @@ body:has(.launch-splash) {
   gap: 0.45rem;
   min-height: 2.75rem;
   padding: 0 0.9rem;
-  border: 1px solid rgba(212, 160, 23, 0.65);
+  border: 1px solid var(--discipleos-accent-text);
   border-radius: 0.375rem;
   background: rgba(15, 20, 24, 0.94);
-  color: #f2d37b;
+  color: var(--discipleos-accent-text);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   font: inherit;
@@ -779,7 +790,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 }
 
 .discipleos-feedback-trigger:hover {
-  border-color: #d4a017;
+  border-color: var(--discipleos-accent-hover);
   background: rgba(33, 26, 13, 0.96);
   transform: translateY(-1px);
 }
@@ -789,7 +800,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 .discipleos-feedback-dialog button:focus-visible,
 .discipleos-feedback-dialog select:focus-visible,
 .discipleos-feedback-dialog textarea:focus-visible {
-  outline: 2px solid #f2d37b;
+  outline: 2px solid var(--discipleos-accent-text);
   outline-offset: 2px;
 }
 
@@ -823,7 +834,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 
 .discipleos-feedback-eyebrow {
   margin: 0 0 0.25rem;
-  color: #d4a017;
+  color: var(--discipleos-accent-text);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 700;
@@ -833,6 +844,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 
 .discipleos-feedback-dialog h2 {
   margin: 0;
+  color: var(--discipleos-heading-text);
   font-size: 1.35rem;
   line-height: 1.2;
 }
@@ -844,7 +856,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
   border: 0;
   border-radius: 0.25rem;
   background: transparent;
-  color: rgba(248, 244, 232, 0.65);
+  color: var(--discipleos-secondary-text);
   cursor: pointer;
   font-size: 1.5rem;
   line-height: 1;
@@ -863,7 +875,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 
 .discipleos-feedback-form label {
   margin-top: 0.35rem;
-  color: rgba(248, 244, 232, 0.78);
+  color: var(--discipleos-secondary-text);
   font-size: 0.8125rem;
   font-weight: 600;
 }
@@ -897,13 +909,14 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 
 .discipleos-feedback-form select:focus,
 .discipleos-feedback-form textarea:focus {
-  border-color: #d4a017;
-  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.2);
+  border-color: var(--discipleos-accent-text);
+  box-shadow: 0 0 0 2px rgba(244, 197, 66, 0.3);
   outline: none;
 }
 
 .discipleos-feedback-form textarea::placeholder {
-  color: rgba(248, 244, 232, 0.42);
+  color: var(--discipleos-secondary-text);
+  opacity: 1;
 }
 
 .discipleos-feedback-form-footer {
@@ -911,7 +924,7 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  color: rgba(248, 244, 232, 0.48);
+  color: var(--discipleos-secondary-text);
   font-size: 0.75rem;
 }
 
@@ -919,14 +932,19 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
 .discipleos-feedback-success button {
   min-height: 2.5rem;
   padding: 0 0.9rem;
-  border: 1px solid #d4a017;
+  border: 1px solid var(--discipleos-accent-text);
   border-radius: 0.375rem;
-  background: #c8921d;
+  background: var(--discipleos-accent-text);
   color: #090d12;
   cursor: pointer;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 700;
+}
+
+.discipleos-feedback-form-footer button:not(:disabled):hover,
+.discipleos-feedback-success button:hover {
+  background: var(--discipleos-accent-hover);
 }
 
 .discipleos-feedback-form-footer button:disabled {
@@ -944,13 +962,13 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
   display: grid;
   gap: 0.65rem;
   padding: 1.25rem;
-  color: rgba(248, 244, 232, 0.72);
+  color: var(--discipleos-secondary-text);
   font-size: 0.875rem;
   line-height: 1.45;
 }
 
 .discipleos-feedback-success strong {
-  color: #f8f4e8;
+  color: var(--discipleos-heading-text);
   font-size: 1rem;
 }
 
