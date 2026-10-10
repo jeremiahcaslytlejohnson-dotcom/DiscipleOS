@@ -256,7 +256,7 @@ test("development first-launch preview shows the chooser without mutating saved 
   expect(eventWriteCount).toBe(0);
 });
 
-test("path choices stay usable on narrow and short phone screens", async ({ page }) => {
+test("path choices adapt cleanly across small and large phone screens", async ({ page }) => {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/auth/me")) {
@@ -275,10 +275,12 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
   });
   await page.addInitScript(() => localStorage.clear());
 
+  const cardHeightsByViewport: Array<{ viewportHeight: number; cardHeight: number }> = [];
   for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 375, height: 667 },
     { width: 320, height: 568 },
+    { width: 375, height: 667 },
+    { width: 384, height: 854 },
+    { width: 448, height: 998 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/");
@@ -287,6 +289,7 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
     await expect(page.getByTestId("first-plan-sign-up-link")).toBeVisible();
     await expect(page.getByTestId("first-plan-sign-in-link")).toBeVisible();
     await expect(page.locator("header h1")).toBeVisible();
+    await expect(page.getByTestId("first-launch-preview-notice")).toHaveCount(0);
     await expect(page.getByTestId("reading-path-guided")).toContainText("New readers");
     await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
       "structured climbs, reminders",
@@ -295,6 +298,7 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
     const contentArea = page.locator(".discipleos-app-content");
     const contentBox = await contentArea.boundingBox();
     expect(contentBox).not.toBeNull();
+    const cardHeights: number[] = [];
     for (const id of [
       "reading-path-guided-action",
       "reading-path-mountain-rhythm-action",
@@ -305,6 +309,7 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
       const box = await action.boundingBox();
       expect(box?.width).toBeGreaterThanOrEqual(44);
       expect(box?.height).toBeGreaterThanOrEqual(44);
+      cardHeights.push(box!.height);
       expect(box!.y + box!.height).toBeLessThanOrEqual(
         contentBox!.y + contentBox!.height,
       );
@@ -317,6 +322,12 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
       });
       expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(2);
     }
+    expect(Math.max(...cardHeights) - Math.min(...cardHeights)).toBeLessThanOrEqual(1);
+    expect(Math.max(...cardHeights)).toBeLessThanOrEqual(164);
+    cardHeightsByViewport.push({
+      viewportHeight: viewport.height,
+      cardHeight: Math.max(...cardHeights),
+    });
     const scrollMetrics = await contentArea.evaluate((element) => {
       const describe = (selector: string) => {
         const node = element.querySelector<HTMLElement>(selector);
@@ -355,5 +366,50 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
       () => document.documentElement.scrollWidth > window.innerWidth,
     );
     expect(hasHorizontalOverflow).toBe(false);
+  }
+  const heightFor = (viewportHeight: number) =>
+    cardHeightsByViewport.find((result) => result.viewportHeight === viewportHeight)!
+      .cardHeight;
+  expect(heightFor(854)).toBeGreaterThan(heightFor(667));
+  expect(heightFor(998)).toBeGreaterThan(heightFor(854));
+
+  for (const viewport of [
+    { width: 1024, height: 768 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await expect(page.locator("header h1")).toBeVisible();
+    await expect(page.getByTestId("first-plan-sign-in-link")).toBeVisible();
+    const cardBoxes = await Promise.all(
+      [
+        "reading-path-guided-action",
+        "reading-path-mountain-rhythm-action",
+        "reading-path-free-climb-action",
+      ].map(async (id) => {
+        const card = page.getByTestId(id);
+        await expect(card).toBeVisible();
+        return card.boundingBox();
+      }),
+    );
+    expect(cardBoxes.every(Boolean)).toBe(true);
+    expect(cardBoxes[0]!.width).toBeGreaterThanOrEqual(300);
+    for (const box of cardBoxes.slice(1)) {
+      expect(Math.abs(box!.x - cardBoxes[0]!.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box!.width - cardBoxes[0]!.width)).toBeLessThanOrEqual(1);
+    }
+    const logo = await page.locator("header h1").boundingBox();
+    expect(logo).not.toBeNull();
+    expect(logo!.x + logo!.width).toBeLessThanOrEqual(viewport.width);
+    if (viewport.height <= 500) {
+      for (const id of ["first-plan-sign-up-link", "first-plan-sign-in-link"]) {
+        const linkBox = await page.getByTestId(id).boundingBox();
+        expect(linkBox).not.toBeNull();
+        expect(linkBox!.y + linkBox!.height).toBeLessThanOrEqual(viewport.height);
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      viewport.width,
+    );
   }
 });

@@ -4503,7 +4503,7 @@ export default function DiscipleOSApp() {
   if (showFirstPlanOnboarding) {
     return (
       <div className="discipleos-shell discipleos-shell--first-plan min-h-full text-white">
-        <div className="discipleos-content discipleos-content--home">
+        <div className="discipleos-content discipleos-content--home discipleos-content--first-plan">
           <header className="flex items-center justify-between gap-4 py-3 sm:py-4">
             <h1 className="shrink-0 text-xl font-bold tracking-[-0.03em] sm:text-2xl">
               <span className="text-white">DISCIPLE</span>

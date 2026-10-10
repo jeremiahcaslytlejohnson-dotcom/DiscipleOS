@@ -107,8 +107,10 @@ export default function FirstPlanOnboarding({
     <>
       <main
         data-testid="first-plan-onboarding"
-        className={`mx-auto w-full max-w-2xl sm:pb-10 sm:pt-8 ${
-          step === 0 ? "p-0" : "pb-24 pt-4"
+        className={`mx-auto w-full max-w-2xl flex-col sm:pb-10 sm:pt-8 ${
+          step === 0
+            ? "flex min-h-[calc(100dvh-10.5rem)] p-0 md:max-w-4xl"
+            : "pb-24 pt-4"
         }`}
       >
       {step > 0 ? (
@@ -125,18 +127,19 @@ export default function FirstPlanOnboarding({
 
       <section
         className={`discipleos-functional-surface overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.3)] ${
-          step === 0 ? "p-2.5 sm:p-8" : "p-5 sm:p-8"
+          step === 0 ? "flex flex-1 flex-col p-2.5 sm:p-8" : "p-5 sm:p-8"
         }`}
       >
         {step === 0 ? (
-          <div className="space-y-2 sm:space-y-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 sm:gap-6">
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
               previewOnly={previewOnly}
+              layout="onboarding"
             />
             {!isSignedIn && !previewOnly ? (
-              <div className="max-w-xl text-[11px] leading-4 text-white/60 sm:text-sm sm:leading-6">
+              <div className="shrink-0 max-w-xl text-[11px] leading-4 text-white/60 sm:text-sm sm:leading-6">
                 Sync plans:{" "}
                 <Link
                   href="/sign-up"
