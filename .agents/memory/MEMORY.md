@@ -6,6 +6,7 @@
 - [Mountain Rhythm](mountain-rhythm.md) — Journey progress and on-schedule consistency are separate; late catch-up counts for progress but not its missed day.
 - [Guided Climb boundaries](guided-climb-boundaries.md) — Each curated set stands alone; Set 1 ends after Day 27 and offers optional Mountain Rhythm or Free Climb paths.
 - [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
+- [First-launch path chooser](first-launch-path-chooser.md) — fit contextual path cards, header, and sign-in without scrolling on standard phones; allow scroll only on exceptionally small screens.
 - [Browser smoke tests](browser-smoke-tests.md) — Playwright needs Chromium plus Nix-declared GLib/graphics libraries in this workspace.
 - [Browser auth callback fixtures](browser-auth-callback-fixtures.md) — intercepted auth redirects may not follow; explicitly invoke the callback and restore the app before asserting cookie-backed state.
 - [Mobile menu positioning](mobile-menu-positioning.md) — reserve a bottom action dock outside mobile scrolling content; keep the open navigation panel viewport-centered.

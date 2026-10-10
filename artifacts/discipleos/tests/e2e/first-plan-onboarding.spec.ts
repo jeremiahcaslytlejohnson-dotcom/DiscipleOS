@@ -232,11 +232,19 @@ test("development first-launch preview shows the chooser without mutating saved 
     });
   });
 
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.addInitScript(() => localStorage.clear());
   await page.goto("/?preview=first-launch");
 
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
   await expect(page.getByTestId("first-launch-preview-notice")).toBeVisible();
+  const previewScrollHeight = await page
+    .locator(".discipleos-app-content")
+    .evaluate((element) => element.scrollHeight);
+  const previewClientHeight = await page
+    .locator(".discipleos-app-content")
+    .evaluate((element) => element.clientHeight);
+  expect(previewScrollHeight).toBeLessThanOrEqual(previewClientHeight + 1);
   await expect(page.getByTestId("reading-path-guided-action")).toBeDisabled();
   await expect(page.getByTestId("reading-path-free-climb-action")).toBeDisabled();
   await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
@@ -267,16 +275,26 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
   });
   await page.addInitScript(() => localStorage.clear());
 
-  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 375, height: 667 },
+    { width: 320, height: 568 },
+  ]) {
     await page.setViewportSize(viewport);
     await page.goto("/");
     const onboarding = page.getByTestId("first-plan-onboarding");
     await expect(onboarding).toBeVisible();
-    if (viewport.height === 844) {
-      const box = await onboarding.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    }
+    await expect(page.getByTestId("first-plan-sign-up-link")).toBeVisible();
+    await expect(page.getByTestId("first-plan-sign-in-link")).toBeVisible();
+    await expect(page.locator("header h1")).toBeVisible();
+    await expect(page.getByTestId("reading-path-guided")).toContainText("New readers");
+    await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
+      "structured climbs, reminders",
+    );
+    await expect(page.getByTestId("reading-path-free-climb")).toContainText("confident readers");
+    const contentArea = page.locator(".discipleos-app-content");
+    const contentBox = await contentArea.boundingBox();
+    expect(contentBox).not.toBeNull();
     for (const id of [
       "reading-path-guided-action",
       "reading-path-mountain-rhythm-action",
@@ -287,7 +305,52 @@ test("path choices stay usable on narrow and short phone screens", async ({ page
       const box = await action.boundingBox();
       expect(box?.width).toBeGreaterThanOrEqual(44);
       expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(
+        contentBox!.y + contentBox!.height,
+      );
+      const description = page.getByTestId(
+        `${id.replace("-action", "")}-description`,
+      );
+      const descriptionLines = await description.evaluate((element) => {
+        const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+        return Math.round(element.getBoundingClientRect().height / lineHeight);
+      });
+      expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(2);
     }
+    const scrollMetrics = await contentArea.evaluate((element) => {
+      const describe = (selector: string) => {
+        const node = element.querySelector<HTMLElement>(selector);
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+          top: Math.round(rect.top),
+          height: Math.round(rect.height),
+          scrollHeight: node.scrollHeight,
+          minHeight: style.minHeight,
+          paddingTop: style.paddingTop,
+          paddingBottom: style.paddingBottom,
+        };
+      };
+      return {
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+        shell: describe(".discipleos-shell"),
+        home: describe(".discipleos-content--home"),
+        onboarding: describe("[data-testid='first-plan-onboarding']"),
+        cards: Array.from(
+          element.querySelectorAll<HTMLElement>("[data-testid^='reading-path-']:not([data-testid$='-action'])"),
+        ).map((card) => ({
+          id: card.dataset.testid,
+          top: Math.round(card.getBoundingClientRect().top),
+          height: Math.round(card.getBoundingClientRect().height),
+        })),
+      };
+    });
+    expect(
+      scrollMetrics.scrollHeight,
+      `${viewport.width}x${viewport.height}: ${JSON.stringify(scrollMetrics)}`,
+    ).toBeLessThanOrEqual(scrollMetrics.clientHeight + 1);
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
     );

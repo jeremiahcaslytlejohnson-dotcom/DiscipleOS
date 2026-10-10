@@ -108,40 +108,36 @@ export default function FirstPlanOnboarding({
       <main
         data-testid="first-plan-onboarding"
         className={`mx-auto w-full max-w-2xl sm:pb-10 sm:pt-8 ${
-          step === 0 ? "pb-4 pt-2" : "pb-24 pt-4"
+          step === 0 ? "p-0" : "pb-24 pt-4"
         }`}
       >
-      <div
-        className={`flex items-center justify-between gap-4 px-1 ${
-          step === 0 ? "mb-3 sm:mb-6" : "mb-6"
-        }`}
-      >
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#F4D77A]">
-          <Sparkles className="h-4 w-4" />
-          {step === 0 ? "Choose your path" : `Step ${step} of 5`}
-        </div>
-        {step > 0 ? (
+      {step > 0 ? (
+        <div className="mb-6 flex items-center justify-between gap-4 px-1">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#F4D77A]">
+            <Sparkles className="h-4 w-4" />
+            Step {step} of 5
+          </div>
           <div className="text-xs text-white/45">
             {step === 5 ? "Ready to begin" : "Build your plan"}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <section
         className={`discipleos-functional-surface overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.3)] ${
-          step === 0 ? "p-3 sm:p-8" : "p-5 sm:p-8"
+          step === 0 ? "p-2.5 sm:p-8" : "p-5 sm:p-8"
         }`}
       >
         {step === 0 ? (
-          <div className="space-y-3 sm:space-y-6">
+          <div className="space-y-2 sm:space-y-6">
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
               previewOnly={previewOnly}
             />
             {!isSignedIn && !previewOnly ? (
-              <div className="max-w-xl text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
-                Want to keep your plan synced across devices?{" "}
+              <div className="max-w-xl text-[11px] leading-4 text-white/60 sm:text-sm sm:leading-6">
+                Sync plans:{" "}
                 <Link
                   href="/sign-up"
                   data-testid="first-plan-sign-up-link"
