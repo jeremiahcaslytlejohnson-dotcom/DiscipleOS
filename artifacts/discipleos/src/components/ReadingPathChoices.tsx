@@ -15,8 +15,8 @@ const paths = [
     key: "guided",
     title: "Guided Climb",
     subtitle: "Discover Scripture",
-    description: "A 27-day guided introduction that gradually layers Genesis, Matthew, Psalms, and Proverbs.",
-    mobileDescription: "New readers: 27-day intro to Genesis, Matthew, Psalms & Proverbs.",
+    description:
+      "New to reading the Bible? Start with a guided 27-day journey that introduces Scripture one step at a time.",
     action: "Start Guided Climb",
     icon: BookOpen,
     testId: "reading-path-guided",
@@ -25,8 +25,8 @@ const paths = [
     key: "mountain",
     title: "Mountain Rhythm",
     subtitle: "Build a lasting reading habit",
-    description: "Establish consistency with structured climbs, reminders, and progress you can track.",
-    mobileDescription: "For consistency: structured climbs, reminders & progress tracking.",
+    description:
+      "Struggling to read consistently? Build a lasting habit with structured climbs, reminders, and progress tracking.",
     action: "Choose a climb",
     icon: Mountain,
     testId: "reading-path-mountain-rhythm",
@@ -35,8 +35,8 @@ const paths = [
     key: "free",
     title: "Free Climb",
     subtitle: "Build a plan your way",
-    description: "Choose, combine, and manage reading plans at your own pace.",
-    mobileDescription: "For confident readers: choose, combine & manage reading plans.",
+    description:
+      "Already reading regularly? Choose and combine Bible reading plans that fit your interests and schedule.",
     action: "Create a Free Climb",
     icon: Sparkles,
     testId: "reading-path-free-climb",
@@ -64,6 +64,11 @@ export default function ReadingPathChoices({
       <h2 className="text-lg font-bold leading-6 tracking-[-0.02em] text-white sm:text-3xl sm:leading-tight">
         {title}
       </h2>
+      {onboardingLayout ? (
+        <p className="discipleos-onboarding-intro text-[13px] leading-[18px] text-[#E2E8F0] sm:text-sm sm:leading-5">
+          Wherever you are in your Scripture journey, there’s a path for you.
+        </p>
+      ) : null}
       {previewOnly ? (
         <p
           role="status"
@@ -132,10 +137,7 @@ export default function ReadingPathChoices({
                     : "md:mt-2 md:leading-6"
                 }`}
               >
-                <span className="md:hidden">
-                  {path.mobileDescription}
-                </span>
-                <span className="hidden md:inline">{path.description}</span>
+                {path.description}
               </span>
               <span
                 className={

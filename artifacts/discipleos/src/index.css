@@ -930,6 +930,12 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
   }
 }
 
+@media (max-height: 640px) {
+  .discipleos-onboarding-intro {
+    display: none;
+  }
+}
+
 @media (max-width: 767px) {
   .discipleos-feedback-trigger {
     right: max(0.75rem, env(safe-area-inset-right));

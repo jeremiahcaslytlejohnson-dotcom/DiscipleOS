@@ -103,6 +103,18 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
   await expect(page.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
 
   await expect(page.getByRole("heading", { name: "How would you like to start?" })).toBeVisible();
+  await expect(page.getByTestId("reading-path-choices")).toContainText(
+    "Wherever you are in your Scripture journey, there’s a path for you.",
+  );
+  await expect(page.getByTestId("reading-path-guided-description")).toHaveText(
+    "New to reading the Bible? Start with a guided 27-day journey that introduces Scripture one step at a time.",
+  );
+  await expect(page.getByTestId("reading-path-mountain-rhythm-description")).toHaveText(
+    "Struggling to read consistently? Build a lasting habit with structured climbs, reminders, and progress tracking.",
+  );
+  await expect(page.getByTestId("reading-path-free-climb-description")).toHaveText(
+    "Already reading regularly? Choose and combine Bible reading plans that fit your interests and schedule.",
+  );
   await expect(page.getByTestId("reading-path-guided")).toContainText("Discover Scripture");
   await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
     "Build a lasting reading habit",
@@ -290,11 +302,20 @@ test("path choices adapt cleanly across small and large phone screens", async ({
     await expect(page.getByTestId("first-plan-sign-in-link")).toBeVisible();
     await expect(page.locator("header h1")).toBeVisible();
     await expect(page.getByTestId("first-launch-preview-notice")).toHaveCount(0);
-    await expect(page.getByTestId("reading-path-guided")).toContainText("New readers");
-    await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
-      "structured climbs, reminders",
+    const intro = page.getByText(
+      "Wherever you are in your Scripture journey, there’s a path for you.",
     );
-    await expect(page.getByTestId("reading-path-free-climb")).toContainText("confident readers");
+    if (viewport.height <= 640) await expect(intro).toBeHidden();
+    else await expect(intro).toBeVisible();
+    await expect(page.getByTestId("reading-path-guided-description")).toHaveText(
+      "New to reading the Bible? Start with a guided 27-day journey that introduces Scripture one step at a time.",
+    );
+    await expect(page.getByTestId("reading-path-mountain-rhythm-description")).toHaveText(
+      "Struggling to read consistently? Build a lasting habit with structured climbs, reminders, and progress tracking.",
+    );
+    await expect(page.getByTestId("reading-path-free-climb-description")).toHaveText(
+      "Already reading regularly? Choose and combine Bible reading plans that fit your interests and schedule.",
+    );
     const contentArea = page.locator(".discipleos-app-content");
     const contentBox = await contentArea.boundingBox();
     expect(contentBox).not.toBeNull();
@@ -320,7 +341,7 @@ test("path choices adapt cleanly across small and large phone screens", async ({
         const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
         return Math.round(element.getBoundingClientRect().height / lineHeight);
       });
-      expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(2);
+      expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(3);
     }
     expect(Math.max(...cardHeights) - Math.min(...cardHeights)).toBeLessThanOrEqual(1);
     expect(Math.max(...cardHeights)).toBeLessThanOrEqual(164);
