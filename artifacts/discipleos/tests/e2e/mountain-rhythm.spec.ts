@@ -1386,6 +1386,17 @@ test("keeps the three summary cards readable across target widths", async ({ pag
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      const typeScale = await metrics.nth(index).evaluate((element) => {
+        const children = Array.from(element.children) as HTMLElement[];
+        return {
+          label: Number.parseFloat(getComputedStyle(children[0]).fontSize),
+          value: Number.parseFloat(getComputedStyle(children[1]).fontSize),
+          detail: Number.parseFloat(getComputedStyle(children[2]).fontSize),
+        };
+      });
+      expect(typeScale.label).toBeGreaterThanOrEqual(12);
+      expect(typeScale.value).toBeGreaterThanOrEqual(18);
+      expect(typeScale.detail).toBeGreaterThanOrEqual(13);
     }
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
@@ -1397,6 +1408,16 @@ test("keeps the three summary cards readable across target widths", async ({ pag
   ).toBe(true);
   await expect(page.getByTestId("mountain-rhythm-mountain")).toBeVisible();
   await expect(page.getByTestId("mountain-rhythm-milestones")).toBeVisible();
+  await expect(page.getByTestId("mountain-rhythm-status")).toContainText("Today’s next step");
+  await expect(page.getByTestId("mountain-rhythm-level-name-50")).toHaveCSS("font-size", "16px");
+  await expect(page.getByTestId("mountain-rhythm-level-threshold-50")).toHaveCSS("font-size", "13px");
+  const dayLabels = page.getByTestId("mountain-rhythm-day-labels").locator("text");
+  await expect(dayLabels.first()).toHaveAttribute("font-size", "12");
+  const helpToggle = page.getByTestId("mountain-rhythm-help-toggle");
+  await expect(helpToggle).toBeVisible();
+  await expect(page.getByTestId("mountain-rhythm-help-copy")).toBeHidden();
+  await helpToggle.click();
+  await expect(page.getByTestId("mountain-rhythm-help-copy")).toBeVisible();
 });
 
 test("keeps Mountain Rhythm hierarchy single-layer with compact corners", async ({ page }) => {

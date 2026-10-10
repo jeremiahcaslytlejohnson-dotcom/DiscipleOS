@@ -723,7 +723,7 @@ export default function MountainRhythm() {
             <h1 className="discipleos-page-title">
               Mountain Rhythm
             </h1>
-             <p className="discipleos-safe-text mt-4 max-w-2xl text-base leading-7 text-white/65 sm:text-lg">
+              <p className={`discipleos-secondary-copy discipleos-safe-text mt-3 max-w-2xl ${selectedPlan ? "text-sm leading-6" : "text-base leading-7 sm:text-lg"}`}>
               One clear route for Scripture consistency. Choose a structured climb, then take the next faithful step.
             </p>
           </section>
@@ -741,7 +741,7 @@ export default function MountainRhythm() {
                 <Mountain className="discipleos-section-heading__icon" />
                 Choose your climb
               </div>
-                <p className="discipleos-secondary-copy discipleos-safe-text mt-2 text-sm leading-6">
+                <p className={`discipleos-secondary-copy discipleos-safe-text mt-2 ${selectedPlan ? "text-[13px] leading-5" : "text-sm leading-6"}`}>
                 Only the selected structured climb shapes your ascent. Ordinary reading plans stay available in Plans.
               </p>
               <div className="mt-5 space-y-3">
@@ -756,19 +756,19 @@ export default function MountainRhythm() {
                       key={choice.kind}
                       onClick={() => !later && !locked && !unavailable && requestStartClimb(choice.kind)}
                       disabled={later || locked || unavailable}
-                      className={`discipleos-item-surface w-full p-4 text-left ${active ? "border-[#D4A017] bg-[#D4A017]/15" : choice.kind === "7-day-climb" ? "border-sky-300/25 bg-sky-300/[0.06]" : choice.kind === "20-day-reset" ? "border-[#D4A017]/35 bg-[#D4A017]/[0.08]" : "border-white/10 bg-white/[0.03]"} ${later || locked || unavailable ? "cursor-not-allowed opacity-60" : "hover:border-[#D4A017]/60 hover:bg-[#D4A017]/10"}`}
+                      className={`discipleos-item-surface w-full p-4 text-left ${active ? "border-[#D4A017] bg-[#D4A017]/15" : choice.kind === "7-day-climb" ? "border-sky-300/25 bg-sky-300/[0.06]" : choice.kind === "20-day-reset" ? "border-[#D4A017]/35 bg-[#D4A017]/[0.08]" : "border-white/10 bg-white/[0.03]"} ${later || locked || unavailable ? "cursor-not-allowed opacity-80" : "hover:border-[#D4A017]/60 hover:bg-[#D4A017]/10"}`}
                       data-testid={`button-choose-${choice.kind}`}
                     >
                       <div className="flex min-w-0 items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="break-words leading-5 font-semibold text-white">
+                          <div className="break-words text-base leading-6 font-semibold text-white">
                             {active ? `${choice.label} · In Progress` : completed ? `${choice.label} · Complete` : choice.label}
                           </div>
                             <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-sm leading-5">{choice.description}</div>
                         </div>
-                        {later || locked ? <LockKeyhole className="h-4 w-4 text-white/45" /> : active ? <Check className="h-5 w-5 text-[#F4D77A]" /> : <span className="text-lg text-[#D4A017]">+</span>}
+                        {later || locked ? <LockKeyhole className="h-5 w-5 text-white/75" /> : active ? <Check className="h-5 w-5 text-[#F4D77A]" /> : <span className="text-lg text-[#D4A017]">+</span>}
                       </div>
-                      <div className="discipleos-field-label mt-3 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                      <div className="discipleos-field-label mt-3 text-xs font-semibold uppercase tracking-[0.12em]">
                         {later ? "Coming Later" : locked ? "Locked" : active ? "In Progress" : unavailable ? "Available after this climb." : completed ? "Completed" : "Start this route"}
                       </div>
                     </Button>
@@ -973,13 +973,13 @@ export default function MountainRhythm() {
                      <div className="flex min-w-0 items-center justify-between gap-3">
                      <div className="min-w-0">
                           <div className="discipleos-section-heading"><RouteIcon className="discipleos-section-heading__icon" /> Route to date</div>
-                        <p className="discipleos-secondary-copy discipleos-safe-text mt-1 text-sm">
+                         <p className="discipleos-secondary-copy discipleos-safe-text mt-1 text-[15px] leading-6">
                           {selectedPlan.name}
                           {selectedPlanAverageMinutes > 0 ? ` · about ${selectedPlanAverageMinutes} min/day` : ""}
                           {" · future readings stay hidden until their day"}
                         </p>
                     </div>
-                    <span className="rounded-full border border-[#D4A017]/30 bg-[#D4A017]/10 px-3 py-1 text-xs text-[#F4D77A]">{score.completedDays}/{score.journeyDays} days</span>
+                     <span className="rounded-full border border-[#D4A017]/30 bg-[#D4A017]/10 px-3 py-1 text-[13px] font-medium text-[#F4D77A]">{score.completedDays}/{score.journeyDays} days</span>
                   </div>
                   <div className="mt-5 space-y-3" data-testid="mountain-rhythm-route-days">
                     {currentRoute.map(({ day, dayNumber }: any, index: number) => {
@@ -1022,19 +1022,19 @@ export default function MountainRhythm() {
                               className="flex min-w-0 flex-1 items-start gap-3 rounded-md py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60"
                             >
                               <div
-                                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/20 text-xs font-semibold text-[#F4D77A]"
+                                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/20 text-sm font-semibold text-[#F4D77A]"
                                 data-testid={`route-day-number-${dayNumber}`}
                               >
                                 {dayNumber}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
+                                <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-white">
                                   <span data-testid={`route-day-date-${dayNumber}`}>
                                     {formatDate(day.date)}
                                   </span>
-                                  {day.date === today ? <span className="rounded-full bg-[#D4A017]/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#F4D77A]">Today</span> : null}
+                                  {day.date === today ? <span className="rounded-full bg-[#D4A017]/20 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#F4D77A]">Today</span> : null}
                                 </div>
-                                <div className="discipleos-meta-copy mt-1 text-xs">
+                                <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">
                                   {day.readings.length} reading{day.readings.length === 1 ? "" : "s"} ·{" "}
                                   <EstimatedReadingTime
                                     minutes={estimatedDayMinutes}
@@ -1042,7 +1042,7 @@ export default function MountainRhythm() {
                                   />
                                 </div>
                                 <div
-                                  className="discipleos-secondary-copy mt-1 flex items-center gap-2 text-xs"
+                                  className="discipleos-secondary-copy mt-1 flex items-center gap-2 text-[13px] leading-5"
                                   data-testid={`route-day-status-${dayNumber}`}
                                 >
                                   <StatusMark status={status} />
@@ -1058,7 +1058,7 @@ export default function MountainRhythm() {
                               {day.date <= today ? (
                                 <Button
                                   onClick={() => completeDay(selectedPlan.id, day.date)}
-                                  className="discipleos-control--compact border border-[#D4A017]/25 bg-[#D4A017]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#F4D77A] hover:border-[#D4A017]/50 hover:bg-[#D4A017]/20"
+                                  className="discipleos-control--compact border border-[#D4A017]/25 bg-[#D4A017]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.06em] text-[#F4D77A] hover:border-[#D4A017]/50 hover:bg-[#D4A017]/20"
                                   data-testid={`button-complete-day-${dayNumber}`}
                                 >
                                   {allDone ? "Undo day" : "Complete day"}
@@ -1078,7 +1078,7 @@ export default function MountainRhythm() {
                                 <Button
                                   key={reading.key}
                                   onClick={() => toggleReading(selectedPlan.id, reading.key)}
-                                  className={`discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-sm ${done ? "bg-emerald-300/10 text-emerald-100" : "bg-black/20 text-white/75 hover:bg-[#D4A017]/10"}`}
+                                  className={`discipleos-flat-row flex min-w-0 items-center justify-between gap-3 px-3 py-3 text-left text-[15px] leading-6 ${done ? "bg-emerald-300/10 text-emerald-100" : "bg-black/20 text-white/75 hover:bg-[#D4A017]/10"}`}
                                   data-testid={`button-reading-${reading.key}`}
                                 >
                                   <span className="discipleos-safe-text">{reading.label || `${reading.book} ${reading.chapter}`}</span>
@@ -1095,25 +1095,24 @@ export default function MountainRhythm() {
 
                  <div className="min-w-0 space-y-5">
                     <section data-testid="mountain-rhythm-status" className="min-w-0">
-                     <div className="discipleos-section-heading"><Sparkles className="discipleos-section-heading__icon" /> Today's status</div>
-                     <div className="mt-4 border-l-2 border-[#D4A017]/45 pl-4">
-                       <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Scripture</div>
-                      <div className="mt-2 flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
-                       <div className="discipleos-secondary-copy mt-1 text-sm">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
-                    </div>
+                      <div className="discipleos-meta-copy text-xs font-semibold uppercase tracking-[0.12em]">Today’s next step</div>
+                      <div className="mt-2 border-l-2 border-[#D4A017]/35 pl-3">
+                        <div className="flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
+                        <div className="discipleos-secondary-copy mt-1 text-sm leading-6">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
+                      </div>
                   </section>
 
                     <section data-testid="mountain-rhythm-milestones" className="min-w-0 border-t border-white/10 pt-5">
                      <div className="discipleos-section-heading">Milestones</div>
-                    <div className="mt-4 space-y-3">
+                     <div className="mt-4 space-y-3">
                       {RHYTHM_LEVELS.map((level) => {
                         const reached = score.currentElevationPercent >= level.min;
                         const current = score.level === level.name;
                         return (
                           <div key={level.name} className={`flex items-center gap-3 border-b border-white/10 px-3 py-3 ${current ? "bg-[#D4A017]/10" : "bg-white/[0.025]"}`}>
                             <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${reached ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-200" : "border-white/15 text-white/30"}`}>{reached ? <Check className="h-3.5 w-3.5" /> : <span className="text-xs">{level.min}</span>}</span>
-                             <div className="min-w-0"><div className={`text-sm font-medium ${reached ? "text-white" : "discipleos-meta-copy"}`}>{level.name}</div><div className="discipleos-meta-copy text-xs">{level.min}% elevation</div></div>
-                            {current ? <span className="ml-auto text-[10px] uppercase tracking-[0.12em] text-[#F4D77A]">Current</span> : null}
+                             <div className="min-w-0"><div data-testid={`mountain-rhythm-level-name-${level.min}`} className={`text-base font-medium ${reached ? "text-white" : "discipleos-meta-copy"}`}>{level.name}</div><div data-testid={`mountain-rhythm-level-threshold-${level.min}`} className="discipleos-meta-copy text-[13px] leading-5">{level.min}% elevation</div></div>
+                            {current ? <span className="ml-auto text-xs font-semibold uppercase tracking-[0.08em] text-[#F4D77A]">Current</span> : null}
                           </div>
                         );
                       })}

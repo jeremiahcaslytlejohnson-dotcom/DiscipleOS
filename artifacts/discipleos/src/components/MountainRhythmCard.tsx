@@ -66,7 +66,7 @@ export default function MountainRhythmCard({
             <Mountain className="h-5 w-5 text-[#D4A017]" />
             {title}
           </div>
-          <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-sm">
+          <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-[15px] leading-6">
             {hasJourney ? `${score.journeyLabel} · active reading climb` : "Choose a 7-, 20-, or 40-day reading climb"}
           </div>
         </div>
@@ -85,28 +85,28 @@ export default function MountainRhythmCard({
         <>
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div data-testid="mountain-rhythm-metric-today" className="min-w-0 border-l border-white/10 px-3 py-1 first:border-l-0">
-              <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Today’s reading</div>
-              <div className="mt-1 text-base font-semibold text-white">{todayLabel(score)}</div>
-              <div className="discipleos-meta-copy mt-1 text-xs">
+              <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Today’s reading</div>
+              <div className="mt-1 text-lg font-semibold leading-6 text-white">{todayLabel(score)}</div>
+              <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">
                 {score.todayPlanned
                    ? `${score.todayPercentage}% of today’s reading`
                    : "No reading assigned today"}
               </div>
             </div>
             <div data-testid="mountain-rhythm-metric-journey" className="min-w-0 border-l border-white/10 px-3 py-1">
-              <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Journey progress</div>
-              <div className="mt-1 text-base font-semibold text-emerald-200">
+              <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Journey progress</div>
+              <div className="mt-1 text-lg font-semibold leading-6 text-emerald-200">
                 {score.journeyProgress}%
               </div>
-              <div className="discipleos-meta-copy mt-1 text-xs">
+              <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">
                 {score.completedDays} of {score.journeyDays} planned days
               </div>
             </div>
             {showRhythmMetric ? (
               <div data-testid="mountain-rhythm-metric-rhythm" className="min-w-0 border-l border-white/10 px-3 py-1">
-                <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">Consistency</div>
-                <div className="mt-1 text-base font-semibold text-white">{score.rhythmProgress}%</div>
-                <div className="discipleos-meta-copy mt-1 text-xs">{score.currentTrend} consistency</div>
+                <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Consistency</div>
+                <div className="mt-1 text-lg font-semibold leading-6 text-white">{score.rhythmProgress}%</div>
+                <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">{score.currentTrend} consistency</div>
               </div>
             ) : null}
           </div>
@@ -206,7 +206,7 @@ export default function MountainRhythmCard({
                     data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
                     cy={point.y}
-                    r={rhythmStatus === "future" ? 3 : rhythmStatus === "missed" ? 4 : 4.5}
+                    r={rhythmStatus === "future" ? 4 : rhythmStatus === "missed" ? 5 : 5.5}
                     fill={
                       rhythmStatus === "future"
                         ? "rgba(255,255,255,0.2)"
@@ -235,8 +235,8 @@ export default function MountainRhythmCard({
                       key={`day-label-${point.date}`}
                       x={point.x}
                       y="272"
-                      fill="rgba(255,255,255,0.48)"
-                      fontSize="9"
+                      fill="#C9CDD3"
+                      fontSize="12"
                       textAnchor="middle"
                     >
                       {index + 1}
@@ -272,11 +272,11 @@ export default function MountainRhythmCard({
               return (
                 <div
                   key={level.name}
-                   className="absolute left-2 flex w-16 items-center gap-2 sm:left-3"
+                     className="absolute left-2 flex w-16 items-center gap-2 sm:left-3"
                   style={{ bottom: `${12 + index * 17}%` }}
                 >
                   <span
-                     className={`h-2.5 w-2.5 shrink-0 rounded-full border ${
+                     className={`h-3 w-3 shrink-0 rounded-full border ${
                       index === currentIndex
                         ? "border-[#F4D77A] bg-[#D4A017]"
                         : reached
@@ -285,7 +285,7 @@ export default function MountainRhythmCard({
                     }`}
                   />
                    <span
-                     className={`text-[10px] leading-[1.15] ${
+                     className={`text-[11px] font-medium leading-[1.2] ${
                         reached ? "text-white/75" : "discipleos-meta-copy"
                      }`}
                    >
@@ -298,7 +298,7 @@ export default function MountainRhythmCard({
           </div>
 
           <div
-            className="discipleos-safe-text mt-4 flex min-w-0 items-start gap-2 text-xs leading-5 text-[#F4D77A]"
+            className="discipleos-safe-text mt-4 flex min-w-0 items-start gap-2 text-sm leading-5 text-[#F4D77A]"
             data-testid="mountain-rhythm-milestone-line"
           >
             <span>
@@ -307,7 +307,14 @@ export default function MountainRhythmCard({
                 : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit"}`}
             </span>
           </div>
-          <p className="discipleos-secondary-copy mt-3 text-xs leading-5">{RHYTHM_COPY}</p>
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <details className="group">
+              <summary data-testid="mountain-rhythm-help-toggle" className="discipleos-secondary-copy cursor-pointer text-[13px] font-medium leading-5 marker:text-[#F4C542] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C542]">
+                How Mountain Rhythm works
+              </summary>
+              <p data-testid="mountain-rhythm-help-copy" className="discipleos-secondary-copy mt-2 text-sm leading-6">{RHYTHM_COPY}</p>
+            </details>
+          </div>
             </>
           ) : null}
         </>

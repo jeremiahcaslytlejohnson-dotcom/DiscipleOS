@@ -1382,7 +1382,7 @@ test("keeps Mountain Rhythm, empty, and auth secondary states legible", async ({
       };
     });
     expect(routeStates.availableOpacity).toBe("1");
-    expect(routeStates.comingLaterOpacity).toBe("0.6");
+    expect(routeStates.comingLaterOpacity).toBe("0.8");
     expect(routeStates.comingLaterDisabled).toBe(true);
 
     await page.goto("/");
