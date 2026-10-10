@@ -250,13 +250,24 @@ test("development first-launch preview shows the chooser without mutating saved 
 
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
   await expect(page.getByTestId("first-launch-preview-notice")).toBeVisible();
-  const previewScrollHeight = await page
-    .locator(".discipleos-app-content")
-    .evaluate((element) => element.scrollHeight);
-  const previewClientHeight = await page
-    .locator(".discipleos-app-content")
-    .evaluate((element) => element.clientHeight);
-  expect(previewScrollHeight).toBeLessThanOrEqual(previewClientHeight + 1);
+  const previewMetrics = await page.locator(".discipleos-app-content").evaluate((element) => {
+    const home = element.querySelector<HTMLElement>(".discipleos-content--home");
+    const choices = element.querySelector<HTMLElement>('[data-testid="reading-path-choices"]');
+    const notice = element.querySelector<HTMLElement>('[data-testid="first-launch-preview-notice"]');
+    const grid = choices?.querySelector<HTMLElement>(":scope > div");
+    return {
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      homePaddingBottom: home && getComputedStyle(home).paddingBottom,
+      noticeBottom: notice?.getBoundingClientRect().bottom,
+      gridTop: grid?.getBoundingClientRect().top,
+      gridMarginBlockStart: grid && getComputedStyle(grid).marginBlockStart,
+    };
+  });
+  expect(
+    previewMetrics.scrollHeight,
+    JSON.stringify(previewMetrics),
+  ).toBeLessThanOrEqual(previewMetrics.clientHeight + 1);
   await expect(page.getByTestId("reading-path-guided-action")).toBeDisabled();
   await expect(page.getByTestId("reading-path-free-climb-action")).toBeDisabled();
   await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
