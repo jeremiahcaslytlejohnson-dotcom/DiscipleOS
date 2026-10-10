@@ -603,6 +603,7 @@ body:has(.launch-splash) {
   }
 
   .discipleos-app-content > .discipleos-shell.discipleos-shell--first-plan {
+    height: 100%;
     min-height: 100%;
   }
 
@@ -616,9 +617,25 @@ body:has(.launch-splash) {
   }
 
   .discipleos-app-content .discipleos-shell--first-plan .discipleos-content--home {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
     min-height: 100%;
-    padding-top: 0.75rem;
-    padding-bottom: 0.5rem;
+    padding-inline: clamp(0.75rem, 4vw, 1.5rem);
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .discipleos-content--first-plan main[data-testid="first-plan-onboarding"] {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .discipleos-content--first-plan .discipleos-onboarding-footer {
+    display: flex;
+    flex: 0 0 12%;
+    align-items: flex-end;
+    padding-bottom: 0.25rem;
   }
 
   .discipleos-app-bottom-spacer {

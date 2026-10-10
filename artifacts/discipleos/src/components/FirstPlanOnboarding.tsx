@@ -139,8 +139,11 @@ export default function FirstPlanOnboarding({
               layout="onboarding"
             />
             {!isSignedIn && !previewOnly ? (
-              <div className="shrink-0 max-w-xl text-xs leading-4 text-white/75 sm:text-sm sm:leading-6">
-                Sync plans:{" "}
+              <div
+                data-testid="first-plan-lower-controls"
+                className="discipleos-onboarding-footer flex flex-wrap items-center gap-x-1 shrink-0 max-w-xl text-xs leading-4 text-white/75 sm:text-sm sm:leading-6"
+              >
+                <span>Sync plans:</span>
                 <Link
                   href="/sign-up"
                   data-testid="first-plan-sign-up-link"
@@ -148,7 +151,7 @@ export default function FirstPlanOnboarding({
                 >
                   Create a free account first
                 </Link>
-                {" "}or{" "}
+                <span>or</span>
                 <Link
                   href="/sign-in"
                   data-testid="first-plan-sign-in-link"

@@ -4481,7 +4481,7 @@ export default function DiscipleOSApp() {
     return (
       <div className="discipleos-shell min-h-screen text-white">
         <div className="discipleos-content discipleos-content--home">
-          <header className="flex items-center justify-between gap-4 py-3 sm:py-4">
+          <header className="flex items-center justify-between gap-4 py-0 sm:py-4">
             <h1 className="shrink-0 text-xl font-bold tracking-[-0.03em] sm:text-2xl">
               <span className="text-white">DISCIPLE</span>
               <span className="text-[#D4A017]">OS</span>

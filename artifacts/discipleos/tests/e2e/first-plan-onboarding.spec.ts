@@ -335,17 +335,24 @@ test("path choices adapt cleanly across small and large phone screens", async ({
   });
   await page.addInitScript(() => localStorage.clear());
 
-  const cardHeightsByViewport: Array<{ viewportHeight: number; cardHeight: number }> = [];
-  for (const viewport of [
+  const cardHeightsByViewport: Array<{
+    viewportHeight: number;
+    cardHeight: number;
+    cardGap: number;
+  }> = [];
+  const mobileViewports = [
     { width: 320, height: 568 },
     { width: 375, height: 667 },
-    { width: 390, height: 844 },
-    { width: 360, height: 800 },
+    { width: 402, height: 874 },
+    { width: 412, height: 915 },
     { width: 384, height: 854 },
     { width: 448, height: 998 },
-  ]) {
+  ];
+  await page.setViewportSize(mobileViewports[0]);
+  await page.goto("/");
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
+  for (const viewport of mobileViewports) {
     await page.setViewportSize(viewport);
-    await page.goto("/");
     const onboarding = page.getByTestId("first-plan-onboarding");
     await expect(onboarding).toBeVisible();
     await expect(page.getByTestId("first-plan-sign-up-link")).toBeVisible();
@@ -378,6 +385,8 @@ test("path choices adapt cleanly across small and large phone screens", async ({
     const contentBox = await contentArea.boundingBox();
     expect(contentBox).not.toBeNull();
     const cardHeights: number[] = [];
+    const cardTops: number[] = [];
+    const cardBottoms: number[] = [];
     for (const id of [
       "reading-path-guided-action",
       "reading-path-mountain-rhythm-action",
@@ -389,6 +398,8 @@ test("path choices adapt cleanly across small and large phone screens", async ({
       expect(box?.width).toBeGreaterThanOrEqual(44);
       expect(box?.height).toBeGreaterThanOrEqual(44);
       cardHeights.push(box!.height);
+      cardTops.push(box!.y);
+      cardBottoms.push(box!.y + box!.height);
       expect(box!.y + box!.height).toBeLessThanOrEqual(
         contentBox!.y + contentBox!.height,
       );
@@ -414,9 +425,12 @@ test("path choices adapt cleanly across small and large phone screens", async ({
     }
     expect(Math.max(...cardHeights) - Math.min(...cardHeights)).toBeLessThanOrEqual(1);
     expect(Math.max(...cardHeights)).toBeLessThanOrEqual(164);
+    const cardGap =
+      (cardTops[1] - cardBottoms[0] + cardTops[2] - cardBottoms[1]) / 2;
     cardHeightsByViewport.push({
       viewportHeight: viewport.height,
       cardHeight: Math.max(...cardHeights),
+      cardGap,
     });
     const scrollMetrics = await contentArea.evaluate((element) => {
       const describe = (selector: string) => {
@@ -452,6 +466,62 @@ test("path choices adapt cleanly across small and large phone screens", async ({
       scrollMetrics.scrollHeight,
       `${viewport.width}x${viewport.height}: ${JSON.stringify(scrollMetrics)}`,
     ).toBeLessThanOrEqual(scrollMetrics.clientHeight + 1);
+    const zones = await contentArea.evaluate((element) => {
+      const content = element.getBoundingClientRect();
+      const main = element.querySelector<HTMLElement>('[data-testid="first-plan-onboarding"]');
+      const surface = main?.querySelector<HTMLElement>(".discipleos-functional-surface");
+      const choices = element.querySelector<HTMLElement>('[data-testid="reading-path-choices"]');
+      const grid = choices?.querySelector<HTMLElement>(":scope > div");
+      const brandHeader = element.querySelector<HTMLElement>(".discipleos-content--first-plan > header");
+      const choiceHeading = choices?.querySelector<HTMLElement>(":scope > h2");
+      const intro = choices?.querySelector<HTMLElement>(".discipleos-onboarding-intro");
+      const footer = element.querySelector<HTMLElement>("[data-testid='first-plan-lower-controls']");
+      const actions = Array.from(
+        element.querySelectorAll<HTMLElement>('[data-testid$="-action"][data-testid^="reading-path-"]'),
+      );
+      const mainRect = main?.getBoundingClientRect();
+      const describe = (node: HTMLElement | null | undefined) => {
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+          top: rect.top,
+          height: rect.height,
+          flex: style.flex,
+          display: style.display,
+        };
+      };
+      const cardRects = actions.map((action) => action.getBoundingClientRect());
+      const firstCardTop = Math.min(...cardRects.map((rect) => rect.top));
+      const lastCardBottom = Math.max(...cardRects.map((rect) => rect.bottom));
+      return {
+        contentHeight: content.height,
+        mainWidthRatio: mainRect ? mainRect.width / window.innerWidth : 0,
+        topRatio: (firstCardTop - content.top) / content.height,
+        cardsRatio: (lastCardBottom - firstCardTop) / content.height,
+        lowerRatio: (content.bottom - lastCardBottom) / content.height,
+        parts: {
+          main: describe(main),
+          surface: describe(surface),
+          choices: describe(choices),
+          grid: describe(grid),
+          brandHeader: describe(brandHeader),
+          choiceHeading: describe(choiceHeading),
+          intro: describe(intro),
+          footer: describe(footer),
+        },
+      };
+    });
+    expect(zones.mainWidthRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeGreaterThanOrEqual(0.9);
+    expect(zones.mainWidthRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeLessThanOrEqual(0.94);
+    if (viewport.height >= 667) {
+      expect(zones.topRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeGreaterThanOrEqual(0.1);
+      expect(zones.topRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeLessThanOrEqual(0.28);
+      expect(zones.cardsRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeGreaterThanOrEqual(0.58);
+      expect(zones.cardsRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeLessThanOrEqual(0.78);
+      expect(zones.lowerRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeGreaterThanOrEqual(0.1);
+      expect(zones.lowerRatio, `${viewport.width}x${viewport.height}: ${JSON.stringify(zones)}`).toBeLessThanOrEqual(0.23);
+    }
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
     );
@@ -460,8 +530,12 @@ test("path choices adapt cleanly across small and large phone screens", async ({
   const heightFor = (viewportHeight: number) =>
     cardHeightsByViewport.find((result) => result.viewportHeight === viewportHeight)!
       .cardHeight;
-  expect(heightFor(854)).toBeGreaterThan(heightFor(667));
-  expect(heightFor(998)).toBeGreaterThan(heightFor(854));
+  const gapFor = (viewportHeight: number) =>
+    cardHeightsByViewport.find((result) => result.viewportHeight === viewportHeight)!
+      .cardGap;
+  expect(heightFor(874)).toBeGreaterThan(heightFor(667));
+  expect(heightFor(915)).toBeGreaterThanOrEqual(heightFor(874));
+  expect(gapFor(915)).toBeGreaterThan(gapFor(667));
 
   for (const viewport of [
     { width: 1024, height: 768 },
@@ -469,7 +543,6 @@ test("path choices adapt cleanly across small and large phone screens", async ({
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/");
     await expect(page.locator("header h1")).toBeVisible();
     await expect(page.getByTestId("first-plan-sign-in-link")).toBeVisible();
     const cardBoxes = await Promise.all(

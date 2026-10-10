@@ -9,6 +9,12 @@ description: Product guidance for the DiscipleOS phone-sized path-selection scre
 
 **How to apply:** Recheck the full first-launch screen, including header, sign-in, and fixed bottom dock, at short, standard, and tall phone sizes; assert no vertical scroll at standard sizes and verify card heights adapt whenever its layout or copy changes.
 
+**Viewport-proportion rule:** Treat a 15% header/introduction, 70% choices, and 15% lower-controls split as flexible targets, not hard requirements. On the shortest standard phones, preserving readable approved copy and no-scroll may require a larger top zone; on taller phones, use extra height for the cards and their gaps rather than dead space.
+
+**Why:** The brand header and full multi-line introductions constrain the top zone on smaller phones, so forcing the target percentages would require shrinking or removing content the user asked to preserve.
+
+**How to apply:** Measure against the visible content viewport after safe areas and the fixed dock are accounted for; keep the text and all three card actions intact, and verify both the shortest and taller phone sizes.
+
 **Wide-screen rule:** Keep the first-launch choices in a single column on desktop and landscape; widen the container and lay out each card’s label, description, and arrow horizontally instead of squeezing them into three columns. On short landscape screens, compact the cards and keep the feedback control clear of the choices.
 
 **Why:** The user preferred the readable phone card stack and explicitly rejected narrow three-column cards on desktop/landscape.
