@@ -440,6 +440,36 @@ test("keeps audited secondary text readable across responsive DiscipleOS states"
     await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
     await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
 
+    const palette = await page.evaluate(() => {
+      const shell = document.querySelector(".discipleos-shell");
+      if (!shell) return null;
+      const makeProbe = (className: string) => {
+        const probe = document.createElement("span");
+        probe.className = className;
+        probe.setAttribute("aria-hidden", "true");
+        shell.append(probe);
+        return probe;
+      };
+      const muted = makeProbe("text-white/45");
+      const gold = makeProbe("text-[#D4A017]");
+      const outline = makeProbe("border-[#D4A017]/25");
+      const mutedColor = getComputedStyle(muted).color;
+      const goldColor = getComputedStyle(gold).color;
+      const outlineColor = getComputedStyle(outline).borderColor;
+      muted.remove();
+      gold.remove();
+      outline.remove();
+      return {
+        muted: mutedColor,
+        gold: goldColor,
+        outline: outlineColor,
+      };
+    });
+    expect(palette).not.toBeNull();
+    expect(palette.muted).toBe("rgb(193, 204, 216)");
+    expect(palette.gold).toBe("rgb(244, 215, 122)");
+    expect(palette.outline).toBe("rgba(244, 215, 122, 0.5)");
+
     const todayAudit = await auditSecondaryText(page, `Today ${width}px`);
     expect(todayAudit.count).toBeGreaterThan(0);
     expect(todayAudit.failures).toEqual([]);

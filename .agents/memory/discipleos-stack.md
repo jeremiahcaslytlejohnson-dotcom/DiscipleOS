@@ -9,6 +9,12 @@ description: Key decisions and quirks from porting DiscipleOS from Vercel/Next.j
 
 **CSS approach:** The app uses Tailwind v4 direct utility classes (`bg-[#09090f]`, `text-white`, `bg-white/5`, etc.) rather than HSL CSS variables. The `src/index.css` is minimal: plain hex `:root` vars + the `.discipleos-shell` hero background gradient pseudo-element. Do NOT add a complex HSL theme system — it will conflict with the inline styles in Home.tsx.
 
+**Readability preference:** Keep DiscipleOS’s dark, gold-accented aesthetic, but make gold/yellow interactive labels, icons, and outlines bright and make secondary/body text comfortably legible across all views. Preserve semantic status colors (for example, green completed/current and yellow caution/not-current); contrast work must not change layout, spacing, wording, fonts, functionality, or progress calculations.
+
+**Why:** The user explicitly asked for a site-wide contrast/readability pass while preserving the existing product design and status distinctions.
+
+**How to apply:** Prefer shared theme tokens and shared text styles over one-off screen overrides; verify mobile and desktop states across onboarding, Today, Plans, Mountain Rhythm, Calendar, settings, and dialogs.
+
 **DB:** @workspace/db (Drizzle + node-postgres) with three tables: `events`, `reading_plans` (JSONB blob), `push_subscriptions`. Push is web-push (VAPID). The public key is supplied through `VITE_VAPID_PUBLIC_KEY`; private key/subject remain server-only env vars.
 
 **Production reads:** The app uses runtime-managed `DATABASE_URL`, and `replit.md` describes it as auto-provisioned. The actual host is not visible without reading a credential-bearing value, so treat Replit-managed Postgres as likely, not proven; a Neon MCP account may be unrelated.
