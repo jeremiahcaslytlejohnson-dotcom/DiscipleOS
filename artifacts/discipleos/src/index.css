@@ -629,13 +629,13 @@ body:has(.launch-splash) {
   .discipleos-content--first-plan main[data-testid="first-plan-onboarding"] {
     flex: 1 1 auto;
     min-height: 0;
+    justify-content: center;
   }
 
   .discipleos-content--first-plan .discipleos-onboarding-footer {
     display: flex;
-    flex: 0 0 12%;
-    align-items: flex-end;
-    padding-bottom: 0.25rem;
+    flex: 0 0 auto;
+    align-items: center;
   }
 
   .discipleos-app-bottom-spacer {
@@ -915,10 +915,21 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
     padding-bottom: 0.5rem;
   }
 
+  .discipleos-content--first-plan > header {
+    padding-block: 0.5rem;
+  }
+
   .discipleos-content--first-plan
     main[data-testid="first-plan-onboarding"]
     > .discipleos-functional-surface {
     padding: 0.5rem 1rem;
+  }
+
+  .discipleos-content--first-plan
+    main[data-testid="first-plan-onboarding"]
+    > .discipleos-functional-surface
+    > div {
+    gap: 0.5rem;
   }
 
   .discipleos-content--first-plan main[data-testid="first-plan-onboarding"] {
@@ -926,7 +937,6 @@ body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
   }
 
   .discipleos-content--first-plan .discipleos-path-card {
-    min-height: 4rem;
     padding-block: 0.5rem;
   }
 

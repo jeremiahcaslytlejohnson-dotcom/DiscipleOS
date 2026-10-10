@@ -127,11 +127,11 @@ export default function FirstPlanOnboarding({
 
       <section
         className={`discipleos-functional-surface overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.3)] ${
-          step === 0 ? "flex flex-1 flex-col p-2 sm:p-8" : "p-5 sm:p-8"
+          step === 0 ? "flex w-full flex-col p-1.5 sm:p-8" : "p-5 sm:p-8"
         }`}
       >
         {step === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-1.5 sm:gap-6">
+          <div className="flex flex-col gap-1.5 sm:gap-6">
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
@@ -141,7 +141,7 @@ export default function FirstPlanOnboarding({
             {!isSignedIn && !previewOnly ? (
               <div
                 data-testid="first-plan-lower-controls"
-                className="discipleos-onboarding-footer flex flex-wrap items-center gap-x-1 shrink-0 max-w-xl text-xs leading-4 text-white/75 sm:text-sm sm:leading-6"
+                className="discipleos-onboarding-footer flex flex-wrap items-center gap-x-1 max-w-xl text-sm leading-5 text-white/85 sm:leading-6"
               >
                 <span>Sync plans:</span>
                 <Link

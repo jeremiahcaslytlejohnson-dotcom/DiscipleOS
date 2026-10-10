@@ -53,17 +53,19 @@ export default function ReadingPathChoices({
 }: ReadingPathChoicesProps) {
   const onboardingLayout = layout === "onboarding";
   const gridClass = onboardingLayout
-    ? "grid-cols-1 grid-rows-[repeat(3,min-content)] content-between gap-y-0"
+    ? "grid-cols-1 gap-y-3"
     : "grid-cols-1 gap-2 md:grid-cols-3 md:gap-3";
   return (
     <section
       data-testid="reading-path-choices"
       aria-label="Reading paths"
-      className={`flex min-h-0 flex-1 flex-col ${
-        onboardingLayout ? "space-y-1" : "space-y-2"
-      }`}
+      className={
+        onboardingLayout
+          ? "flex flex-col space-y-1"
+          : "flex min-h-0 flex-1 flex-col space-y-2"
+      }
     >
-      <h2 className="text-lg font-bold leading-6 tracking-[-0.02em] text-white sm:text-3xl sm:leading-tight">
+      <h2 className="text-xl font-bold leading-7 tracking-[-0.02em] text-white sm:text-3xl sm:leading-tight">
         {title}
       </h2>
       {onboardingLayout ? (
@@ -90,7 +92,7 @@ export default function ReadingPathChoices({
         </p>
       ) : null}
       <div
-        className={`grid min-h-0 flex-1 ${gridClass} ${
+        className={`grid ${onboardingLayout ? "" : "min-h-0 flex-1"} ${gridClass} ${
           onboardingLayout
             ? ""
             : "md:grid-rows-1 md:content-start"
@@ -101,10 +103,10 @@ export default function ReadingPathChoices({
           const cardClass =
             `discipleos-path-card group flex ${
               onboardingLayout
-                ? "min-h-[clamp(7.25rem,calc((100dvh-27rem)/3),10rem)]"
-                : "min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)]"
-            } w-full min-w-0 flex-col items-stretch justify-center border border-white/12 bg-white/[0.04] p-1 text-left transition hover:border-[#D4A017]/45 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] ${
-              onboardingLayout ? "md:min-h-[5.5rem] md:p-4" : "md:min-h-0 md:p-5"
+                ? "px-4 py-2.5"
+                : "min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)] p-1"
+            } w-full min-w-0 flex-col items-stretch border border-white/12 bg-white/[0.04] text-left transition hover:border-[#D4A017]/45 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] ${
+              onboardingLayout ? "md:min-h-0 md:p-4" : "md:min-h-0 md:p-5"
             }`;
           const MobileContent = (
             <span
@@ -140,10 +142,10 @@ export default function ReadingPathChoices({
               </span>
               <span
                 data-testid={`${path.testId}-description`}
-                className={`mt-1 block text-sm leading-5 text-[#E2E8F0] ${
+                className={`block ${
                   onboardingLayout
-                    ? "md:mt-0 md:min-w-0 md:flex-1 md:leading-5"
-                    : "md:mt-2 md:leading-6"
+                    ? "mt-2 text-base leading-[1.4] text-[#F1F5F9] md:mt-0 md:min-w-0 md:flex-1 md:leading-[1.4]"
+                    : "mt-1 text-sm leading-5 text-[#E2E8F0] md:mt-2 md:leading-6"
                 }`}
               >
                 {path.description}

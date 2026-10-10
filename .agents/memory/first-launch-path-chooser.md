@@ -3,17 +3,11 @@ name: First-launch path chooser
 description: Product guidance for the DiscipleOS phone-sized path-selection screen.
 ---
 
-**Rule:** Explain who each reading path serves and what it does in concise, legible, benefit-oriented copy. On standard phones—including shorter common screens—fit all three full-card choices, the page header, and sign-in access in one viewport with no vertical scrolling. Use consistent card heights that grow on taller phones and compact on shorter phones; center each icon, title, and description inside its card, and distribute spare height between cards rather than leaving large blank card interiors or a bottom gap. Minimize preview-only notices. On exceptionally small devices, never clip inaccessible choices. Preserve the existing entry actions and saved data.
+**Rule:** Explain who each reading path serves and what it does in concise, legible, benefit-oriented copy. Use a compact vertical stack of three full-width, content-sized tappable cards with modest consistent padding and uniform gaps; never stretch cards to fill viewport height or distribute spare height between them. Center the group vertically when the available space permits. Keep descriptions around 16px with clear contrast, all three choices and sign-in access visible without scrolling on standard phones, and preserve the approved copy, entry actions, and saved data. Keep preview-only notices compact and render them only in preview.
 
-**Why:** The user reported that compressed rows gave almost no context, then asked to remove oversized card interiors and bottom whitespace while keeping scrolling off.
+**Why:** The user rejected the viewport-percentage layout because it created large card interiors and gaps with clustered text, and explicitly prioritized coherent visual rhythm and readability over filling the screen.
 
-**How to apply:** Recheck the full first-launch screen, including header, sign-in, and fixed bottom dock, at short, standard, and tall phone sizes; assert no vertical scroll at standard sizes and verify card heights adapt whenever its layout or copy changes.
-
-**Viewport-proportion rule:** Treat a 15% header/introduction, 70% choices, and 15% lower-controls split as flexible targets, not hard requirements. On the shortest standard phones, preserving readable approved copy and no-scroll may require a larger top zone; on taller phones, use extra height for the cards and their gaps rather than dead space.
-
-**Why:** The brand header and full multi-line introductions constrain the top zone on smaller phones, so forcing the target percentages would require shrinking or removing content the user asked to preserve.
-
-**How to apply:** Measure against the visible content viewport after safe areas and the fixed dock are accounted for; keep the text and all three card actions intact, and verify both the shortest and taller phone sizes.
+**How to apply:** Recheck the full first-launch screen, including the header, helper intro, sign-in links, and fixed bottom dock, at 375×667 and tall-phone sizes; assert no vertical or horizontal scroll and verify the sign-in links are not clipped.
 
 **Wide-screen rule:** Keep the first-launch choices in a single column on desktop and landscape; widen the container and lay out each card’s label, description, and arrow horizontally instead of squeezing them into three columns. On short landscape screens, compact the cards and keep the feedback control clear of the choices.
 
