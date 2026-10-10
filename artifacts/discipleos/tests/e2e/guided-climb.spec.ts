@@ -181,7 +181,7 @@ test("Set 1 retains the exact 27-day schedule and is complete without a continua
 
 test("new readers can preview and start Find Your Footing from first-plan onboarding", async ({ page }) => {
   const savedPlans = await stubAppApi(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 600, height: 460 });
   await page.goto("/");
 
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
@@ -189,6 +189,7 @@ test("new readers can preview and start Find Your Footing from first-plan onboar
 
   const preview = page.getByTestId("guided-climb-preview");
   await expect(preview).toBeVisible();
+  await expect(page.getByRole("button", { name: "Feedback", exact: true })).toBeHidden();
   await expect(page.getByTestId("guided-climb-preview-day-1")).toContainText(
     "Genesis 1",
   );

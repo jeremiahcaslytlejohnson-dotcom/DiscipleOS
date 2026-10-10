@@ -19,7 +19,7 @@ export default function GuidedClimbPreview({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/80 p-2 sm:items-center sm:p-5"
+      className="discipleos-guided-climb-preview-layer fixed inset-0 z-[80] flex items-end justify-center bg-black/80 p-2 sm:items-center sm:p-5"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

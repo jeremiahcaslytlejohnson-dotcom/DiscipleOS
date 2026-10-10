@@ -673,6 +673,10 @@ body:has(.launch-splash) {
   transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
+body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
+  display: none;
+}
+
 .discipleos-feedback-trigger:hover {
   border-color: #d4a017;
   background: rgba(33, 26, 13, 0.96);
