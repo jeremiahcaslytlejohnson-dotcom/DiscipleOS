@@ -21,10 +21,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import MountainRhythmCard from "../components/MountainRhythmCard";
+import EstimatedReadingTime from "../components/EstimatedReadingTime";
 import {
   VERSE_COUNTS,
   estimateChapterMinutes,
   estimateChapterMinutesAtWpm,
+  estimateDayMinutes,
+  formatEstimatedReadingTime,
 } from "../bible-data";
 import {
   buildBudgetedReadingJourneySchedule,
@@ -996,6 +999,7 @@ export default function MountainRhythm() {
                       const readingsId = `route-day-readings-${selectedPlan.id}-${day.date}`;
                       const expanded =
                         routeDayExpandedOverrides[routeDayKey] ?? (index === 0);
+                      const estimatedDayMinutes = estimateDayMinutes(day.readings);
                       return (
                         <div
                           key={day.date}
@@ -1007,7 +1011,7 @@ export default function MountainRhythm() {
                             <Button
                               aria-expanded={expanded}
                               aria-controls={readingsId}
-                              aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayNumber} readings, ${formatDate(day.date)}, ${statusLabel}, ${day.readings.length} readings, ${formatTime(day.estimatedMinutes)}`}
+                              aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayNumber} readings, ${formatDate(day.date)}, ${statusLabel}, ${day.readings.length} readings, estimated reading time ${formatEstimatedReadingTime(estimatedDayMinutes)}`}
                               data-testid={`route-day-toggle-${dayNumber}`}
                               onClick={() =>
                                 setRouteDayExpandedOverrides((current) => ({
@@ -1031,7 +1035,11 @@ export default function MountainRhythm() {
                                   {day.date === today ? <span className="rounded-full bg-[#D4A017]/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#F4D77A]">Today</span> : null}
                                 </div>
                                 <div className="discipleos-meta-copy mt-1 text-xs">
-                                  {day.readings.length} reading{day.readings.length === 1 ? "" : "s"} · {formatTime(day.estimatedMinutes)}
+                                  {day.readings.length} reading{day.readings.length === 1 ? "" : "s"} ·{" "}
+                                  <EstimatedReadingTime
+                                    minutes={estimatedDayMinutes}
+                                    testId={`route-day-estimated-reading-time-${dayNumber}`}
+                                  />
                                 </div>
                                 <div
                                   className="discipleos-secondary-copy mt-1 flex items-center gap-2 text-xs"

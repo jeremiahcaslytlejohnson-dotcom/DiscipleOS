@@ -117,6 +117,14 @@ export function estimateDayMinutes(readings: Array<{ book: string; chapter: numb
   return readings.reduce((sum, r) => sum + estimateChapterMinutes(r.book, r.chapter), 0);
 }
 
+export function formatEstimatedReadingTime(minutes: number): string {
+  const totalMinutes = Math.max(0, Math.round(minutes));
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const remainder = totalMinutes % 60;
+  return remainder === 0 ? `${hours} hr` : `${hours} hr ${remainder} min`;
+}
+
 /** Total estimated minutes to read a set of books cover-to-cover */
 export function estimateBooksMinutes(selectedBooks: string[]): number {
   return selectedBooks.reduce((sum, bookName) => {

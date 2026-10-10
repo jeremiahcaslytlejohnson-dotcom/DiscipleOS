@@ -1,8 +1,10 @@
 import {
   GUIDED_CLIMB_SET_ONE,
+  estimateGuidedClimbDraftDayMinutes,
   formatGuidedClimbDay,
   getGuidedClimbDayChapterCount,
 } from "../lib/guided-climb";
+import EstimatedReadingTime from "./EstimatedReadingTime";
 
 type GuidedClimbPreviewProps = {
   open: boolean;
@@ -58,6 +60,7 @@ export default function GuidedClimbPreview({
         >
           {GUIDED_CLIMB_SET_ONE.days.map((day) => {
             const chapterCount = getGuidedClimbDayChapterCount(day);
+            const estimatedMinutes = estimateGuidedClimbDraftDayMinutes(day);
             const heavier = chapterCount >= 4;
 
             return (
@@ -74,15 +77,22 @@ export default function GuidedClimbPreview({
                     {formatGuidedClimbDay(day)}
                   </div>
                 </div>
-                <span
-                  className={`mt-0.5 shrink-0 rounded-full border px-2 py-1 text-[10px] font-medium ${
-                    heavier
-                      ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
-                      : "border-white/10 bg-white/[0.03] text-white/55"
-                  }`}
-                >
-                  {heavier ? "Heavier · " : ""}
-                  {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
+                <span className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[10px] font-medium ${
+                      heavier
+                        ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                        : "border-white/10 bg-white/[0.03] text-white/55"
+                    }`}
+                  >
+                    {heavier ? "Heavier · " : ""}
+                    {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
+                  </span>
+                  <EstimatedReadingTime
+                    minutes={estimatedMinutes}
+                    testId={`guided-climb-estimated-reading-time-day-${day.day}`}
+                    className="text-[10px]"
+                  />
                 </span>
               </li>
             );

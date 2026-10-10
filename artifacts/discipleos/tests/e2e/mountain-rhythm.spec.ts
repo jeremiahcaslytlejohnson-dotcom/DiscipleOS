@@ -964,6 +964,9 @@ for (const route of [
       ),
     ).toBeVisible();
     await expect(page.getByTestId("route-day-1")).toBeVisible();
+    await expect(
+      page.getByTestId("route-day-estimated-reading-time-1"),
+    ).toHaveText(/≈ \d+ min/);
     await expect(page.getByText("Ordinary reading plan", { exact: true })).toHaveCount(0);
 
     const metricValuesBeforeReload = await Promise.all(
@@ -1087,7 +1090,7 @@ test("shows the newest available Route to date day first and collapses earlier d
   ).toContainText("2 readings");
   await expect(
     completedEarlierDay.getByTestId("route-day-toggle-2"),
-  ).toContainText(/About \d+ min|A short reading/);
+  ).toContainText(/≈ \d+ min/);
   await expect(
     completedEarlierDay.getByTestId("route-day-status-2"),
   ).toHaveText("Complete");

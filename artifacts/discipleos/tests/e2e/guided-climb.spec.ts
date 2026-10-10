@@ -193,9 +193,15 @@ test("new readers can preview and start Find Your Footing from first-plan onboar
   await expect(page.getByTestId("guided-climb-preview-day-1")).toContainText(
     "Genesis 1",
   );
+  await expect(
+    page.getByTestId("guided-climb-estimated-reading-time-day-1"),
+  ).toHaveText("≈ 4 min");
   await expect(page.getByTestId("guided-climb-preview-day-27")).toContainText(
     "Genesis 50 · Matthew 27–28",
   );
+  await expect(
+    page.getByTestId("guided-climb-estimated-reading-time-day-27"),
+  ).toHaveText("≈ 15 min");
   expect(await page.getByText("Heavier · 4 chapters", { exact: true }).count()).toBe(7);
 
   await page.getByTestId("guided-climb-preview-day-27").scrollIntoViewIfNeeded();

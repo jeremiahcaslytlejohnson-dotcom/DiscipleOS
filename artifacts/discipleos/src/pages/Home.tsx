@@ -9,6 +9,7 @@ import {
   estimateChapterMinutes,
   estimateChapterMinutesAtWpm,
   estimateDayMinutes,
+  formatEstimatedReadingTime,
   formatMinutes,
 } from "../bible-data";
 import {
@@ -24,6 +25,7 @@ import {
 import InstallButton from "../install-button";
 import FirstPlanOnboarding from "../components/FirstPlanOnboarding";
 import GuidedClimbPreview from "../components/GuidedClimbPreview";
+import EstimatedReadingTime from "../components/EstimatedReadingTime";
 import {
   buildGuidedClimbSetOnePlan,
   isGuidedClimbSetOneComplete,
@@ -410,6 +412,10 @@ function getReadingChapters(reading: any) {
   }));
 }
 
+function getAssignedReadingDayMinutes(readings: any[] = []) {
+  return estimateDayMinutes(readings.flatMap(getReadingChapters));
+}
+
 function getAssignmentMinutes(day: any) {
   if (typeof day?.estimatedMinutes === "number") return day.estimatedMinutes;
   return (day?.readings || []).reduce(
@@ -561,6 +567,7 @@ function PlanDayRow({
         : 0),
     0,
   );
+  const estimatedDayMinutes = getAssignedReadingDayMinutes(readings);
   const dayStatus = readings.length === 0
     ? "No readings"
     : dayComplete
@@ -596,7 +603,7 @@ function PlanDayRow({
         <button
           type="button"
           data-testid={`plan-day-toggle-${dayIdentifier}`}
-          aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings, ${formatDate(day.date)}, ${dayStatus}, ${readings.length} readings, ${completedDayChapters} of ${totalDayChapters} chapters complete`}
+          aria-label={`${expanded ? "Collapse" : "Expand"} Day ${dayIndex + 1} readings, ${formatDate(day.date)}, ${dayStatus}, ${readings.length} readings, ${completedDayChapters} of ${totalDayChapters} chapters complete, estimated reading time ${formatEstimatedReadingTime(estimatedDayMinutes)}`}
           aria-expanded={expanded}
           aria-controls={dayReadingsId}
           onClick={onToggleExpanded}
@@ -635,8 +642,11 @@ function PlanDayRow({
               className="discipleos-meta-copy mt-1 block text-xs"
             >
               {readings.length} reading{readings.length === 1 ? "" : "s"} ·{" "}
-              {completedDayChapters}/{totalDayChapters} chapters complete · ~
-              {formatMinutes(getAssignmentMinutes(day))}
+              {completedDayChapters}/{totalDayChapters} chapters complete ·{" "}
+              <EstimatedReadingTime
+                minutes={estimatedDayMinutes}
+                testId={`plan-day-estimated-reading-time-${dayIdentifier}`}
+              />
             </span>
             {day.guidedLoad === "heavier" ? (
               <span
@@ -648,7 +658,7 @@ function PlanDayRow({
             ) : null}
             <span className="discipleos-meta-copy mt-1 flex items-center gap-1 text-xs">
               <Clock3 className="h-3.5 w-3.5 shrink-0 text-[#D4A017]/70" />
-              Reading time: {formatTime(plan.readingTime || "07:00")}
+              Scheduled: {formatTime(plan.readingTime || "07:00")}
             </span>
           </span>
         </button>
@@ -1931,7 +1941,7 @@ export default function DiscipleOSApp() {
 
     todaysPlans.forEach(({ plan, todayReading }) => {
       const completedMap = getCompletedMap(plan);
-      totalMinutes += getAssignmentMinutes(todayReading);
+      totalMinutes += getAssignedReadingDayMinutes(todayReading.readings);
       todayReading.readings.forEach((reading: any) => {
         const units = Math.max(1, getReadingChapters(reading).length);
         total += units;
@@ -2078,6 +2088,7 @@ export default function DiscipleOSApp() {
           time: plan.readingTime || "07:00",
           notes: `${assignment.readings.length} chapters assigned`,
           readings: assignment.readings,
+          estimatedReadingMinutes: getAssignedReadingDayMinutes(assignment.readings),
           completedCount: assignment.readings.filter(
             (reading) => !!completedMap[reading.key]
           ).length,
@@ -2090,6 +2101,18 @@ export default function DiscipleOSApp() {
       `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`)
     );
   }, [events, plans, selectedCalendarDate]);
+  const dayViewPlanItems = useMemo(
+    () => dayViewItems.filter((item) => item.kind === "plan"),
+    [dayViewItems],
+  );
+  const dayViewCombinedReadingMinutes = useMemo(
+    () =>
+      dayViewPlanItems.reduce(
+        (sum, item) => sum + (item.estimatedReadingMinutes || 0),
+        0,
+      ),
+    [dayViewPlanItems],
+  );
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(Notification.permission);
@@ -3606,6 +3629,11 @@ export default function DiscipleOSApp() {
                 </button>
                 <div className="discipleos-meta-copy mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-7 text-sm">
                   <span>{formatTime(event.time || "07:00")}</span>
+                  <span aria-hidden="true" className="text-white/30">·</span>
+                  <EstimatedReadingTime
+                    minutes={event.estimatedReadingMinutes}
+                    testId={`calendar-estimated-reading-time-${event.planId}`}
+                  />
                   {event.notes ? (
                     <>
                       <span aria-hidden="true" className="text-white/30">·</span>
@@ -4776,7 +4804,12 @@ export default function DiscipleOSApp() {
                       data-testid="dashboard-assigned-reading-estimate"
                       className="discipleos-secondary-copy mt-1 text-sm"
                     >
-                      ~{formatMinutes(todayAssignedReadingSummary.totalMinutes)} estimated reading
+                      <EstimatedReadingTime
+                        minutes={todayAssignedReadingSummary.totalMinutes}
+                        testId="today-total-estimated-reading-time"
+                        className="ml-1"
+                      />{" "}
+                      estimated reading
                     </div>
                   ) : null}
                 </div>
@@ -4822,7 +4855,11 @@ export default function DiscipleOSApp() {
                             {plan.name}
                           </div>
                           <div className="discipleos-meta-copy mt-2 text-sm">
-                            {todayReading.readings.length} reading{todayReading.readings.length === 1 ? "" : "s"} · ~{formatMinutes(getAssignmentMinutes(todayReading))}
+                            {todayReading.readings.length} reading{todayReading.readings.length === 1 ? "" : "s"} ·{" "}
+                            <EstimatedReadingTime
+                              minutes={getAssignedReadingDayMinutes(todayReading.readings)}
+                              testId={`today-estimated-reading-time-${plan.id}`}
+                            />
                           </div>
                           {todayReading.guidedLoad === "heavier" ? (
                             <div
@@ -4866,7 +4903,7 @@ export default function DiscipleOSApp() {
                       <div className="discipleos-flat-list grid gap-2 md:grid-cols-2 lg:grid-cols-3">
                         {todayReading.readings.map((reading) => {
                           const done = !!completedMap[reading.key];
-                          const readingMinutes = getAssignmentMinutes({ readings: [reading] });
+                          const readingMinutes = getAssignedReadingDayMinutes([reading]);
                           return (
                             <button
                               key={reading.key}
@@ -4886,7 +4923,7 @@ export default function DiscipleOSApp() {
                                 <div className="discipleos-meta-copy text-sm">
                                   {reading.chapter ? `Chapter ${reading.chapter}` : "Reading"}
                                   {readingMinutes > 0 ? (
-                                    <span className="discipleos-meta-copy ml-2">~{formatMinutes(readingMinutes)}</span>
+                                    <EstimatedReadingTime minutes={readingMinutes} className="ml-2" />
                                   ) : null}
                                 </div>
                               </div>
@@ -5773,14 +5810,21 @@ export default function DiscipleOSApp() {
                      ) : null}
 
                      <div data-testid="calendar-items-list" className="space-y-5">
-                       {dayViewItems.some((event) => event.kind === "plan") ? (
+                            {dayViewPlanItems.length > 0 ? (
                          <div>
-                           <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#F4D77A]/75">
+                            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#F4D77A]/75">
                              <BookOpen className="h-3.5 w-3.5" />
                              Reading
+                              {dayViewPlanItems.length > 1 ? (
+                                <EstimatedReadingTime
+                                  minutes={dayViewCombinedReadingMinutes}
+                                  testId="calendar-combined-estimated-reading-time"
+                                  className="normal-case tracking-normal"
+                                />
+                              ) : null}
                            </div>
                            <div className="discipleos-flat-list">
-                             {dayViewItems.filter((event) => event.kind === "plan").map(renderCalendarItem)}
+                              {dayViewPlanItems.map(renderCalendarItem)}
                            </div>
                          </div>
                        ) : null}

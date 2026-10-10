@@ -520,6 +520,9 @@ test("completes a plan day in one tap, persists it, and exposes undo", async ({ 
   if (await todayReadingToggle.getAttribute("aria-expanded") !== "true") {
     await todayReadingToggle.click();
   }
+  await expect(
+    todayReading.getByTestId("today-estimated-reading-time-complete-day-plan"),
+  ).toHaveText("≈ 4 min");
   const todayCompleteDay = page.getByTestId("today-complete-day-complete-day-plan");
   const todayCompleteDayGeometry = await todayCompleteDay.evaluate((button) => ({
     height: button.getBoundingClientRect().height,
@@ -622,6 +625,15 @@ test("collapses Calendar reading plans independently while keeping the summary a
     await expect(firstRow).toContainText("bible");
     await expect(firstRow).toContainText(/6:45/);
     await expect(firstRow).toContainText("3 chapters assigned");
+    await expect(
+      firstRow.getByTestId(`calendar-estimated-reading-time-${firstPlan.id}`),
+    ).toHaveText("≈ 4 min");
+    await expect(
+      secondRow.getByTestId(`calendar-estimated-reading-time-${secondPlan.id}`),
+    ).toHaveText("≈ 6 min");
+    await expect(
+      activities.getByTestId("calendar-combined-estimated-reading-time"),
+    ).toHaveText("≈ 10 min");
     const firstCompleteDay = firstRow.getByRole("button", { name: /^(Complete|Undo) day$/ });
     await expect(firstCompleteDay).toBeVisible();
     const completeDayGeometry = await firstCompleteDay.evaluate((button) => ({
@@ -717,7 +729,9 @@ test("collapses Plan details day readings independently while preserving complet
   await (await openDashboardNavigation(page))
     .getByRole("button", { name: "Plans", exact: true })
     .click();
-  await page.getByTestId(`planned-reading-card-${plan.id}`).click();
+  const planCard = page.getByTestId(`planned-reading-card-${plan.id}`);
+  await expect(planCard).not.toContainText("≈");
+  await planCard.click();
 
   const details = page.getByTestId("dashboard-plan-details");
   const firstIdentifier = `${plan.id}-${today}`;
@@ -754,6 +768,9 @@ test("collapses Plan details day readings independently while preserving complet
   await expect(firstDay.getByTestId(`plan-day-progress-${firstIdentifier}`)).toContainText(
     "2 readings · 1/2 chapters complete",
   );
+  await expect(
+    firstDay.getByTestId(`plan-day-estimated-reading-time-${firstIdentifier}`),
+  ).toHaveText("≈ 3 min");
   await expect(secondToggle).toContainText("Day 2 of 2");
   await expect(secondDay.getByTestId(`plan-day-status-${secondIdentifier}`)).toHaveText("Upcoming");
   await expect(firstAction).toHaveText("Complete day");

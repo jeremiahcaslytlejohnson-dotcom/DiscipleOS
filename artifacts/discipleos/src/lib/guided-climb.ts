@@ -1,5 +1,6 @@
 import { addDaysISO } from "./local-date";
 import type { ScheduleBook, ScheduleAssignment } from "./reading-schedule";
+import { estimateDayMinutes } from "../bible-data";
 
 export type GuidedClimbReadingRange = {
   book: string;
@@ -151,6 +152,17 @@ export function getGuidedClimbDayChapterCount(draftDay: GuidedClimbDraftDay) {
   return draftDay.readings.reduce(
     (sum, range) => sum + range.to - range.from + 1,
     0,
+  );
+}
+
+export function estimateGuidedClimbDraftDayMinutes(draftDay: GuidedClimbDraftDay) {
+  return estimateDayMinutes(
+    draftDay.readings.flatMap((range) =>
+      Array.from({ length: range.to - range.from + 1 }, (_, offset) => ({
+        book: range.book,
+        chapter: range.from + offset,
+      })),
+    ),
   );
 }
 

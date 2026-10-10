@@ -13,6 +13,7 @@
 - [Splash-aware visual verification](splash-aware-visual-verification.md) — wait for splash removal; responsive matrices should navigate once per seeded state, then resize.
 - [Responsive disclosure probes](responsive-disclosure-probes.md) — keep mobile-only collapsed content out of geometry probes, while exposing the complete form from the tablet breakpoint upward.
 - [Account reading settings](account-settings.md) — store defaults separately and apply them only when starting a new ordinary reading plan.
+- [Scheduled reading estimates](scheduled-reading-estimates.md) — day-level estimates use the shared verse-count pace, recomputed from current assigned passages.
 - [First-party auth boundary](first-party-auth-boundary.md) — passwordless email-code auth uses Postgres-backed httpOnly sessions; anonymous app-state sessions remain separate.
 - [Browser auth API fixture](browser-auth-api-fixture.md) — real email-code browser tests need Vite’s configured proxy to the local API service and a reserved non-production test domain.
 - [Cross-tab auth sync](auth-cross-tab-sync.md) — logout broadcasts identity invalidation, cancels stale sync/replay, and persists local-only state until explicit sign-in.
