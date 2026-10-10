@@ -6,6 +6,7 @@ type ReadingPathChoicesProps = {
   onStartFreeClimb: () => void;
   activeMountainRhythmLabel?: string | null;
   title?: string;
+  previewOnly?: boolean;
 };
 
 const paths = [
@@ -40,6 +41,7 @@ export default function ReadingPathChoices({
   onStartFreeClimb,
   activeMountainRhythmLabel,
   title = "How would you like to start?",
+  previewOnly = false,
 }: ReadingPathChoicesProps) {
   return (
     <section
@@ -50,6 +52,16 @@ export default function ReadingPathChoices({
       <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-3xl">
         {title}
       </h2>
+      {previewOnly ? (
+        <p
+          role="status"
+          data-testid="first-launch-preview-notice"
+          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-4 py-3 text-sm leading-6 text-white/75"
+        >
+          Preview only. Path actions are disabled, and your saved data will not
+          change.
+        </p>
+      ) : null}
       {activeMountainRhythmLabel ? (
         <p
           data-testid="active-mountain-rhythm-note"
@@ -86,7 +98,12 @@ export default function ReadingPathChoices({
                 <Link
                   href="/mountain-rhythm"
                   data-testid="reading-path-mountain-rhythm-action"
-                  className="discipleos-action mt-5 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/40 bg-[#211A0D] px-3 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+                  aria-disabled={previewOnly}
+                  tabIndex={previewOnly ? -1 : undefined}
+                  onClick={(event) => {
+                    if (previewOnly) event.preventDefault();
+                  }}
+                  className={`discipleos-action mt-5 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/40 bg-[#211A0D] px-3 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E] ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
                 >
                   {activeMountainRhythmLabel
                     ? "Continue Mountain Rhythm"
@@ -97,6 +114,7 @@ export default function ReadingPathChoices({
                 <button
                   type="button"
                   data-testid={`${path.testId}-action`}
+                  disabled={previewOnly}
                   onClick={
                     path.key === "guided"
                       ? onStartGuidedClimb

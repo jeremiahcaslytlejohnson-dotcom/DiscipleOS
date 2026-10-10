@@ -145,3 +145,105 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
     paceMode: "time",
   });
 });
+
+test("development first-launch preview shows the chooser without mutating saved data", async ({ page }) => {
+  let planWriteCount = 0;
+  let eventWriteCount = 0;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: false, user: null }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          established: true,
+          authenticated: false,
+          userId: "dev-preview-user",
+        }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/reading/plans")) {
+      if (request.method() === "POST" || request.method() === "DELETE") {
+        planWriteCount += 1;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          plans: [{ id: "existing-dev-plan", name: "Existing plan", assignments: [], completed: {} }],
+        }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/events")) {
+      if (request.method() === "POST" || request.method() === "DELETE") {
+        eventWriteCount += 1;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          events: [{ id: "existing-dev-event", title: "Existing event", type: "prayer", date: todayISO() }],
+        }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, eventCompletions: [] }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/verse")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ reference: "Psalm 1:1", text: "Blessed is the one." }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  await page.addInitScript(() => localStorage.clear());
+  await page.goto("/?preview=first-launch");
+
+  await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
+  await expect(page.getByTestId("first-launch-preview-notice")).toBeVisible();
+  await expect(page.getByTestId("reading-path-guided-action")).toBeDisabled();
+  await expect(page.getByTestId("reading-path-free-climb-action")).toBeDisabled();
+  await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
+  await expect(page.getByTestId("first-plan-sign-in-link")).toHaveCount(0);
+  expect(planWriteCount).toBe(0);
+  expect(eventWriteCount).toBe(0);
+});

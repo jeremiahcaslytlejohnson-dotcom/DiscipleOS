@@ -1627,6 +1627,10 @@ function AccountControls() {
 }
 
 export default function DiscipleOSApp() {
+  const isFirstLaunchPreview =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("preview") === "first-launch";
   const {
     isLoaded: isAuthLoaded,
     isSignedIn,
@@ -4372,11 +4376,12 @@ export default function DiscipleOSApp() {
   const hasExistingActivity =
     events.length > 0 || Object.keys(eventCompletions).length > 0;
   const showFirstPlanOnboarding =
-    hasHydrated &&
-    hasInitialSyncCompleted &&
-    plans.length === 0 &&
-    !hasExistingActivity &&
-    (isSignedIn || !localOnlyAfterSignOutRef.current);
+    isFirstLaunchPreview ||
+    (hasHydrated &&
+      hasInitialSyncCompleted &&
+      plans.length === 0 &&
+      !hasExistingActivity &&
+      (isSignedIn || !localOnlyAfterSignOutRef.current));
   const showFirstPlanSyncState =
     hasHydrated &&
     !hasInitialSyncCompleted &&
@@ -4531,6 +4536,7 @@ export default function DiscipleOSApp() {
             onCreatePlan={() => createPlan({ onboarding: true })}
             onStartGuidedClimb={startGuidedClimb}
             isSignedIn={isSignedIn}
+            previewOnly={isFirstLaunchPreview}
           />
         </div>
       </div>

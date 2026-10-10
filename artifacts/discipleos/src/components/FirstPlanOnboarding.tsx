@@ -47,6 +47,7 @@ type FirstPlanOnboardingProps = {
   onCreatePlan: () => void;
   onStartGuidedClimb: () => void;
   isSignedIn: boolean;
+  previewOnly?: boolean;
 };
 
 const DAILY_MINUTES = [5, 10, 15, 20, 30];
@@ -82,6 +83,7 @@ export default function FirstPlanOnboarding({
   onCreatePlan,
   onStartGuidedClimb,
   isSignedIn,
+  previewOnly = false,
 }: FirstPlanOnboardingProps) {
   const hasBooks = form.selectedBooks.length > 0;
   const canContinue =
@@ -125,8 +127,9 @@ export default function FirstPlanOnboarding({
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
+              previewOnly={previewOnly}
             />
-            {!isSignedIn ? (
+            {!isSignedIn && !previewOnly ? (
               <div className="max-w-xl text-sm leading-6 text-white/55">
                 Want to keep your plan synced across devices?{" "}
                 <Link
