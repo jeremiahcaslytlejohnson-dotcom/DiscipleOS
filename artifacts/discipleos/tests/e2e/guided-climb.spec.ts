@@ -179,7 +179,7 @@ test("Set 1 retains the exact 27-day schedule and is complete without a continua
   expect(plan.assignments[26].date).toBe(plan.endDate);
 });
 
-test("new readers can start Discover Scripture directly from first-plan choices", async ({ page }) => {
+test("new readers see the introduction before starting Discover Scripture", async ({ page }) => {
   const savedPlans = await stubAppApi(page);
   await page.setViewportSize({ width: 600, height: 460 });
   await page.goto("/");
@@ -187,6 +187,24 @@ test("new readers can start Discover Scripture directly from first-plan choices"
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
   await expect(page.getByTestId("reading-path-guided")).toContainText("27-day");
   await page.getByTestId("reading-path-guided-action").click();
+  const intro = page.getByTestId("guided-climb-preview");
+  await expect(intro).toBeVisible();
+  await expect(intro).toContainText("Start gently, then add a little more reading as you go.");
+  for (const book of ["Genesis", "Matthew", "Psalms", "Proverbs"]) {
+    await expect(intro).toContainText(book);
+  }
+  await expect(intro).toContainText("doesn’t include the full Bible text");
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 600 });
+    const bounds = await intro.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+  }
+  await page.setViewportSize({ width: 600, height: 460 });
+  await intro.getByTestId("guided-climb-reading-time").fill("08:15");
+  await intro.getByTestId("guided-climb-start").click();
 
   await expect(page.getByTestId("first-plan-onboarding")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
@@ -204,6 +222,7 @@ test("new readers can start Discover Scripture directly from first-plan choices"
     "Proverbs",
   ]);
   expect(savedPlan.guidedClimb.set).toBe(1);
+  expect(savedPlan.readingTime).toBe("08:15");
   expect(savedPlan.assignments).toHaveLength(27);
   expect(
     savedPlan.assignments.map((day: any) =>
@@ -297,6 +316,7 @@ test("returning readers can add Guided Climb without replacing an existing plan"
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
   await expect(page.getByTestId("planned-reading-card-existing-reading-plan")).toBeVisible();
   await page.getByTestId("plans-guided-climb-button").click();
+  await expect(page.getByTestId("guided-climb-preview")).toBeVisible();
   await page.getByTestId("guided-climb-start").click();
 
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
@@ -312,6 +332,34 @@ test("returning readers can add Guided Climb without replacing an existing plan"
   await expect(
     page.getByTestId(`planned-reading-card-${savedPlans[0].id}`),
   ).toBeVisible();
+});
+
+test("returning Guided Climb readers can reopen the introduction without restarting", async ({ page }) => {
+  const existingPlan = makeGuidedPlan();
+  const savedPlans = await stubAppApi(page, [existingPlan]);
+  await page.goto("/");
+  await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
+  await page.getByTestId(`guided-climb-introduction-${existingPlan.id}`).click();
+  const intro = page.getByTestId("guided-climb-preview");
+  await expect(intro).toContainText("Your journey and progress are saved.");
+  await expect(intro.getByTestId("guided-climb-reading-time")).toHaveCount(0);
+  await intro.getByTestId("guided-climb-start").click();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  expect(savedPlans).toHaveLength(0);
+});
+
+test("read time can be set while reminder opt-in remains optional", async ({ page }) => {
+  const savedPlans = await stubAppApi(page);
+  await page.goto("/");
+  await page.getByTestId("reading-path-guided-action").click();
+  const intro = page.getByTestId("guided-climb-preview");
+  await expect(intro.getByTestId("guided-climb-reminder-toggle")).not.toBeChecked();
+  await intro.getByTestId("guided-climb-reading-time").fill("06:45");
+  await intro.getByTestId("guided-climb-reminder-toggle").check();
+  await expect(intro).toContainText("Push reminders require you to be signed in");
+  await intro.getByTestId("guided-climb-start").click();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  expect(savedPlans[0].readingTime).toBe("06:45");
 });
 
 test("Day 27 completion offers Mountain Rhythm or a Free Climb, with no required next set", async ({ page }) => {

@@ -1,19 +1,28 @@
-import {
-  GUIDED_CLIMB_SET_ONE,
-  estimateGuidedClimbDraftDayMinutes,
-  formatGuidedClimbDay,
-  getGuidedClimbDayChapterCount,
-} from "../lib/guided-climb";
-import EstimatedReadingTime from "./EstimatedReadingTime";
-
 type GuidedClimbPreviewProps = {
   open: boolean;
+  existingPlan?: boolean;
+  readingTime: string;
+  reminderEnabled: boolean;
+  onReadingTimeChange: (time: string) => void;
+  onReminderChange: (enabled: boolean) => void;
   onClose: () => void;
   onStart: () => void;
 };
 
+const BOOKS = [
+  ["Genesis", "Beginnings: creation, the first families, and the patriarchs."],
+  ["Matthew", "Jesus’ life, teachings, death, and resurrection."],
+  ["Psalms", "Poems and prayers for worship, grief, gratitude, and trust."],
+  ["Proverbs", "Practical wisdom for everyday choices and relationships."],
+];
+
 export default function GuidedClimbPreview({
   open,
+  existingPlan = false,
+  readingTime,
+  reminderEnabled,
+  onReadingTimeChange,
+  onReminderChange,
   onClose,
   onStart,
 }: GuidedClimbPreviewProps) {
@@ -21,7 +30,7 @@ export default function GuidedClimbPreview({
 
   return (
     <div
-      className="discipleos-guided-climb-preview-layer fixed inset-0 z-[80] flex items-end justify-center bg-black/80 p-2 sm:items-center sm:p-5"
+      className="discipleos-guided-climb-preview-layer fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto bg-black/80 p-2 sm:items-center sm:p-5"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -31,75 +40,88 @@ export default function GuidedClimbPreview({
         aria-modal="true"
         aria-labelledby="guided-climb-preview-title"
         data-testid="guided-climb-preview"
-        className="discipleos-functional-surface flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden shadow-2xl"
+        className="discipleos-functional-surface my-auto max-h-[94dvh] w-full max-w-2xl overflow-y-auto shadow-2xl"
       >
-        <header className="shrink-0 border-b border-white/10 p-4 sm:p-6">
+        <header className="border-b border-white/10 p-5 sm:p-7">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#F4D77A]">
-            Optional · Guided Climb Set 1 · 27 days
+            Guided Climb · 27 days
           </div>
-          <h2
-            id="guided-climb-preview-title"
-            className="mt-2 text-2xl font-bold text-white sm:text-3xl"
-          >
-            {GUIDED_CLIMB_SET_ONE.name}
+          <h2 id="guided-climb-preview-title" className="mt-2 text-2xl font-bold text-white sm:text-3xl">
+            Discover Scripture
           </h2>
-          <p className="discipleos-secondary-copy mt-2 max-w-xl text-sm leading-6">
-            A complete beginner plan through Genesis 1–50 and Matthew 1–28,
-            with the listed Psalms and Proverbs. It ends after Day 27; no future
-            set is required.
-          </p>
-          <p className="mt-2 text-xs leading-5 text-white/55">
-            Days marked “Heavier” have the highest chapter load in this
-            schedule. Chapter references are shown below exactly as assigned.
+          <p className="discipleos-secondary-copy mt-3 text-sm leading-6 sm:text-base">
+            Start gently, then add a little more reading as you go. By Day 27,
+            you’ll finish Genesis and Matthew, with selected Psalms and Proverbs
+            along the way.
           </p>
         </header>
 
-        <ol
-          data-testid="guided-climb-preview-days"
-          className="min-h-0 flex-1 divide-y divide-white/[0.07] overflow-y-auto px-4 sm:px-6"
-        >
-          {GUIDED_CLIMB_SET_ONE.days.map((day) => {
-            const chapterCount = getGuidedClimbDayChapterCount(day);
-            const estimatedMinutes = estimateGuidedClimbDraftDayMinutes(day);
-            const heavier = chapterCount >= 4;
+        <div className="space-y-5 p-5 sm:p-7">
+          <section aria-labelledby="guided-climb-books-heading">
+            <h3 id="guided-climb-books-heading" className="text-base font-semibold text-white">
+              Meet the books
+            </h3>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {BOOKS.map(([book, context]) => (
+                <li key={book} className="border border-white/10 bg-white/[0.035] p-3">
+                  <div className="text-sm font-semibold text-[#F4D77A]">{book}</div>
+                  <p className="mt-1 text-sm leading-5 text-white/75">{context}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-            return (
-              <li
-                key={day.day}
-                data-testid={`guided-climb-preview-day-${day.day}`}
-                className="flex min-w-0 items-start justify-between gap-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#F4D77A]">
-                    Day {day.day}
-                  </div>
-                  <div className="discipleos-safe-text mt-0.5 text-sm leading-5 text-white">
-                    {formatGuidedClimbDay(day)}
-                  </div>
-                </div>
-                <span className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
-                  <span
-                    className={`rounded-full border px-2 py-1 text-[10px] font-medium ${
-                      heavier
-                        ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
-                        : "border-white/10 bg-white/[0.03] text-white/55"
-                    }`}
-                  >
-                    {heavier ? "Heavier · " : ""}
-                    {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
-                  </span>
-                  <EstimatedReadingTime
-                    minutes={estimatedMinutes}
-                    testId={`guided-climb-estimated-reading-time-day-${day.day}`}
-                    className="text-[10px]"
-                  />
+          <p className="border-l-2 border-[#D4A017]/60 pl-3 text-sm leading-5 text-white/75">
+            Open a physical Bible or your preferred Bible app for each passage.
+            DiscipleOS organizes and tracks your reading; it doesn’t include the
+            full Bible text.
+          </p>
+
+          {existingPlan ? (
+            <p className="border border-emerald-300/20 bg-emerald-300/[0.04] p-3 text-sm leading-5 text-emerald-100/80">
+              Your journey and progress are saved. Your daily reading time is {readingTime}.
+            </p>
+          ) : (
+          <section className="border border-white/10 bg-white/[0.035] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-white">When would you like to read?</h3>
+                <p className="mt-1 text-xs leading-5 text-white/60">
+                  Choose a time for this plan, or skip it for now.
+                </p>
+              </div>
+              <label className="flex shrink-0 items-center gap-2 text-sm text-white">
+                <span className="sr-only">Daily reading time</span>
+                <input
+                  data-testid="guided-climb-reading-time"
+                  type="time"
+                  value={readingTime}
+                  onChange={(event) => onReadingTimeChange(event.target.value)}
+                  className="min-h-11 border border-white/15 bg-[#10171A] px-3 text-white"
+                />
+              </label>
+            </div>
+            <label className="mt-4 flex items-start gap-3 text-sm leading-5 text-white/80">
+              <input
+                data-testid="guided-climb-reminder-toggle"
+                type="checkbox"
+                checked={reminderEnabled}
+                onChange={(event) => onReminderChange(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-[#D4A017]"
+              />
+              <span>
+                Set a daily reminder at this time
+                <span className="mt-1 block text-xs leading-5 text-white/55">
+                  Push reminders require you to be signed in, grant notification
+                  permission, and enable this device. You can still start without them.
                 </span>
-              </li>
-            );
-          })}
-        </ol>
+              </span>
+            </label>
+          </section>
+          )}
+        </div>
 
-        <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-white/10 p-4 sm:flex-row sm:justify-end sm:p-5">
+        <footer className="flex flex-col-reverse gap-2 border-t border-white/10 p-4 sm:flex-row sm:justify-end sm:p-5">
           <button
             type="button"
             onClick={onClose}
@@ -113,7 +135,7 @@ export default function GuidedClimbPreview({
             onClick={onStart}
             className="discipleos-action min-h-11 bg-[#C8921D] px-5 font-semibold text-black hover:bg-[#D4A017]"
           >
-            Start Discover Scripture
+            {existingPlan ? "Return to Today’s Walk" : "Start Reading"}
           </button>
         </footer>
       </section>

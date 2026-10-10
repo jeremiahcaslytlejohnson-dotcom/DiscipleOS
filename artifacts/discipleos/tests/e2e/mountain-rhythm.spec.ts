@@ -306,7 +306,7 @@ async function expectDistinctMountainMetrics(page: Page, journeyLabel: string) {
   await expect(mountainPanel.getByTestId("mountain-rhythm-mountain")).toBeVisible();
   await expect(
     mountainPanel.getByRole("img", {
-      name: new RegExp(`${journeyLabel} mountain showing`),
+      name: new RegExp(`${journeyLabel} recent seven-day reading-rhythm trail`),
     }),
   ).toBeVisible();
   await expect(page.getByTestId("mountain-rhythm-milestones")).toContainText(
@@ -759,6 +759,39 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[0]).toBe(pointY[1]);
   expect(pointY[2]).toBeLessThan(pointY[1]);
   await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(7);
+  await expect(chart.getByTestId("mountain-rhythm-current-flag-label")).toHaveText("Today");
+  await expect(
+    page.getByTestId("mountain-rhythm-stage-indicator-0"),
+  ).toHaveAttribute("aria-label", "Basecamp: Current stage");
+  await expect(
+    page.getByTestId("mountain-rhythm-stage-indicator-1"),
+  ).toHaveAttribute("aria-label", "On the Trail: Next stage");
+  const stageRail = page.getByTestId("mountain-rhythm-stage-rail");
+  await expect(stageRail.getByText("Milestones")).toBeVisible();
+  for (const width of [320, 360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    const railBox = await stageRail.boundingBox();
+    const chartBox = await chart.boundingBox();
+    const flagBox = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
+    expect(railBox).not.toBeNull();
+    expect(chartBox).not.toBeNull();
+    expect(flagBox).not.toBeNull();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    expect(flagBox!.x).toBeGreaterThanOrEqual(chartBox!.x);
+    expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
+    for (let index = 0; index < 5; index += 1) {
+      const label = stageRail.getByTestId(`mountain-rhythm-stage-label-${index}`);
+      const indicator = stageRail.getByTestId(`mountain-rhythm-stage-indicator-${index}`);
+      const [labelBox, indicatorBox] = await Promise.all([
+        label.boundingBox(),
+        indicator.boundingBox(),
+      ]);
+      expect(labelBox).not.toBeNull();
+      expect(indicatorBox).not.toBeNull();
+      expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(railBox!.x + railBox!.width - 4);
+      expect(Math.abs(labelBox!.y + labelBox!.height / 2 - indicatorBox!.y - indicatorBox!.height / 2)).toBeLessThan(3);
+    }
+  }
 });
 
 test("keeps the chart at Basecamp when every reading is unchecked", async ({ page }) => {
@@ -854,6 +887,7 @@ test("does not offer a locked 20-Day Reset after the 7-Day Climb", async ({ page
 
     await expect(page.getByTestId("mountain-rhythm-complete")).toContainText("7-Day Climb complete");
     await expect(page.getByTestId("completed-climb-7-day-climb")).toContainText("100% journey progress");
+  await expect(page.getByTestId("mountain-rhythm-mountain")).toHaveCount(0);
     await expect(page.getByTestId("button-start-next-20-day-reset")).toHaveCount(0);
     await expect(page.getByTestId("button-choose-20-day-reset")).toBeDisabled();
     await expect(page.getByTestId("button-choose-20-day-reset")).toContainText("Locked");

@@ -1768,6 +1768,10 @@ export default function DiscipleOSApp() {
   const planSessionStartedRef = useRef(false);
   const [isBookPickerOpen, setIsBookPickerOpen] = useState(false);
   const [isGuidedClimbPreviewOpen, setIsGuidedClimbPreviewOpen] = useState(false);
+  const [guidedClimbReadingTime, setGuidedClimbReadingTime] = useState(
+    readingDefaults.preferredReadingTime,
+  );
+  const [guidedClimbReminderEnabled, setGuidedClimbReminderEnabled] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -2835,7 +2839,44 @@ export default function DiscipleOSApp() {
     setForm((prev) => ({ ...prev, name: "" }));
   };
 
-  const startGuidedClimb = () => {
+  const openGuidedClimbIntroduction = () => {
+    const existingPlan = plans.find(isGuidedClimbSetOnePlan);
+    if (existingPlan) setGuidedClimbReadingTime(existingPlan.readingTime || readingDefaults.preferredReadingTime);
+    else setGuidedClimbReadingTime(readingDefaults.preferredReadingTime);
+    setGuidedClimbReminderEnabled(false);
+    setIsGuidedClimbPreviewOpen(true);
+  };
+
+  const selectGuidedClimb = () => {
+    const existingPlan = plans.find(isGuidedClimbSetOnePlan);
+    if (existingPlan) {
+      setSelectedPlanId(existingPlan.id);
+      setActiveTab("today");
+      return;
+    }
+    openGuidedClimbIntroduction();
+  };
+
+  const startGuidedClimb = async () => {
+    const existingPlan = plans.find(isGuidedClimbSetOnePlan);
+    if (existingPlan) {
+      setSelectedPlanId(existingPlan.id);
+      setEditingPlanId(null);
+      setPlanCreatedFeedback(null);
+      setIsGuidedClimbPreviewOpen(false);
+      setIsNavigationOpen(false);
+      setActiveTab("today");
+      return;
+    }
+
+    let reminderReady = false;
+    if (guidedClimbReminderEnabled && isSignedIn) {
+      reminderReady =
+        notificationPermission === "granted" && isSubscribed
+          ? true
+          : await enableNotifications();
+    }
+
     const readingWpm = Number(form.readingWpm) || DEFAULT_READING_WPM;
     const startDate = todayISO();
     const plan = buildGuidedClimbSetOnePlan({
@@ -2845,7 +2886,7 @@ export default function DiscipleOSApp() {
           : `${Date.now()}-${Math.random()}`,
       startDate,
       bookCatalog: BIBLE_BOOKS,
-      readingTime: form.readingTime || "07:00",
+      readingTime: guidedClimbReadingTime || readingDefaults.preferredReadingTime,
       readingWpm,
       dailyMinutes: Number(form.dailyMinutes) || 20,
       estimateChapterMinutes: (book, chapter) =>
@@ -2856,6 +2897,29 @@ export default function DiscipleOSApp() {
     if (!localOnlyAfterSignOutRef.current) {
       savePlanToServer(plan).catch(() => {
         queuePendingOp({ type: "upsert-plan", payload: plan, ts: Date.now() });
+      });
+    }
+    if (guidedClimbReminderEnabled && reminderReady) {
+      const reminderEvent = {
+        id: typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`,
+        title: "Discover Scripture reading",
+        type: "event",
+        date: plan.startDate,
+        time: plan.readingTime,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        notes: "Daily reading reminder for Guided Climb: Discover Scripture.",
+        remind: true,
+        reminderMinutes: 0,
+        repeat: "daily",
+        repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+        repeatUntil: plan.endDate,
+        countsTowardRhythm: false,
+      };
+      setEvents((previous) => upsertEvent(previous, reminderEvent));
+      saveEventToServer(reminderEvent).catch(() => {
+        queuePendingOp({ type: "upsert-event", payload: reminderEvent, ts: Date.now() });
       });
     }
     setSelectedPlanId(plan.id);
@@ -4225,7 +4289,7 @@ export default function DiscipleOSApp() {
   const enableNotifications = async () => {
     if (!isSignedIn) {
       window.location.assign(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/sign-in`);
-      return;
+      return false;
     }
 
     const fail = (message: string) => {
@@ -4243,13 +4307,13 @@ export default function DiscipleOSApp() {
       if (typeof window === "undefined" || !("Notification" in window)) {
         setNotificationPermission("unsupported");
         fail("This browser does not support reminder notifications.");
-        return;
+        return false;
       }
 
       if (!("serviceWorker" in navigator)) {
         setNotificationPermission("unsupported");
         fail("This browser cannot run reminder notifications.");
-        return;
+        return false;
       }
 
       const permission = await Notification.requestPermission();
@@ -4261,14 +4325,14 @@ export default function DiscipleOSApp() {
             ? "Notifications are blocked. Allow them in this site's browser settings, then try again."
             : "Notification permission was not granted. Try again when you are ready.",
         );
-        return;
+        return false;
       }
 
       const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
         console.error("VITE_VAPID_PUBLIC_KEY is not set — cannot create push subscription");
         fail("Reminders are not configured for this app yet.");
-        return;
+        return false;
       }
 
       // Resolve every non-destructive prerequisite before replacing a working
@@ -4321,6 +4385,7 @@ export default function DiscipleOSApp() {
       setIsSubscribed(true);
       setNotificationEnablementState("success");
       showTemporaryNotificationFeedback("Reminders are enabled on this device.");
+      return true;
     } catch (error) {
       console.error("Enable notifications failed:", error);
       const status = (error as Error & { status?: number })?.status;
@@ -4333,6 +4398,7 @@ export default function DiscipleOSApp() {
       } else {
         fail("Reminders could not be enabled. Check browser permissions and try again.");
       }
+      return false;
     }
   };
   const notificationButtonLabel =
@@ -4534,9 +4600,19 @@ export default function DiscipleOSApp() {
             }
             onUseSuggestedEndDate={useOnboardingSuggestedEndDate}
             onCreatePlan={() => createPlan({ onboarding: true })}
-            onStartGuidedClimb={startGuidedClimb}
+            onStartGuidedClimb={selectGuidedClimb}
             isSignedIn={isSignedIn}
             previewOnly={isFirstLaunchPreview}
+          />
+          <GuidedClimbPreview
+            open={isGuidedClimbPreviewOpen}
+            existingPlan={plans.some(isGuidedClimbSetOnePlan)}
+            readingTime={guidedClimbReadingTime}
+            reminderEnabled={guidedClimbReminderEnabled}
+            onReadingTimeChange={setGuidedClimbReadingTime}
+            onReminderChange={setGuidedClimbReminderEnabled}
+            onClose={() => setIsGuidedClimbPreviewOpen(false)}
+            onStart={startGuidedClimb}
           />
         </div>
       </div>
@@ -5994,7 +6070,7 @@ export default function DiscipleOSApp() {
                          <button
                            type="button"
                            data-testid="plans-guided-climb-button"
-                           onClick={() => setIsGuidedClimbPreviewOpen(true)}
+                           onClick={selectGuidedClimb}
                            className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
                          >
                            Guided Climb
@@ -6012,8 +6088,13 @@ export default function DiscipleOSApp() {
                      ) : null}
                   </div>
 
-                   <GuidedClimbPreview
-                     open={isGuidedClimbPreviewOpen}
+    <GuidedClimbPreview
+                    open={isGuidedClimbPreviewOpen}
+                    existingPlan={plans.some(isGuidedClimbSetOnePlan)}
+                    readingTime={guidedClimbReadingTime}
+                    reminderEnabled={guidedClimbReminderEnabled}
+                    onReadingTimeChange={setGuidedClimbReadingTime}
+                    onReminderChange={setGuidedClimbReminderEnabled}
                      onClose={() => setIsGuidedClimbPreviewOpen(false)}
                      onStart={startGuidedClimb}
                    />
@@ -6068,7 +6149,7 @@ export default function DiscipleOSApp() {
                    >
                       <ReadingPathChoices
                         title="Choose a reading path"
-                        onStartGuidedClimb={startGuidedClimb}
+                        onStartGuidedClimb={selectGuidedClimb}
                         onStartFreeClimb={beginCreatePlan}
                         activeMountainRhythmLabel={activeMountainRhythmLabel}
                       />
@@ -6149,8 +6230,21 @@ export default function DiscipleOSApp() {
                                }}
                                data-testid={`plan-card-status-${plan.id}`}
                              >
-                               {stats.percent}% complete
+                              {stats.percent}% complete
                              </span>
+                             {isGuidedClimbSetOnePlan(plan) ? (
+                               <button
+                                 type="button"
+                                 data-testid={`guided-climb-introduction-${plan.id}`}
+                                 onClick={(event) => {
+                                   event.stopPropagation();
+                                   openGuidedClimbIntroduction();
+                                 }}
+                                 className="mt-2 min-h-10 border border-[#D4A017]/30 px-3 text-xs font-semibold text-[#F4D77A] hover:bg-[#D4A017]/10"
+                               >
+                                 About Discover Scripture
+                               </button>
+                             ) : null}
                            </div>
                         </div>
                       );

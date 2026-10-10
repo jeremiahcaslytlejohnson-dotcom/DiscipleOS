@@ -57,6 +57,8 @@ export default function MountainRhythmCard({
     .join("");
   const flagX = Math.max(7, Math.min(geometry.current.x - 5, 342));
   const flagY = Math.max(8, Math.min(geometry.current.y - 30, 246));
+  const currentPointIsToday = geometry.current.date === score?.windowEnd;
+  const flagLabel = currentPointIsToday ? "Today" : "Latest day";
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -124,15 +126,60 @@ export default function MountainRhythmCard({
 
           {!summaryOnly ? (
             <>
-            <div className="relative mt-5 h-[220px] overflow-hidden px-2 py-3 sm:h-[250px] sm:px-4 sm:py-3">
-             <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-20 border-r border-white/[0.08] bg-[#0B1418]/25" />
+             <div className="relative mt-5 h-[220px] overflow-hidden px-2 py-3 sm:h-[250px] sm:px-4 sm:py-3">
+              <div
+                data-testid="mountain-rhythm-stage-rail"
+                className="pointer-events-none absolute inset-y-0 left-0 z-[1] flex w-28 flex-col border-r border-white/[0.12] bg-[#0B1418]/60 px-2 py-3"
+              >
+                <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/55">
+                  Milestones
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col-reverse justify-between">
+                  {RHYTHM_LEVELS.map((level, index) => {
+                    const reached = score.currentElevationPercent >= ASCENT_MARKERS[index];
+                    const current = index === currentIndex;
+                    const next = index === currentIndex + 1 && !score.journeyComplete;
+                    return (
+                      <div key={level.name} className="flex min-h-0 items-center gap-2">
+                        <span
+                          data-testid={`mountain-rhythm-stage-indicator-${index}`}
+                          aria-label={`${level.name}: ${current ? "Current stage" : next ? "Next stage" : reached ? "Reached" : "Not reached"}`}
+                          className={`h-3 w-3 shrink-0 rounded-full border ${
+                            current
+                              ? "border-[#F4D77A] bg-[#D4A017] shadow-[0_0_0_2px_rgba(212,160,23,0.15)]"
+                              : next
+                                ? "border-[#D4A017] bg-[#D4A017]/20"
+                              : reached
+                                ? "border-emerald-200 bg-emerald-400"
+                                : "border-white/30 bg-[#10171A]"
+                          }`}
+                        />
+                        <span
+                          data-testid={`mountain-rhythm-stage-label-${index}`}
+                          className={`min-w-0 text-[11px] font-medium leading-[1.15] ${
+                            current
+                              ? "text-[#F4D77A]"
+                              : next
+                                ? "text-[#E7C76A]"
+                              : reached
+                                ? "text-white/85"
+                                : "text-white/65"
+                          }`}
+                        >
+                          {level.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             <svg
               data-testid="mountain-rhythm-mountain"
-               className="absolute inset-y-0 left-20 h-full w-[calc(100%-5rem)]"
+               className="absolute inset-y-0 left-28 h-full w-[calc(100%-7rem)]"
               viewBox="0 0 360 280"
               preserveAspectRatio="none"
               role="img"
-               aria-label={`${score.journeyLabel} mountain showing ${score.journeyProgress}% journey progress`}
+                aria-label={`${score.journeyLabel} recent seven-day reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
             >
               <defs>
                 <linearGradient id="mountain-fill" x1="0" x2="1" y1="0" y2="1">
@@ -246,7 +293,7 @@ export default function MountainRhythmCard({
               </g>
               <g
                 transform={`translate(${flagX} ${flagY})`}
-                aria-label={`Current position at ${currentLevel}`}
+                 aria-label={`${flagLabel}'s position at ${currentLevel}`}
               >
                 <line
                   x1="5"
@@ -264,48 +311,33 @@ export default function MountainRhythmCard({
                   strokeLinejoin="round"
                   strokeWidth="0.75"
                 />
+                <text
+                  data-testid="mountain-rhythm-current-flag-label"
+                  x={flagX > 300 ? -3 : 22}
+                  y="10"
+                  textAnchor={flagX > 300 ? "end" : "start"}
+                  fill="#F4D77A"
+                  fontSize="15"
+                  fontWeight="600"
+                  stroke="#0B1418"
+                  strokeWidth="2.5"
+                  paintOrder="stroke"
+                >
+                  {flagLabel}
+                </text>
               </g>
             </svg>
-
-            {RHYTHM_LEVELS.map((level, index) => {
-              const reached = score.currentElevationPercent >= ASCENT_MARKERS[index];
-              return (
-                <div
-                  key={level.name}
-                     className="absolute left-2 flex w-16 items-center gap-2 sm:left-3"
-                  style={{ bottom: `${12 + index * 17}%` }}
-                >
-                  <span
-                     className={`h-3 w-3 shrink-0 rounded-full border ${
-                      index === currentIndex
-                        ? "border-[#F4D77A] bg-[#D4A017]"
-                        : reached
-                          ? "border-emerald-200 bg-emerald-400"
-                          : "border-white/25 bg-[#10171A]"
-                    }`}
-                  />
-                   <span
-                     className={`text-[11px] font-medium leading-[1.2] ${
-                        reached ? "text-white/75" : "discipleos-meta-copy"
-                     }`}
-                   >
-                    {level.name}
-                  </span>
-                </div>
-              );
-            })}
 
           </div>
 
           <div
-            className="discipleos-safe-text mt-4 flex min-w-0 items-start gap-2 text-sm leading-5 text-[#F4D77A]"
+            className="discipleos-safe-text mt-4 flex min-w-0 items-start gap-2 text-sm leading-5"
             data-testid="mountain-rhythm-milestone-line"
           >
-            <span>
-              {score.journeyComplete
-                ? `Current: ${currentLevel}`
-                : `Current: ${currentLevel} · Next: ${nextLevel?.name || "Summit"}`}
-            </span>
+            <span className="text-[#F4D77A]">Current: {currentLevel}</span>
+            {!score.journeyComplete ? (
+              <span className="text-[#E7C76A]">· Next: {nextLevel?.name || "Summit"}</span>
+            ) : null}
           </div>
           <div className="mt-3 border-t border-white/10 pt-3">
             <details className="group">
