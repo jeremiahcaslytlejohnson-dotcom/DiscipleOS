@@ -2806,8 +2806,14 @@ test("shows one contained empty Plans state without an abandoned detail column",
   await stubHomeApi(page, []);
   await seedPlans(page, []);
 
-  for (const width of [360, 1280]) {
-    await page.setViewportSize({ width, height: 900 });
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
+    { width: 1440, height: 900 },
+  ]) {
+    const { width } = viewport;
+    await page.setViewportSize(viewport);
     await page.goto("/");
 
     const navigation = await openDashboardNavigation(page);
@@ -2821,6 +2827,24 @@ test("shows one contained empty Plans state without an abandoned detail column",
     await expect(page.getByText("No reading plan selected yet", { exact: false })).toHaveCount(0);
     await expect(page.getByTestId("dashboard-plan-details")).toHaveCount(0);
     await expect(page.getByTestId("reading-path-free-climb-action")).toBeVisible();
+    const pathTitle = emptyState.getByTestId("reading-path-guided-title");
+    const pathDescription = emptyState.getByTestId("reading-path-guided-description");
+    expect(
+      Number.parseFloat(
+        await pathTitle.evaluate((element) => getComputedStyle(element).fontSize),
+      ),
+    ).toBeGreaterThanOrEqual(16);
+    const descriptionStyle = await pathDescription.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        lineHeight: Number.parseFloat(style.lineHeight),
+        color: style.color,
+      };
+    });
+    expect(descriptionStyle.fontSize).toBeGreaterThanOrEqual(14);
+    expect(descriptionStyle.lineHeight).toBeGreaterThanOrEqual(20);
+    expect(descriptionStyle.color).toBe("rgb(226, 232, 240)");
     await expect(page.getByTestId("reading-path-mountain-rhythm-action")).toHaveAttribute(
       "href",
       "/mountain-rhythm",
@@ -2847,9 +2871,52 @@ test("shows one contained empty Plans state without an abandoned detail column",
     expect(layout.empty?.height ?? Infinity).toBeLessThan(1000);
     expect(layout.list?.left ?? -1).toBeGreaterThanOrEqual(12);
     expect(layout.list?.right ?? Infinity).toBeLessThanOrEqual(width - 12);
+    if (width <= 600) {
+      const viewportLayout = await page.evaluate(() => {
+        const content = document.querySelector(".discipleos-app-content");
+        const contentRect = content?.getBoundingClientRect();
+        return {
+          content: contentRect
+            ? { top: contentRect.top, bottom: contentRect.bottom }
+            : null,
+          cards: Array.from(
+            document.querySelectorAll<HTMLElement>('[data-testid^="reading-path-"][data-testid$="-action"]'),
+          ).map((card) => {
+            const rect = card.getBoundingClientRect();
+            return { top: rect.top, bottom: rect.bottom };
+          }),
+        };
+      });
+      expect(
+        viewportLayout.cards.every(
+          (card) =>
+            card.top >= (viewportLayout.content?.top ?? Infinity) &&
+            card.bottom <= (viewportLayout.content?.bottom ?? -Infinity),
+        ),
+        `${width}x${viewport.height}: ${JSON.stringify(viewportLayout)}`,
+      ).toBe(true);
+    }
 
     await page.getByTestId("reading-path-free-climb-action").click();
-    await expect(page.getByTestId("dashboard-build-form")).toBeVisible();
+    const buildForm = page.getByTestId("dashboard-build-form");
+    await expect(buildForm).toBeVisible();
+    const newTestamentChoice = page.getByTestId("plan-create-preset-newTestament");
+    const newTestamentLabel = newTestamentChoice.getByText("New Testament", { exact: true });
+    const newTestamentDetail = newTestamentChoice.getByText(
+      "Read through the New Testament.",
+      { exact: true },
+    );
+    expect(
+      Number.parseFloat(
+        await newTestamentLabel.evaluate((element) => getComputedStyle(element).fontSize),
+      ),
+    ).toBeGreaterThanOrEqual(16);
+    expect(
+      Number.parseFloat(
+        await newTestamentDetail.evaluate((element) => getComputedStyle(element).fontSize),
+      ),
+    ).toBeGreaterThanOrEqual(14);
+    await expect(newTestamentDetail).toHaveCSS("color", "rgb(226, 232, 240)");
   }
 });
 

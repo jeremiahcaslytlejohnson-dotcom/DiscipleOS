@@ -65,7 +65,7 @@ export default function ReadingPathChoices({
         {title}
       </h2>
       {onboardingLayout ? (
-        <p className="discipleos-onboarding-intro text-[13px] leading-[18px] text-[#E2E8F0] sm:text-sm sm:leading-5">
+        <p className="discipleos-onboarding-intro text-sm leading-5 text-[#F1F5F9]">
           Wherever you are in your Scripture journey, there’s a path for you.
         </p>
       ) : null}
@@ -73,7 +73,7 @@ export default function ReadingPathChoices({
         <p
           role="status"
           data-testid="first-launch-preview-notice"
-          className="w-fit border border-[#D4A017]/20 bg-[#D4A017]/[0.04] px-2 py-1 text-[10px] leading-3 text-white/70"
+          className="w-fit border border-[#D4A017]/25 bg-[#D4A017]/[0.04] px-2 py-0.5 text-xs leading-4 text-[#F1F5F9]"
         >
           Preview only · actions disabled · data unchanged
         </p>
@@ -81,7 +81,7 @@ export default function ReadingPathChoices({
       {activeMountainRhythmLabel ? (
         <p
           data-testid="active-mountain-rhythm-note"
-          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-3 py-2 text-xs leading-5 text-white/75 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
+          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-3 py-2 text-sm leading-5 text-[#E2E8F0] sm:px-4 sm:py-3 sm:leading-6"
         >
           Your {activeMountainRhythmLabel} in Mountain Rhythm is still in
           progress. These choices won’t change it.
@@ -97,7 +97,7 @@ export default function ReadingPathChoices({
         {paths.map((path) => {
           const Icon = path.icon;
           const cardClass =
-            `discipleos-path-card group flex min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)] w-full min-w-0 flex-col items-stretch justify-center border border-white/12 bg-white/[0.04] p-2 text-left transition hover:border-[#D4A017]/45 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] ${
+            `discipleos-path-card group flex min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)] w-full min-w-0 flex-col items-stretch justify-center border border-white/12 bg-white/[0.04] p-1 text-left transition hover:border-[#D4A017]/45 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] ${
               onboardingLayout ? "md:min-h-[5.5rem] md:p-4" : "md:min-h-0 md:p-5"
             }`;
           const MobileContent = (
@@ -115,7 +115,10 @@ export default function ReadingPathChoices({
                   <Icon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold leading-5 text-white md:text-lg md:leading-6">
+                  <span
+                    data-testid={`${path.testId}-title`}
+                    className="block text-base font-semibold leading-5 text-white md:text-lg md:leading-6"
+                  >
                     {path.title}
                   </span>
                   <span className="discipleos-path-subtitle mt-1 hidden text-sm font-medium leading-5 text-[#F4D77A] md:block">
@@ -131,7 +134,7 @@ export default function ReadingPathChoices({
               </span>
               <span
                 data-testid={`${path.testId}-description`}
-                className={`mt-1.5 block text-[13px] leading-[18px] text-[#E2E8F0] sm:text-sm sm:leading-5 ${
+                className={`mt-1 block text-sm leading-5 text-[#E2E8F0] ${
                   onboardingLayout
                     ? "md:mt-0 md:min-w-0 md:flex-1 md:leading-5"
                     : "md:mt-2 md:leading-6"

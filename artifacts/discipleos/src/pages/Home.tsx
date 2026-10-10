@@ -4546,7 +4546,16 @@ export default function DiscipleOSApp() {
   return (
     <div className="discipleos-shell min-h-screen text-white">
       <div className="discipleos-content discipleos-content--home">
-        <section className={cn("relative mb-5", hasReturningExperience ? "py-3 sm:py-4" : "py-8 sm:py-12")}>
+        <section
+          className={cn(
+            "relative mb-5",
+            activeTab === "plans" && planViewPlans.length === 0
+              ? "py-3 sm:py-4"
+              : hasReturningExperience
+                ? "py-3 sm:py-4"
+                : "py-8 sm:py-12",
+          )}
+        >
           <header className="flex items-center justify-between gap-4">
             <h1 className={cn("shrink-0 font-bold tracking-[-0.03em]", hasReturningExperience ? "text-xl sm:text-2xl" : "text-xl sm:text-3xl")}>
               <span className="text-white">DISCIPLE</span>
@@ -4556,7 +4565,14 @@ export default function DiscipleOSApp() {
           </header>
 
           {!hasReturningExperience && (
-            <div className="min-w-0 max-w-2xl mt-8 sm:mt-10">
+            <div
+              className={cn(
+                "min-w-0 max-w-2xl mt-8 sm:mt-10",
+                activeTab === "plans" &&
+                  planViewPlans.length === 0 &&
+                  "hidden md:block",
+              )}
+            >
               <>
                 <p className="max-w-[620px] text-4xl font-bold leading-[0.94] tracking-[-0.035em] text-white sm:text-6xl">
                   <span className="block">Discipline that</span>
@@ -5138,14 +5154,14 @@ export default function DiscipleOSApp() {
                           aria-pressed={isPresetSelected}
                           onClick={() => (preset.key === "custom" ? openCustomBookPicker() : togglePreset(preset.key))}
                           className={cn(
-                            "discipleos-choice-row min-h-[76px] px-4 py-3 text-left transition",
+                   "discipleos-choice-row min-h-[76px] px-4 py-3 text-left transition",
                             isPresetSelected
                               ? "border-[#D4A017]/50 bg-[#D4A017]/15 text-[#F4D77A]"
                               : "text-[#F8FAFC] hover:bg-white/5",
                           )}
                         >
-                          <div className="font-medium">{preset.label}</div>
-                          <div className="mt-1 text-xs opacity-70">{preset.detail}</div>
+                          <div className="text-base font-semibold leading-5">{preset.label}</div>
+                          <div className="mt-1 text-sm leading-5 text-[#E2E8F0]">{preset.detail}</div>
                         </button>
                       );
                     })}
@@ -5958,11 +5974,17 @@ export default function DiscipleOSApp() {
              <div
                data-testid="dashboard-plans-list"
                 className={cn(
-                  "discipleos-functional-surface min-w-0 space-y-5 p-4 sm:p-5",
+                 "discipleos-functional-surface min-w-0 space-y-5 p-4 sm:p-5",
+                 planViewPlans.length === 0 && "space-y-0 p-2 sm:p-5",
                   planViewPlans.length === 0 && "lg:max-w-3xl",
                 )}
              >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                   <div
+                     className={cn(
+                       "flex flex-wrap items-center justify-between gap-3",
+                       planViewPlans.length === 0 && "hidden",
+                     )}
+                   >
                     <div className="discipleos-section-heading">
                       <BookMarked className="discipleos-section-heading__icon" />
                       Planned reading

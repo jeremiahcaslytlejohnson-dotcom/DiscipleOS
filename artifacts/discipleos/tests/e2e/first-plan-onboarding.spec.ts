@@ -115,6 +115,16 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
   await expect(page.getByTestId("reading-path-free-climb-description")).toHaveText(
     "Already reading regularly? Choose and combine Bible reading plans that fit your interests and schedule.",
   );
+  expect(
+    Number.parseFloat(
+      await page.getByTestId("reading-path-guided-title").evaluate((element) => getComputedStyle(element).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(16);
+  expect(
+    Number.parseFloat(
+      await page.getByTestId("reading-path-guided-description").evaluate((element) => getComputedStyle(element).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(14);
   await expect(page.getByTestId("reading-path-guided")).toContainText("Discover Scripture");
   await expect(page.getByTestId("reading-path-mountain-rhythm")).toContainText(
     "Build a lasting reading habit",
@@ -126,6 +136,24 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
   await expect(page.getByTestId("first-plan-choose-books")).toContainText(
     "Build a plan from the books you want to read.",
   );
+  const chooseBooksDescription = page.getByTestId("first-plan-choose-books").getByText(
+    "Build a plan from the books you want to read.",
+  );
+  expect(
+    Number.parseFloat(
+      await chooseBooksDescription.evaluate((element) => getComputedStyle(element).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(14);
+  await expect(chooseBooksDescription).toHaveCSS("color", "rgb(226, 232, 240)");
+  const presetDetail = page
+    .getByTestId("first-plan-preset-gospels")
+    .getByText("Matthew, Mark, Luke, and John");
+  expect(
+    Number.parseFloat(
+      await presetDetail.evaluate((element) => getComputedStyle(element).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(14);
+  await expect(presetDetail).toHaveCSS("color", "rgb(226, 232, 240)");
   await page.getByTestId("first-plan-preset-gospels").click();
   await expect(page.getByTestId("first-plan-preset-gospels")).toHaveAttribute(
     "aria-pressed",
@@ -250,6 +278,15 @@ test("development first-launch preview shows the chooser without mutating saved 
 
   await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
   await expect(page.getByTestId("first-launch-preview-notice")).toBeVisible();
+  await expect(page.getByTestId("first-launch-preview-notice")).toHaveCSS(
+    "color",
+    "rgb(241, 245, 249)",
+  );
+  expect(
+    Number.parseFloat(
+      await page.getByTestId("first-launch-preview-notice").evaluate((element) => getComputedStyle(element).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(12);
   const previewMetrics = await page.locator(".discipleos-app-content").evaluate((element) => {
     const home = element.querySelector<HTMLElement>(".discipleos-content--home");
     const choices = element.querySelector<HTMLElement>('[data-testid="reading-path-choices"]');
@@ -302,6 +339,8 @@ test("path choices adapt cleanly across small and large phone screens", async ({
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
     { width: 384, height: 854 },
     { width: 448, height: 998 },
   ]) {
@@ -317,7 +356,15 @@ test("path choices adapt cleanly across small and large phone screens", async ({
       "Wherever you are in your Scripture journey, there’s a path for you.",
     );
     if (viewport.height <= 640) await expect(intro).toBeHidden();
-    else await expect(intro).toBeVisible();
+    else {
+      await expect(intro).toBeVisible();
+      expect(
+        Number.parseFloat(
+          await intro.evaluate((element) => getComputedStyle(element).fontSize),
+        ),
+      ).toBeGreaterThanOrEqual(14);
+      await expect(intro).toHaveCSS("color", "rgb(241, 245, 249)");
+    }
     await expect(page.getByTestId("reading-path-guided-description")).toHaveText(
       "New to reading the Bible? Start with a guided 27-day journey that introduces Scripture one step at a time.",
     );
@@ -348,11 +395,22 @@ test("path choices adapt cleanly across small and large phone screens", async ({
       const description = page.getByTestId(
         `${id.replace("-action", "")}-description`,
       );
+      const title = page.getByTestId(`${id.replace("-action", "")}-title`);
+      expect(
+        Number.parseFloat(await title.evaluate((element) => getComputedStyle(element).fontSize)),
+      ).toBeGreaterThanOrEqual(16);
+      const descriptionStyle = await description.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { fontSize: Number.parseFloat(style.fontSize), lineHeight: Number.parseFloat(style.lineHeight), color: style.color };
+      });
+      expect(descriptionStyle.fontSize).toBeGreaterThanOrEqual(14);
+      expect(descriptionStyle.lineHeight).toBeGreaterThanOrEqual(20);
+      expect(descriptionStyle.color).toBe("rgb(226, 232, 240)");
       const descriptionLines = await description.evaluate((element) => {
         const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
         return Math.round(element.getBoundingClientRect().height / lineHeight);
       });
-      expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(3);
+      expect(descriptionLines, `${viewport.width}x${viewport.height} ${id}`).toBeLessThanOrEqual(4);
     }
     expect(Math.max(...cardHeights) - Math.min(...cardHeights)).toBeLessThanOrEqual(1);
     expect(Math.max(...cardHeights)).toBeLessThanOrEqual(164);
@@ -407,6 +465,7 @@ test("path choices adapt cleanly across small and large phone screens", async ({
 
   for (const viewport of [
     { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(viewport);

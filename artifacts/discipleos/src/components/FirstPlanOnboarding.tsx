@@ -115,11 +115,11 @@ export default function FirstPlanOnboarding({
       >
       {step > 0 ? (
         <div className="mb-6 flex items-center justify-between gap-4 px-1">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#F4D77A]">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#F4D77A]">
             <Sparkles className="h-4 w-4" />
             Step {step} of 5
           </div>
-          <div className="text-xs text-white/45">
+          <div className="text-sm text-white/70">
             {step === 5 ? "Ready to begin" : "Build your plan"}
           </div>
         </div>
@@ -127,11 +127,11 @@ export default function FirstPlanOnboarding({
 
       <section
         className={`discipleos-functional-surface overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.3)] ${
-          step === 0 ? "flex flex-1 flex-col p-2.5 sm:p-8" : "p-5 sm:p-8"
+          step === 0 ? "flex flex-1 flex-col p-2 sm:p-8" : "p-5 sm:p-8"
         }`}
       >
         {step === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 sm:gap-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5 sm:gap-6">
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
@@ -139,7 +139,7 @@ export default function FirstPlanOnboarding({
               layout="onboarding"
             />
             {!isSignedIn && !previewOnly ? (
-              <div className="shrink-0 max-w-xl text-[11px] leading-4 text-white/60 sm:text-sm sm:leading-6">
+              <div className="shrink-0 max-w-xl text-xs leading-4 text-white/75 sm:text-sm sm:leading-6">
                 Sync plans:{" "}
                 <Link
                   href="/sign-up"
@@ -204,8 +204,8 @@ export default function FirstPlanOnboarding({
                     }`}
                   >
                     <span>
-                      <span className="block font-semibold">{preset.label}</span>
-                      <span className="mt-1 block text-sm text-white/55">
+                      <span className="block text-base font-semibold leading-5">{preset.label}</span>
+                      <span className="mt-1 block text-sm leading-5 text-[#E2E8F0]">
                         {preset.detail}
                       </span>
                     </span>
@@ -230,10 +230,10 @@ export default function FirstPlanOnboarding({
               }`}
             >
               <span>
-                <span className="block font-semibold text-white">
+                <span className="block text-base font-semibold leading-5 text-white">
                   Choose Books
                 </span>
-                <span className="mt-1 block text-sm text-white/55">
+                <span className="mt-1 block text-sm leading-5 text-[#E2E8F0]">
                   Build a plan from the books you want to read.
                 </span>
               </span>

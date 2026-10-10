@@ -14,3 +14,9 @@ description: Product guidance for the DiscipleOS phone-sized path-selection scre
 **Why:** The user preferred the readable phone card stack and explicitly rejected narrow three-column cards on desktop/landscape.
 
 **How to apply:** Check desktop and short-landscape widths for readable descriptions, an unclipped logo, visible sign-in links, and no floating controls covering a choice.
+
+**Plans empty-state rule:** On phone-sized Plans tabs with no plans, hide the marketing hero and redundant “Planned reading” heading, and compact the empty-state container so all three path choices stay visible without scrolling. Restore the hero at desktop widths.
+
+**Why:** The phone dashboard otherwise pushes the last path choice below the viewport; the empty state already has its own “Choose a reading path” heading.
+
+**How to apply:** Keep this compact treatment scoped to the empty Plans tab; do not hide the hero on populated Plans views or alter the first-launch chooser.
