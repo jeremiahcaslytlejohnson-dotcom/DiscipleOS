@@ -47,7 +47,7 @@ export default function ReadingPathChoices({
     <section
       data-testid="reading-path-choices"
       aria-label="Reading paths"
-      className="space-y-4"
+      className="space-y-3 sm:space-y-4"
     >
       <h2 className="text-2xl font-bold tracking-[-0.02em] text-white sm:text-3xl">
         {title}
@@ -56,7 +56,7 @@ export default function ReadingPathChoices({
         <p
           role="status"
           data-testid="first-launch-preview-notice"
-          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-4 py-3 text-sm leading-6 text-white/75"
+          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-3 py-2 text-xs leading-5 text-white/75 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
         >
           Preview only. Path actions are disabled, and your saved data will not
           change.
@@ -65,35 +65,65 @@ export default function ReadingPathChoices({
       {activeMountainRhythmLabel ? (
         <p
           data-testid="active-mountain-rhythm-note"
-          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-4 py-3 text-sm leading-6 text-white/75"
+          className="border border-[#D4A017]/25 bg-[#D4A017]/[0.06] px-3 py-2 text-xs leading-5 text-white/75 sm:px-4 sm:py-3 sm:text-sm sm:leading-6"
         >
           Your {activeMountainRhythmLabel} in Mountain Rhythm is still in
           progress. These choices won’t change it.
         </p>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3 md:gap-3">
         {paths.map((path) => {
           const Icon = path.icon;
           const cardClass =
-            "flex min-w-0 flex-col border border-white/10 bg-white/[0.035] p-4 sm:p-5";
+            "group flex min-h-[4.25rem] w-full min-w-0 items-center gap-3 border border-white/10 bg-white/[0.035] p-3 text-left transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] md:min-h-0 md:flex-col md:items-start md:p-5";
+          const Arrow = (
+            <ArrowRight
+              className="h-4 w-4 shrink-0 text-[#F4D77A] transition-transform group-hover:translate-x-0.5 md:hidden"
+              aria-hidden="true"
+            />
+          );
+          const MobileContent = (
+            <>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D4A017]/30 bg-[#D4A017]/10 text-[#F4D77A] md:h-10 md:w-10 md:rounded-xl">
+                <Icon className="h-[18px] w-[18px] md:h-5 md:w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-base font-semibold leading-5 text-white md:mt-4 md:text-lg md:leading-6">
+                  {path.title}
+                </span>
+                <span className="mt-0.5 block text-sm leading-5 text-[#F4D77A] md:mt-1 md:min-h-10 md:font-medium">
+                  <span className="md:hidden">
+                    {path.key === "guided"
+                      ? "A 27-day starter plan"
+                      : path.key === "mountain"
+                        ? "Build a lasting habit"
+                        : "Choose and combine plans"}
+                  </span>
+                  <span className="hidden md:inline">{path.subtitle}</span>
+                </span>
+                <span className="discipleos-secondary-copy mt-2 hidden flex-1 text-sm leading-6 md:block">
+                  {path.description}
+                </span>
+                <span className="discipleos-action mt-5 hidden min-h-11 items-center justify-center gap-2 border border-[#D4A017]/40 bg-[#211A0D] px-3 text-sm font-semibold text-[#F4D77A] transition group-hover:bg-[#33280E] md:inline-flex">
+                  {path.key === "guided"
+                    ? "Start Guided Climb"
+                    : path.key === "mountain"
+                      ? activeMountainRhythmLabel
+                        ? "Continue Mountain Rhythm"
+                        : "Choose a climb"
+                      : "Create a Free Climb"}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </span>
+              </span>
+              {Arrow}
+            </>
+          );
           return (
             <article
               key={path.key}
               data-testid={path.testId}
-              className={cardClass}
+              className="min-w-0"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#D4A017]/30 bg-[#D4A017]/10 text-[#F4D77A]">
-                <Icon className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold leading-6 text-white">
-                {path.title}
-              </h3>
-              <p className="mt-1 min-h-10 text-sm font-medium leading-5 text-[#F4D77A]">
-                {path.subtitle}
-              </p>
-              <p className="discipleos-secondary-copy mt-2 flex-1 text-sm leading-6">
-                {path.description}
-              </p>
               {path.key === "mountain" ? (
                 <Link
                   href="/mountain-rhythm"
@@ -103,12 +133,9 @@ export default function ReadingPathChoices({
                   onClick={(event) => {
                     if (previewOnly) event.preventDefault();
                   }}
-                  className={`discipleos-action mt-5 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/40 bg-[#211A0D] px-3 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E] ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                  className={`${cardClass} ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
                 >
-                  {activeMountainRhythmLabel
-                    ? "Continue Mountain Rhythm"
-                    : "Choose a climb"}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  {MobileContent}
                 </Link>
               ) : (
                 <button
@@ -120,12 +147,9 @@ export default function ReadingPathChoices({
                       ? onStartGuidedClimb
                       : onStartFreeClimb
                   }
-                  className="discipleos-action mt-5 inline-flex min-h-11 items-center justify-center gap-2 border border-[#D4A017]/40 bg-[#211A0D] px-3 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
+                  className={`${cardClass} ${previewOnly ? "cursor-not-allowed opacity-50" : ""}`}
                 >
-                  {path.key === "guided"
-                    ? "Start Guided Climb"
-                    : "Create a Free Climb"}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  {MobileContent}
                 </button>
               )}
             </article>

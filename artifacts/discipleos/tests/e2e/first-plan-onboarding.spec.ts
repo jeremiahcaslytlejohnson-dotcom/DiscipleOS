@@ -247,3 +247,50 @@ test("development first-launch preview shows the chooser without mutating saved 
   expect(planWriteCount).toBe(0);
   expect(eventWriteCount).toBe(0);
 });
+
+test("path choices stay usable on narrow and short phone screens", async ({ page }) => {
+  await page.route("**/api/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authenticated: false, user: null }) });
+      return;
+    }
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, established: false, authenticated: false, userId: "mobile-path-test" }) });
+      return;
+    }
+    if (pathname.endsWith("/reading/plans")) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, plans: [] }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, events: [], eventCompletions: [] }) });
+  });
+  await page.addInitScript(() => localStorage.clear());
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const onboarding = page.getByTestId("first-plan-onboarding");
+    await expect(onboarding).toBeVisible();
+    if (viewport.height === 844) {
+      const box = await onboarding.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    }
+    for (const id of [
+      "reading-path-guided-action",
+      "reading-path-mountain-rhythm-action",
+      "reading-path-free-climb-action",
+    ]) {
+      const action = page.getByTestId(id);
+      await expect(action).toBeVisible();
+      const box = await action.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(hasHorizontalOverflow).toBe(false);
+  }
+});

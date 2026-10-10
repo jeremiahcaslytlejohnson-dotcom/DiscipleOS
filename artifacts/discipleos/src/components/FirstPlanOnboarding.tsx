@@ -107,9 +107,15 @@ export default function FirstPlanOnboarding({
     <>
       <main
         data-testid="first-plan-onboarding"
-        className="mx-auto w-full max-w-2xl pb-24 pt-4 sm:pb-10 sm:pt-8"
+        className={`mx-auto w-full max-w-2xl sm:pb-10 sm:pt-8 ${
+          step === 0 ? "pb-4 pt-2" : "pb-24 pt-4"
+        }`}
       >
-      <div className="mb-6 flex items-center justify-between gap-4 px-1">
+      <div
+        className={`flex items-center justify-between gap-4 px-1 ${
+          step === 0 ? "mb-3 sm:mb-6" : "mb-6"
+        }`}
+      >
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#F4D77A]">
           <Sparkles className="h-4 w-4" />
           {step === 0 ? "Choose your path" : `Step ${step} of 5`}
@@ -121,16 +127,20 @@ export default function FirstPlanOnboarding({
         ) : null}
       </div>
 
-      <section className="discipleos-functional-surface overflow-hidden p-5 shadow-[0_18px_60px_rgba(0,0,0,0.3)] sm:p-8">
+      <section
+        className={`discipleos-functional-surface overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.3)] ${
+          step === 0 ? "p-3 sm:p-8" : "p-5 sm:p-8"
+        }`}
+      >
         {step === 0 ? (
-          <div className="space-y-6">
+          <div className="space-y-3 sm:space-y-6">
             <ReadingPathChoices
               onStartGuidedClimb={onStartGuidedClimb}
               onStartFreeClimb={() => onStepChange(1)}
               previewOnly={previewOnly}
             />
             {!isSignedIn && !previewOnly ? (
-              <div className="max-w-xl text-sm leading-6 text-white/55">
+              <div className="max-w-xl text-xs leading-5 text-white/55 sm:text-sm sm:leading-6">
                 Want to keep your plan synced across devices?{" "}
                 <Link
                   href="/sign-up"
