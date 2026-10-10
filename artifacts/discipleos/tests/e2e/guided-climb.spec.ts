@@ -202,9 +202,63 @@ test("new readers see the introduction before starting Discover Scripture", asyn
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
   }
+  await page.setViewportSize({ width: 390, height: 600 });
+  const startReading = page.getByRole("button", { name: "Start Reading" });
+  const mobileLayout = await intro.evaluate((element) => {
+    const scrollContainers = [element, ...element.querySelectorAll("*")]
+      .filter((node) => {
+        const style = getComputedStyle(node);
+        return ["auto", "scroll"].includes(style.overflowY) &&
+          node.scrollHeight > node.clientHeight + 1;
+      })
+      .length;
+    const pageContent = document.querySelector(".discipleos-app-content");
+    return {
+      overflowY: getComputedStyle(element).overflowY,
+      maxHeight: getComputedStyle(element).maxHeight,
+      scrollContainers,
+      pageScrolls: pageContent.scrollHeight > pageContent.clientHeight,
+    };
+  });
+  expect(mobileLayout).toEqual({
+    overflowY: "visible",
+    maxHeight: "none",
+    scrollContainers: 0,
+    pageScrolls: true,
+  });
+  await startReading.scrollIntoViewIfNeeded();
+  const startBounds = await startReading.boundingBox();
+  const pageContentBounds = await page.locator(".discipleos-app-content").boundingBox();
+  expect(startBounds).not.toBeNull();
+  expect(pageContentBounds).not.toBeNull();
+  expect(startBounds!.y).toBeGreaterThanOrEqual(pageContentBounds!.y);
+  expect(startBounds!.y + startBounds!.height).toBeLessThanOrEqual(
+    pageContentBounds!.y + pageContentBounds!.height + 1,
+  );
+
+  await page.setViewportSize({ width: 1280, height: 420 });
+  const desktopLayout = await intro.evaluate((element) => ({
+    overflowY: getComputedStyle(element).overflowY,
+    maxHeight: getComputedStyle(element).maxHeight,
+    scrollHeight: document.documentElement.scrollHeight,
+    viewportHeight: window.innerHeight,
+    mobileScrollerOverflow: getComputedStyle(
+      document.querySelector(".discipleos-app-content"),
+    ).overflowY,
+  }));
+  expect(desktopLayout.overflowY).toBe("visible");
+  expect(desktopLayout.maxHeight).toBe("none");
+  expect(desktopLayout.scrollHeight).toBeGreaterThan(desktopLayout.viewportHeight);
+  expect(desktopLayout.mobileScrollerOverflow).not.toBe("auto");
+  await startReading.scrollIntoViewIfNeeded();
+  const desktopStartBounds = await startReading.boundingBox();
+  expect(desktopStartBounds).not.toBeNull();
+  expect(desktopStartBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(desktopStartBounds!.y + desktopStartBounds!.height).toBeLessThanOrEqual(420);
+
   await page.setViewportSize({ width: 600, height: 460 });
   await intro.getByTestId("guided-climb-reading-time").fill("08:15");
-  await intro.getByTestId("guided-climb-start").click();
+  await startReading.click();
 
   await expect(page.getByTestId("first-plan-onboarding")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();

@@ -684,6 +684,10 @@ body:has(.launch-splash) {
     min-height: 100%;
   }
 
+  .discipleos-app-content > .discipleos-shell--first-plan:has(.discipleos-guided-climb-intro) {
+    height: auto;
+  }
+
   .discipleos-shell--first-plan::before {
     height: 100%;
   }
@@ -701,6 +705,12 @@ body:has(.launch-splash) {
     padding-inline: clamp(0.75rem, 4vw, 1.5rem);
     padding-top: max(0.5rem, env(safe-area-inset-top));
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .discipleos-app-content
+    .discipleos-shell--first-plan
+    .discipleos-content--home:has(.discipleos-guided-climb-intro) {
+    height: auto;
   }
 
   .discipleos-content--first-plan main[data-testid="first-plan-onboarding"] {
@@ -785,7 +795,7 @@ body:has(.launch-splash) {
   transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
-body:has(.discipleos-guided-climb-preview-layer) .discipleos-feedback-trigger {
+body:has(.discipleos-guided-climb-intro) .discipleos-feedback-trigger {
   display: none;
 }
 

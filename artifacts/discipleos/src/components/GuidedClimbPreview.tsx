@@ -29,59 +29,51 @@ export default function GuidedClimbPreview({
   if (!open) return null;
 
   return (
-    <div
-      className="discipleos-guided-climb-preview-layer fixed inset-0 z-[80] flex items-end justify-center overflow-y-auto bg-black/80 p-2 sm:items-center sm:p-5"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <section
+      data-testid="guided-climb-preview"
+      aria-labelledby="guided-climb-preview-title"
+      className="discipleos-guided-climb-intro w-full space-y-5 py-3 sm:space-y-6 sm:py-5"
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="guided-climb-preview-title"
-        data-testid="guided-climb-preview"
-        className="discipleos-functional-surface my-auto max-h-[94dvh] w-full max-w-2xl overflow-y-auto shadow-2xl"
-      >
-        <header className="border-b border-white/10 p-5 sm:p-7">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#F4D77A]">
-            Guided Climb · 27 days
-          </div>
-          <h2 id="guided-climb-preview-title" className="mt-2 text-2xl font-bold text-white sm:text-3xl">
-            Discover Scripture
-          </h2>
-          <p className="discipleos-secondary-copy mt-3 text-sm leading-6 sm:text-base">
-            Start gently, then add a little more reading as you go. By Day 27,
-            you’ll finish Genesis and Matthew, with selected Psalms and Proverbs
-            along the way.
+      <header className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#F4D77A]">
+          Guided Climb · 27 days
+        </div>
+        <h2 id="guided-climb-preview-title" className="text-2xl font-bold text-white sm:text-3xl">
+          Discover Scripture
+        </h2>
+        <p className="discipleos-secondary-copy max-w-3xl text-sm leading-6 sm:text-base">
+          Start gently, then add a little more reading as you go. By Day 27,
+          you’ll finish Genesis and Matthew, with selected Psalms and Proverbs
+          along the way.
+        </p>
+      </header>
+
+      <div className="space-y-5">
+        <section aria-labelledby="guided-climb-books-heading">
+          <h3 id="guided-climb-books-heading" className="text-base font-semibold text-white">
+            Meet the books
+          </h3>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {BOOKS.map(([book, context]) => (
+              <li key={book} className="border border-white/10 bg-white/[0.035] p-3">
+                <div className="text-sm font-semibold text-[#F4D77A]">{book}</div>
+                <p className="mt-1 text-sm leading-5 text-white/75">{context}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <p className="border-l-2 border-[#D4A017]/60 pl-3 text-sm leading-5 text-white/75">
+          Open a physical Bible or your preferred Bible app for each passage.
+          DiscipleOS organizes and tracks your reading; it doesn’t include the
+          full Bible text.
+        </p>
+
+        {existingPlan ? (
+          <p className="border border-emerald-300/20 bg-emerald-300/[0.04] p-3 text-sm leading-5 text-emerald-100/80">
+            Your journey and progress are saved. Your daily reading time is {readingTime}.
           </p>
-        </header>
-
-        <div className="space-y-5 p-5 sm:p-7">
-          <section aria-labelledby="guided-climb-books-heading">
-            <h3 id="guided-climb-books-heading" className="text-base font-semibold text-white">
-              Meet the books
-            </h3>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {BOOKS.map(([book, context]) => (
-                <li key={book} className="border border-white/10 bg-white/[0.035] p-3">
-                  <div className="text-sm font-semibold text-[#F4D77A]">{book}</div>
-                  <p className="mt-1 text-sm leading-5 text-white/75">{context}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <p className="border-l-2 border-[#D4A017]/60 pl-3 text-sm leading-5 text-white/75">
-            Open a physical Bible or your preferred Bible app for each passage.
-            DiscipleOS organizes and tracks your reading; it doesn’t include the
-            full Bible text.
-          </p>
-
-          {existingPlan ? (
-            <p className="border border-emerald-300/20 bg-emerald-300/[0.04] p-3 text-sm leading-5 text-emerald-100/80">
-              Your journey and progress are saved. Your daily reading time is {readingTime}.
-            </p>
-          ) : (
+        ) : (
           <section className="border border-white/10 bg-white/[0.035] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -118,10 +110,9 @@ export default function GuidedClimbPreview({
               </span>
             </label>
           </section>
-          )}
-        </div>
+        )}
 
-        <footer className="flex flex-col-reverse gap-2 border-t border-white/10 p-4 sm:flex-row sm:justify-end sm:p-5">
+        <footer className="flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
@@ -138,7 +129,7 @@ export default function GuidedClimbPreview({
             {existingPlan ? "Return to Today’s Walk" : "Start Reading"}
           </button>
         </footer>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

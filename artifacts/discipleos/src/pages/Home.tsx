@@ -4577,33 +4577,35 @@ export default function DiscipleOSApp() {
             </h1>
             <AccountControls />
           </header>
-          <FirstPlanOnboarding
-            form={form}
-            step={onboardingStep}
-            planPreview={planPreview}
-            formatDate={formatDate}
-            presetBooks={{
-              newTestament: PRESETS.newTestament,
-              gospels: PRESETS.gospels,
-            }}
-            books={BIBLE_BOOKS}
-            isBookPickerOpen={isBookPickerOpen}
-            onStepChange={setOnboardingStep}
-            onSelectPreset={setOnboardingPreset}
-            onChooseBooks={openOnboardingBookPicker}
-            onToggleBook={toggleBook}
-            onCloseBookPicker={() => setIsBookPickerOpen(false)}
-            onMinutesChange={setOnboardingMinutes}
-            onStartDateChange={setOnboardingStartDate}
-            onEndDateChange={(endDate) =>
-              setForm((prev) => ({ ...prev, autoSchedule: false, endDate }))
-            }
-            onUseSuggestedEndDate={useOnboardingSuggestedEndDate}
-            onCreatePlan={() => createPlan({ onboarding: true })}
-            onStartGuidedClimb={selectGuidedClimb}
-            isSignedIn={isSignedIn}
-            previewOnly={isFirstLaunchPreview}
-          />
+          {!isGuidedClimbPreviewOpen && (
+            <FirstPlanOnboarding
+              form={form}
+              step={onboardingStep}
+              planPreview={planPreview}
+              formatDate={formatDate}
+              presetBooks={{
+                newTestament: PRESETS.newTestament,
+                gospels: PRESETS.gospels,
+              }}
+              books={BIBLE_BOOKS}
+              isBookPickerOpen={isBookPickerOpen}
+              onStepChange={setOnboardingStep}
+              onSelectPreset={setOnboardingPreset}
+              onChooseBooks={openOnboardingBookPicker}
+              onToggleBook={toggleBook}
+              onCloseBookPicker={() => setIsBookPickerOpen(false)}
+              onMinutesChange={setOnboardingMinutes}
+              onStartDateChange={setOnboardingStartDate}
+              onEndDateChange={(endDate) =>
+                setForm((prev) => ({ ...prev, autoSchedule: false, endDate }))
+              }
+              onUseSuggestedEndDate={useOnboardingSuggestedEndDate}
+              onCreatePlan={() => createPlan({ onboarding: true })}
+              onStartGuidedClimb={selectGuidedClimb}
+              isSignedIn={isSignedIn}
+              previewOnly={isFirstLaunchPreview}
+            />
+          )}
           <GuidedClimbPreview
             open={isGuidedClimbPreviewOpen}
             existingPlan={plans.some(isGuidedClimbSetOnePlan)}
@@ -6042,7 +6044,19 @@ export default function DiscipleOSApp() {
             </div>
         )}
 
-         {activeTab === "plans" && (
+          {activeTab === "plans" && isGuidedClimbPreviewOpen && (
+            <GuidedClimbPreview
+              open
+              existingPlan={plans.some(isGuidedClimbSetOnePlan)}
+              readingTime={guidedClimbReadingTime}
+              reminderEnabled={guidedClimbReminderEnabled}
+              onReadingTimeChange={setGuidedClimbReadingTime}
+              onReminderChange={setGuidedClimbReminderEnabled}
+              onClose={() => setIsGuidedClimbPreviewOpen(false)}
+              onStart={startGuidedClimb}
+            />
+          )}
+          {activeTab === "plans" && !isGuidedClimbPreviewOpen && (
              <div className={cn(
              "discipleos-section-stack grid min-w-0",
              planViewPlans.length > 0 && "lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]",
@@ -6087,18 +6101,6 @@ export default function DiscipleOSApp() {
                        </>
                      ) : null}
                   </div>
-
-    <GuidedClimbPreview
-                    open={isGuidedClimbPreviewOpen}
-                    existingPlan={plans.some(isGuidedClimbSetOnePlan)}
-                    readingTime={guidedClimbReadingTime}
-                    reminderEnabled={guidedClimbReminderEnabled}
-                    onReadingTimeChange={setGuidedClimbReadingTime}
-                    onReminderChange={setGuidedClimbReminderEnabled}
-                     onClose={() => setIsGuidedClimbPreviewOpen(false)}
-                     onStart={startGuidedClimb}
-                   />
-
                   {planCreatedFeedback ? (
                     <div
                       data-testid="plan-created-feedback"
