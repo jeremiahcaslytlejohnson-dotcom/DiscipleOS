@@ -8,15 +8,45 @@ type RequestTestVerificationCode = (
   client?: APIRequestContext,
   purpose?: AuthPurpose,
 ) => Promise<string>;
+type TrackTestEmailForCleanup = (email: string) => void;
 
 const test = base.extend<{
+  trackTestEmailForCleanup: TrackTestEmailForCleanup;
   requestTestVerificationCode: RequestTestVerificationCode;
 }>({
-  requestTestVerificationCode: async ({ page }, use, testInfo) => {
+  trackTestEmailForCleanup: async ({ page }, use, testInfo) => {
     const fixtureEmails = new Set<string>();
 
+    await use((email) => fixtureEmails.add(email));
+
+    if (fixtureEmails.size === 0) return;
+
+    try {
+      const cleanup = await page.request.post("/api/auth/test-cleanup", {
+        data: { emails: [...fixtureEmails] },
+      });
+      if (!cleanup.ok()) {
+        console.warn(
+          `Auth fixture cleanup failed with ${cleanup.status()}: ${await cleanup.text()}`,
+        );
+      } else {
+        const payload = await cleanup.json();
+        if (!payload.success) {
+          console.warn("Auth fixture cleanup returned an unsuccessful response");
+        }
+      }
+    } catch (error) {
+      console.warn("Auth fixture cleanup failed", error);
+    }
+
+    testInfo.annotations.push({
+      type: "auth-fixture-cleanup",
+      description: `Attempted cleanup for ${fixtureEmails.size} reserved fixture email(s).`,
+    });
+  },
+  requestTestVerificationCode: async ({ page, trackTestEmailForCleanup }, use) => {
     await use(async (email, client = page.request, purpose = "email") => {
-      fixtureEmails.add(email);
+      trackTestEmailForCleanup(email);
       const requestCode = await client.post("/api/auth/request-code", {
         data: { email, purpose },
       });
@@ -42,31 +72,6 @@ const test = base.extend<{
         )
         .toMatch(/^\d{6}$/);
       return code;
-    });
-
-    if (fixtureEmails.size === 0) return;
-
-    try {
-      const cleanup = await page.request.post("/api/auth/test-cleanup", {
-        data: { emails: [...fixtureEmails] },
-      });
-      if (!cleanup.ok()) {
-        console.warn(
-          `Auth fixture cleanup failed with ${cleanup.status()}: ${await cleanup.text()}`,
-        );
-      } else {
-        const payload = await cleanup.json();
-        if (!payload.success) {
-          console.warn("Auth fixture cleanup returned an unsuccessful response");
-        }
-      }
-    } catch (error) {
-      console.warn("Auth fixture cleanup failed", error);
-    }
-
-    testInfo.annotations.push({
-      type: "auth-fixture-cleanup",
-      description: `Attempted cleanup for ${fixtureEmails.size} reserved fixture email(s).`,
     });
   },
 });
@@ -130,6 +135,56 @@ async function openDashboardNavigation(page: Page) {
   return page.getByTestId("dashboard-navigation-panel");
 }
 
+type ActiveClimbSnapshot = {
+  id: string;
+  startDate: string;
+  endDate: string;
+  assignmentDates: string[];
+  assignmentReadingKeys: string[][];
+  completedKeys: string[];
+  earnedDayKeys: string[];
+  progressPercent: number;
+};
+
+async function getActiveClimbSnapshot(page: Page): Promise<ActiveClimbSnapshot | null> {
+  return page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    const plan = (Array.isArray(stored.plans) ? stored.plans : []).find(
+      (candidate: any) => candidate.journeyKey === "7-day-climb",
+    );
+    if (!plan) return null;
+
+    const assignments = Array.isArray(plan.assignments) ? plan.assignments : [];
+    const assignmentDates = assignments.map((assignment: any) => String(assignment.date));
+    const assignmentReadingKeys = assignments.map((assignment: any) =>
+      (Array.isArray(assignment.readings) ? assignment.readings : [])
+        .map((reading: any) => String(reading.key))
+        .sort(),
+    );
+    const completedKeys = Object.entries(plan.completed || {})
+      .filter(([, completed]) => completed === true)
+      .map(([key]) => key)
+      .sort();
+    const earnedDayKeys = (Array.isArray(plan.earnedDayKeys) ? plan.earnedDayKeys : [])
+      .map(String)
+      .sort();
+
+    return {
+      id: String(plan.id),
+      startDate: String(plan.startDate),
+      endDate: String(plan.endDate),
+      assignmentDates,
+      assignmentReadingKeys,
+      completedKeys,
+      earnedDayKeys,
+      progressPercent:
+        Math.round(
+          (earnedDayKeys.length / Math.max(1, assignmentDates.length)) * 1000,
+        ) / 10,
+    };
+  });
+}
+
 for (const route of ["/sign-in", "/sign-up"]) {
   test(`${route} exposes only the email-code authentication path`, async ({ page }) => {
     await page.goto(route);
@@ -147,6 +202,101 @@ for (const route of ["/sign-in", "/sign-up"]) {
     await expect(page.locator(".launch-splash")).toHaveCount(0);
   });
 }
+
+test("claims an anonymous Mountain Rhythm climb with its dates and progress when signing in", async ({
+  page,
+  trackTestEmailForCleanup,
+  requestTestVerificationCode,
+}) => {
+  const email = `active-climb-claim-${randomUUID()}@e2e.discipleos.test`;
+  trackTestEmailForCleanup(email);
+
+  await page.goto("/");
+  await expect(page.getByTestId("first-plan-onboarding")).toBeVisible();
+  await page.getByTestId("reading-path-mountain-rhythm-action").click();
+  await expect(page).toHaveURL(/\/mountain-rhythm$/);
+  await page.getByTestId("button-choose-7-day-climb").click();
+  await expect(page.getByTestId("mountain-rhythm-route")).toBeVisible();
+
+  await expect.poll(() => getActiveClimbSnapshot(page)).not.toBeNull();
+  const uncompletedClimb = await getActiveClimbSnapshot(page);
+  expect(uncompletedClimb).not.toBeNull();
+  expect(uncompletedClimb!.assignmentDates).toHaveLength(7);
+  expect(uncompletedClimb!.startDate).toBe(uncompletedClimb!.assignmentDates[0]);
+  expect(uncompletedClimb!.endDate).toBe(uncompletedClimb!.assignmentDates[6]);
+  expect(uncompletedClimb!.completedKeys).toEqual([]);
+  expect(uncompletedClimb!.earnedDayKeys).toEqual([]);
+
+  await page.getByTestId("button-complete-day-1").click();
+  await expect(page.getByTestId("route-day-status-1")).toContainText("Complete");
+  const expectedClimb: ActiveClimbSnapshot = {
+    ...uncompletedClimb!,
+    completedKeys: uncompletedClimb!.assignmentReadingKeys[0],
+    earnedDayKeys: [uncompletedClimb!.assignmentDates[0]],
+    progressPercent:
+      Math.round((1000 / uncompletedClimb!.assignmentDates.length)) / 10,
+  };
+  await expect.poll(() => getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+
+  await page.goto("/sign-in");
+  await page.getByRole("textbox", { name: "Email address" }).fill(email);
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  const code = await requestTestVerificationCode(email);
+  await page.getByRole("textbox", { name: "One-time code" }).fill(code);
+
+  const claimResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/account/claim") &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Verify and continue" }).click();
+  const claimResponse = await claimResponsePromise;
+  expect(claimResponse.ok()).toBeTruthy();
+  expect((await claimResponse.json()).claimed.plans).toBe(1);
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+
+  const todayReading = page.getByTestId(
+    `today-reading-${expectedClimb.assignmentReadingKeys[0][0]}`,
+  );
+  await expect(todayReading).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`today-complete-day-${expectedClimb.id}`))
+    .toContainText("Day complete");
+  await expect(page.getByTestId("dashboard-mountain-rhythm-progress"))
+    .toHaveText(`${expectedClimb.progressPercent}%`);
+  expect(await getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("route-day-status-1")).toContainText("Complete");
+  await expect(page.getByTestId("mountain-rhythm-metric-journey"))
+    .toContainText(`${expectedClimb.progressPercent}%`);
+  await expect(page.getByTestId("route-day-date-1")).toBeVisible();
+  expect(await getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+
+  await page.goto("/");
+  const plansNavigation = await openDashboardNavigation(page);
+  await plansNavigation.getByRole("button", { name: "Plans", exact: true }).click();
+  const planDayId = `${expectedClimb.id}-${expectedClimb.assignmentDates[0]}`;
+  await expect(page.getByTestId(`plan-day-section-${planDayId}`)).toBeVisible();
+  await expect(page.getByTestId(`plan-day-status-${planDayId}`)).toHaveText("Complete");
+  await expect(page.getByTestId(`plan-day-date-${planDayId}`)).toBeVisible();
+  expect(await getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+
+  const calendarNavigation = await openDashboardNavigation(page);
+  await calendarNavigation.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByTestId(`calendar-day-${expectedClimb.assignmentDates[0]}`).click();
+  const calendarClimb = page.getByTestId(`calendar-plan-item-${expectedClimb.id}`);
+  await expect(calendarClimb).toBeVisible();
+  await expect(calendarClimb).toContainText("Undo day");
+  await calendarClimb.getByTestId(`calendar-plan-toggle-${expectedClimb.id}`).click();
+  await expect(
+    calendarClimb
+      .getByTestId(`calendar-plan-readings-${expectedClimb.id}`)
+      .getByRole("button")
+      .first(),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(await getActiveClimbSnapshot(page)).toEqual(expectedClimb);
+});
 
 test("keeps a locally created plan when a new email account is verified", async ({
   page,
