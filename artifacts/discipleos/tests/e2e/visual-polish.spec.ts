@@ -1460,15 +1460,15 @@ test("keeps mobile account, feedback, and navigation controls clear of page cont
     });
     const scrolledFeedbackBox = await feedback.boundingBox();
     const scrolledNavigationBox = await navigation.boundingBox();
-    const progressBox = await page.getByTestId("dashboard-progress").boundingBox();
+    const mountainBox = await page.getByTestId("dashboard-mountain-rhythm").boundingBox();
     const scrolledDockBox = await dock.boundingBox();
     expect(scrolledFeedbackBox).not.toBeNull();
     expect(scrolledNavigationBox).not.toBeNull();
-    expect(progressBox).not.toBeNull();
+    expect(mountainBox).not.toBeNull();
     expect(scrolledDockBox).not.toBeNull();
     expect(scrolledFeedbackBox?.y).toBe(feedbackBox?.y);
     expect(scrolledNavigationBox?.y).toBe(navigationBox?.y);
-    expect((progressBox?.y ?? 0) + (progressBox?.height ?? 0)).toBeLessThanOrEqual(
+    expect((mountainBox?.y ?? 0) + (mountainBox?.height ?? 0)).toBeLessThanOrEqual(
       (scrolledDockBox?.y ?? Infinity) - 8,
     );
   }
@@ -2275,13 +2275,14 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
     const assigned = page.getByTestId("dashboard-assigned-reading");
     const activities = page.getByTestId("dashboard-schedule");
     const progress = page.getByTestId("dashboard-progress");
-    await expect(page.getByTestId("dashboard-mountain-rhythm")).toHaveCount(0);
+    const mountain = page.getByTestId("dashboard-mountain-rhythm");
     await expect(assigned.getByRole("button", { name: /Today’s Reading/ })).toHaveAttribute("aria-expanded", "true");
     await expect(assigned.getByTestId("dashboard-assigned-reading-values")).toContainText("0 of 2 chapters complete");
     await expect(assigned.getByText("Morning Psalms", { exact: true })).toBeVisible();
     await expect(assigned.getByText("Evening Proverbs", { exact: true })).toBeVisible();
     await expect(activities.getByRole("button", { name: /Today’s Activities/ })).toHaveAttribute("aria-expanded", "true");
     await expect(progress.getByRole("button", { name: /^Progress/ })).toHaveAttribute("aria-expanded", "false");
+    await expect(mountain.getByRole("button", { name: /Mountain Rhythm/ })).toHaveAttribute("aria-expanded", "false");
 
     const layout = await page.evaluate(() => {
       const top = (testId: string) =>
@@ -2293,6 +2294,7 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
         assigned: top("dashboard-assigned-reading"),
         activities: top("dashboard-schedule"),
         progress: top("dashboard-progress"),
+        mountain: top("dashboard-mountain-rhythm"),
       };
     });
 
@@ -2300,9 +2302,10 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
     expect(layout.verse).toBeLessThan(layout.assigned);
     expect(layout.assigned).toBeLessThan(layout.activities);
     expect(layout.activities).toBeLessThan(layout.progress);
+    expect(layout.progress).toBeLessThan(layout.mountain);
 
     if (width < 768) {
-      for (const testId of ["dashboard-assigned-reading", "dashboard-schedule", "dashboard-progress"]) {
+      for (const testId of ["dashboard-assigned-reading", "dashboard-schedule", "dashboard-progress", "dashboard-mountain-rhythm"]) {
         const box = await page.getByTestId(testId).boundingBox();
         expect(box).not.toBeNull();
         expect(box?.x ?? -1).toBeGreaterThanOrEqual(12);
@@ -2321,44 +2324,11 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
     await expect(progressToggle).toHaveAttribute("aria-expanded", "true");
     await expect(progress.getByTestId("dashboard-progress-list")).toContainText("Morning Psalms");
 
+    const mountainToggle = mountain.getByRole("button", { name: /Mountain Rhythm/ });
+    await mountainToggle.click();
+    await expect(mountainToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(mountain.getByTestId("dashboard-mountain-rhythm-summary")).toBeVisible();
   }
-});
-
-test("lists Guided, Mountain, and Free plans together in Home Progress", async ({ page }) => {
-  const guidedPlan = {
-    ...makeOrdinaryPlan("progress-guided-plan", "Guided plan"),
-    guidedClimb: {
-      series: "Guided Climb",
-      set: 1,
-      slug: "find-your-footing",
-    },
-  };
-  const mountainPlan = makeStructuredClimbPlan("progress-mountain-plan", "7-Day Climb");
-  const freePlan = makeOrdinaryPlan("progress-free-plan", "Free plan");
-  const plans = [guidedPlan, mountainPlan, freePlan];
-
-  await stubHomeApi(page, plans);
-  await seedPlans(page, plans);
-  await page.goto("/");
-
-  await expect(page.getByTestId("dashboard-mountain-rhythm")).toHaveCount(0);
-  const progress = page.getByTestId("dashboard-progress");
-  await progress.getByRole("button", { name: /^Progress/ }).click();
-  await expect(progress.getByTestId("dashboard-progress-list")).toContainText("Discover Scripture");
-
-  for (const [plan, kind] of [
-    [guidedPlan, "Guided"],
-    [mountainPlan, "Mountain"],
-    [freePlan, "Free"],
-  ] as const) {
-    const row = page.getByTestId(`dashboard-progress-row-${plan.id}`);
-    await expect(row).toBeVisible();
-    await expect(row).toContainText(`${kind} plan`);
-  }
-  await expect(page.getByTestId(`dashboard-open-plan-${mountainPlan.id}`)).toHaveAttribute(
-    "href",
-    "/mountain-rhythm",
-  );
 });
 
 test("colors original reading-plan progress summaries by schedule status", async ({ page }) => {
@@ -2415,22 +2385,22 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(dashboardBehind).toHaveText(
     "33% complete · 2 chapters remaining",
   );
-  await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  await expect(dashboardBehind).toHaveCSS("color", "rgb(244, 197, 66)");
   const assertStableProgressRow = async (plan: { id: string; name: string }) => {
     const row = page.getByTestId(`dashboard-progress-row-${plan.id}`);
-    const nameGroup = row.locator(".grid > div").first();
+    const name = row.getByText(plan.name, { exact: true });
     const action = row.getByRole("button", { name: /^Open plan/ });
-    const [nameGroupBox, actionBox] = await Promise.all([
-      nameGroup.boundingBox(),
+    const [nameBox, actionBox] = await Promise.all([
+      name.boundingBox(),
       action.boundingBox(),
     ]);
-    expect(nameGroupBox).not.toBeNull();
+    expect(nameBox).not.toBeNull();
     expect(actionBox).not.toBeNull();
     expect(Math.abs(
-      (nameGroupBox!.y + nameGroupBox!.height / 2) -
+      (nameBox!.y + nameBox!.height / 2) -
       (actionBox!.y + actionBox!.height / 2),
     )).toBeLessThanOrEqual(2);
-    expect(actionBox!.x).toBeGreaterThan(nameGroupBox!.x + nameGroupBox!.width);
+    expect(actionBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
   };
   const assertAlignmentUniformWidths = async (
     elements: Array<typeof dashboardUpToDate>,
@@ -2485,7 +2455,7 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(cardUpToDate).toHaveText("67% complete");
   await expect(cardUpToDate).toHaveCSS("color", "rgb(134, 239, 172)");
   await expect(cardBehind).toHaveText("33% complete");
-  await expect(cardBehind).toHaveCSS("color", "rgb(244, 215, 122)");
+  await expect(cardBehind).toHaveCSS("color", "rgb(244, 197, 66)");
   for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await assertAlignmentUniformWidths(
@@ -2575,6 +2545,7 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       const assigned = page.getByTestId("dashboard-assigned-reading");
       const schedule = page.getByTestId("dashboard-schedule");
       const progress = page.getByTestId("dashboard-progress");
+      const mountain = page.getByTestId("dashboard-mountain-rhythm");
       const assignedToggle = assigned.getByRole("button", { name: /Today’s Reading/ });
       await expect(assigned).toBeVisible();
       await expect(assignedToggle).toHaveAttribute("aria-expanded", "true");
@@ -2583,7 +2554,7 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       await expect(page.getByTestId("dashboard-verse-of-day")).toContainText("Psalm 1:1");
       await expect(page.getByTestId("dashboard-stats")).toHaveCount(0);
       await expect(progress.getByRole("button", { name: /^Progress/ })).toHaveAttribute("aria-expanded", "false");
-      await expect(page.getByTestId("dashboard-mountain-rhythm")).toHaveCount(0);
+      await expect(mountain.getByRole("button", { name: /Mountain Rhythm/ })).toHaveAttribute("aria-expanded", "false");
       for (const name of state.ordinaryNames) {
         await expect(assigned.getByText(name, { exact: true })).toBeVisible();
       }
@@ -2595,6 +2566,39 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         await expect(assigned.getByTestId("today-empty-create-plan")).toHaveCount(1);
         await expect(page.getByRole("button", { name: "Create a Plan", exact: true })).toHaveCount(1);
       }
+      const mountainSummary = page.getByTestId("dashboard-mountain-rhythm");
+      const mountainToggle = mountainSummary.getByRole("button", { name: /Mountain Rhythm/ });
+      await mountainToggle.click();
+      await expect(mountainSummary.getByTestId("dashboard-mountain-rhythm-summary")).toBeVisible();
+      if (state.climbReading) {
+        await expect(mountainSummary.getByTestId("dashboard-mountain-rhythm-climb")).toContainText(
+          "7-Day Climb",
+        );
+        await expect(mountainSummary.getByTestId("dashboard-mountain-rhythm-progress")).toContainText(
+          state.climbComplete ? "14.3%" : "0%",
+        );
+        const todayStatus = mountainSummary.getByTestId("dashboard-mountain-rhythm-today-status");
+        await expect(todayStatus).toContainText(state.climbComplete ? "Complete" : "Not complete");
+        if (state.climbComplete) {
+          await expect(
+            mountainSummary.getByTestId("dashboard-mountain-rhythm-summary"),
+          ).toContainText("Today’s reading finished");
+          await expect(
+            mountainSummary.getByTestId("dashboard-mountain-rhythm-today-action"),
+          ).toHaveCount(0);
+        } else {
+          await expect(
+            mountainSummary.getByTestId("dashboard-mountain-rhythm-today-action"),
+          ).toHaveAttribute("href", "/mountain-rhythm");
+          await expect(
+            mountainSummary.getByTestId("dashboard-mountain-rhythm-today-action"),
+          ).toContainText("Open today’s reading");
+        }
+        await expect(mountainSummary.getByText("Current stage", { exact: true })).toHaveCount(0);
+        await expect(mountainSummary.getByTestId("mountain-rhythm-panel")).toHaveCount(0);
+        await expect(page.getByTestId("mountain-rhythm-panel")).toHaveCount(0);
+      }
+
       const layout = await page.evaluate(() => {
         const box = (testId: string) => {
           const element = document.querySelector(`[data-testid="${testId}"]`);
@@ -2609,6 +2613,7 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
           assigned: box("dashboard-assigned-reading"),
           schedule: box("dashboard-schedule"),
           progress: box("dashboard-progress"),
+          mountain: box("dashboard-mountain-rhythm"),
         assignedButtons: Array.from(
           document.querySelectorAll('[data-testid="dashboard-assigned-reading"] .discipleos-flat-list button'),
           ).map((element) => Math.round(element.getBoundingClientRect().height)),
@@ -2623,9 +2628,11 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       expect(layout.assigned?.left ?? -1).toBeGreaterThanOrEqual(12);
       expect(layout.assigned?.right ?? Infinity).toBeLessThanOrEqual(width - 12);
       expect(layout.assigned?.top ?? Infinity).toBeLessThan(layout.schedule?.top ?? -1);
+      expect(layout.schedule?.top ?? Infinity).toBeLessThan(layout.mountain?.top ?? -1);
       expect(layout.verse?.top ?? Infinity).toBeLessThan(layout.assigned?.top ?? -1);
       expect(layout.assigned?.top ?? Infinity).toBeLessThan(layout.schedule?.top ?? -1);
       expect(layout.schedule?.top ?? Infinity).toBeLessThan(layout.progress?.top ?? -1);
+      expect(layout.progress?.top ?? Infinity).toBeLessThan(layout.mountain?.top ?? -1);
       if (state.plans.length > 0) {
         expect(layout.assignedButtons.length).toBeGreaterThan(0);
         expect(Math.min(...layout.assignedButtons)).toBeGreaterThanOrEqual(40);
@@ -2643,6 +2650,9 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         await readingButton.click();
         await expect(readingButton).toHaveAttribute("class", before || "");
       }
+
+      await mountainToggle.click();
+      await expect(mountainToggle).toHaveAttribute("aria-expanded", "false");
     }
   }
 });
@@ -2671,8 +2681,8 @@ test("uses functional surfaces where contrast is needed and keeps compact ordina
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await expect(page.getByTestId("dashboard-schedule")).toBeVisible();
   await expect(page.getByTestId("dashboard-progress")).toBeVisible();
-  await expect(page.getByTestId("dashboard-mountain-rhythm")).toHaveCount(0);
-  const sections = await sectionStyle(["dashboard-assigned-reading", "dashboard-schedule", "dashboard-progress"]);
+  await expect(page.getByTestId("dashboard-mountain-rhythm")).toBeVisible();
+  const sections = await sectionStyle(["dashboard-assigned-reading", "dashboard-schedule", "dashboard-progress", "dashboard-mountain-rhythm"]);
   const radii = await page.evaluate(() => {
     const sampleSurface = document.querySelector(".discipleos-shell .discipleos-functional-surface");
     const sampleAction = document.querySelector(".discipleos-shell .discipleos-action");
@@ -2723,26 +2733,33 @@ test("remembers Today section disclosures and restores defaults after local data
   const scheduleToggle = page.getByTestId("dashboard-schedule").getByRole("button", { name: /Today’s Activities/ });
   const assignedReadingToggle = page.getByTestId("dashboard-assigned-reading").getByRole("button", { name: /Today’s Reading/ });
   const progressToggle = page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ });
+  const mountainToggle = page.getByTestId("dashboard-mountain-rhythm").getByRole("button", { name: /Mountain Rhythm/ });
+
   await expect(scheduleToggle).toHaveAttribute("aria-expanded", "true");
   await expect(assignedReadingToggle).toHaveAttribute("aria-expanded", "true");
   await expect(progressToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(mountainToggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
   await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
 
   await scheduleToggle.click();
   await assignedReadingToggle.click();
   await progressToggle.click();
+  await mountainToggle.click();
   await expect(scheduleToggle).toHaveAttribute("aria-expanded", "false");
   await expect(assignedReadingToggle).toHaveAttribute("aria-expanded", "false");
   await expect(progressToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(mountainToggle).toHaveAttribute("aria-expanded", "true");
 
   await page.reload();
   const reloadedScheduleToggle = page.getByTestId("dashboard-schedule").getByRole("button", { name: /Today’s Activities/ });
   const reloadedAssignedReadingToggle = page.getByTestId("dashboard-assigned-reading").getByRole("button", { name: /Today’s Reading/ });
   const reloadedProgressToggle = page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ });
+  const reloadedMountainToggle = page.getByTestId("dashboard-mountain-rhythm").getByRole("button", { name: /Mountain Rhythm/ });
   await expect(reloadedScheduleToggle).toHaveAttribute("aria-expanded", "false");
   await expect(reloadedAssignedReadingToggle).toHaveAttribute("aria-expanded", "false");
   await expect(reloadedProgressToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(reloadedMountainToggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
   await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeHidden();
 
@@ -2754,7 +2771,8 @@ test("remembers Today section disclosures and restores defaults after local data
     .toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ }))
     .toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByTestId("dashboard-mountain-rhythm")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-mountain-rhythm").getByRole("button", { name: /Mountain Rhythm/ }))
+    .toHaveAttribute("aria-expanded", "false");
 });
 
 test("keeps dashboard tab containers lean and inside shared gutters", async ({ page }) => {
