@@ -4782,15 +4782,6 @@ export default function DiscipleOSApp() {
                   </button>
                 );
               })}
-              <Link
-                href="/mountain-rhythm"
-                data-testid="link-mountain-rhythm-entry"
-                aria-label={`Mountain Rhythm${mountainRhythm.journeyDays > 0 ? `, ${mountainRhythm.journeyLabel}` : ""}`}
-                 className="discipleos-action group inline-flex shrink-0 items-center justify-center gap-1.5 border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-[#94A3B8] transition-colors hover:bg-white/10 hover:text-white"
-              >
-                 <Mountain className="h-4 w-4 shrink-0 text-[#D4A017]" />
-                <span className="whitespace-nowrap">Mountain Rhythm</span>
-              </Link>
                 <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 lg:flex-nowrap">
                  <div className="w-28 shrink-0">
                       <InstallButton compact testId="install-app-desktop-button" />
@@ -4847,16 +4838,6 @@ export default function DiscipleOSApp() {
                       </button>
                     );
                   })}
-                  <Link
-                    href="/mountain-rhythm"
-                    data-testid="link-mountain-rhythm-entry"
-                    aria-label={`Mountain Rhythm${mountainRhythm.journeyDays > 0 ? `, ${mountainRhythm.journeyLabel}` : ""}`}
-                    onClick={() => setIsNavigationOpen(false)}
-                     className="discipleos-action group flex w-full min-w-0 items-center justify-center gap-1.5 border border-white/10 bg-white/[0.04] px-2 py-2 text-center text-xs text-[#94A3B8] transition-[border-color,background-color,transform] hover:-translate-y-0.5 hover:border-[#D4A017]/50 hover:bg-white/10 hover:text-white"
-                  >
-                     <Mountain className="h-4 w-4 shrink-0 text-[#D4A017]" />
-                    <span className="whitespace-normal text-center leading-tight">Mountain Rhythm</span>
-                  </Link>
                   <div
                     data-testid="dashboard-navigation-secondary-actions"
                     className="mt-3 border-t border-white/10 pt-3 md:mt-0 md:border-0 md:pt-0"

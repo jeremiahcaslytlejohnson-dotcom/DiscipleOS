@@ -3049,6 +3049,13 @@ test("shows the browser install action inside the mobile navigation menu", async
   const navigationPanel = page.getByTestId("dashboard-navigation-panel");
   const installButton = navigationPanel.getByTestId("install-app-menu-button");
   await expect(installButton).toBeVisible();
+  await expect(navigationPanel.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
+  await expect(navigationPanel.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(navigationPanel.getByRole("button", { name: "Calendar", exact: true })).toBeVisible();
+  await expect(navigationPanel.getByRole("button", { name: "Plans", exact: true })).toBeVisible();
+  await expect(
+    navigationPanel.getByRole("button", { name: /reminders|notifications/i }),
+  ).toBeVisible();
 
   await page.evaluate(() => {
     const promptEvent = new Event("beforeinstallprompt", { cancelable: true });
@@ -3120,7 +3127,7 @@ test("does not reuse a dismissed install prompt from the hidden responsive butto
   expect(fallbackDialogMessage).toContain("Install isn’t available yet");
 });
 
-test("keeps every desktop and tablet navigation control visible without overflow", async ({ page }) => {
+test("keeps desktop and tablet navigation controls visible without overflow", async ({ page }) => {
   const plan = makeOrdinaryPlan();
   await stubHomeApi(page, plan);
   await seedPlans(page, [plan]);
@@ -3132,11 +3139,12 @@ test("keeps every desktop and tablet navigation control visible without overflow
     const navigation = page.getByTestId("dashboard-navigation-row");
     await expect(navigation).toBeVisible();
     await expect(navigation.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+    await expect(page.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
     const layout = await navigation.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const controls = Array.from(
         element.querySelectorAll<HTMLElement>(
-          'button[aria-pressed], a[data-testid="link-mountain-rhythm-entry"], button:not([aria-pressed])',
+          'button[aria-pressed], button:not([aria-pressed])',
         ),
       ).filter((control) => {
         const rect = control.getBoundingClientRect();
@@ -3177,7 +3185,7 @@ test("keeps every desktop and tablet navigation control visible without overflow
     expect(layout.rowRight).toBeLessThanOrEqual(width);
     expect(layout.rowScrollWidth).toBeLessThanOrEqual(layout.rowClientWidth + 1);
     expect(layout.overflowX).not.toMatch(/auto|scroll/);
-    expect(layout.controls).toHaveLength(6);
+    expect(layout.controls).toHaveLength(5);
     const inactiveControlStyle = layout.controls[1];
     for (const control of layout.controls.slice(2)) {
       expect(control.borderRadius).toBe(inactiveControlStyle.borderRadius);

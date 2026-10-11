@@ -724,9 +724,15 @@ test("server-sync retry removes the reminder and plan without changing Mountain 
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
   await expect(page.getByTestId(`planned-reading-card-${plan.id}`)).toHaveCount(0);
   await expect(page.getByTestId(`planned-reading-card-${unrelatedPlan.id}`)).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Mountain Rhythm, 7-Day Climb" }),
-  ).toBeVisible();
+  const openMountainRhythm = page
+    .getByTestId("dashboard-active-climb")
+    .getByRole("link", { name: "Open Mountain Rhythm" });
+  await expect(openMountainRhythm).toBeVisible();
+  await openMountainRhythm.click();
+  await expect(page).toHaveURL(/\/mountain-rhythm$/);
+  await expect(page.getByRole("heading", { name: "Mountain Rhythm" })).toBeVisible();
+  await page.getByTestId("button-back-mountain-rhythm").click();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   const storedData = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
   );
