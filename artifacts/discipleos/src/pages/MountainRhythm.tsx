@@ -42,6 +42,7 @@ import {
   saveReadingDefaults,
 } from "../lib/reading-settings";
 import {
+  appendOwnerBoundLocalPlans,
   addPendingOp,
   flushPendingOps,
   getVerifiedSessionOwner,
@@ -241,9 +242,8 @@ export default function MountainRhythm() {
   const today = todayISO();
   const cachedPlanOwnerIsTrusted =
     isAuthLoaded &&
-    (isSignedIn
-      ? initial.ownerId === userId
-      : !loadLocalOnlyAfterSignOut());
+    isSignedIn &&
+    initial.ownerId === userId;
   const canShowPlanState =
     cachedPlanOwnerIsTrusted ||
     (verifiedPlanOwnerId !== null &&
@@ -267,6 +267,20 @@ export default function MountainRhythm() {
           if (isSignedIn || sessionData?.authenticated === true) void refreshAuth();
           return;
         }
+        if (!isSignedIn && loadLocalOnlyAfterSignOut()) {
+          const hasCachedData =
+            initial.plans.length > 0 ||
+            initial.events.length > 0 ||
+            Object.keys(initial.eventCompletions).length > 0;
+          if (initial.ownerId === currentOwnerId) {
+            setVerifiedPlanOwnerId(currentOwnerId);
+            setOwnerId(currentOwnerId);
+          } else if (!hasCachedData && loadPendingOpsState().ops.length === 0) {
+            setVerifiedPlanOwnerId(currentOwnerId);
+            setOwnerId(currentOwnerId);
+          }
+          return;
+        }
         if (!cancelled) {
           setHasAuthenticatedSession(sessionData?.authenticated === true);
         }
@@ -281,7 +295,11 @@ export default function MountainRhythm() {
         setReadingDefaults(
           loadReadingDefaults(isSignedIn ? currentOwnerId : undefined),
         );
-        if (initial.ownerId === currentOwnerId) {
+        const hasLocalData =
+          initial.plans.length > 0 ||
+          initial.events.length > 0 ||
+          Object.keys(initial.eventCompletions).length > 0;
+        if (initial.ownerId === currentOwnerId || (!hasLocalData && unresolvedPendingOps.length === 0)) {
           setVerifiedPlanOwnerId(currentOwnerId);
           setOwnerId(currentOwnerId);
         }
@@ -305,7 +323,6 @@ export default function MountainRhythm() {
             setSelectedPlanId(null);
           }
           if (boundary.pendingOpsWereCleared) {
-            savePendingOps([], currentOwnerId);
             unresolvedPendingOps = [];
           } else if (boundary.pendingOps.length > 0) {
             const remaining = await flushPendingOps(
@@ -351,8 +368,15 @@ export default function MountainRhythm() {
             const oversizedServerPlans = data.plans.filter((plan: any) =>
               isOversizedReadingJourneyPlan(plan, BOOK_CATALOG, estimateChapterMinutes),
             );
-            const hydratedPlans = normalizePlans(data.plans).map((plan: any) =>
+            const normalizedServerPlans = normalizePlans(data.plans).map((plan: any) =>
               mergeLocalCompletionHistory(plan, localPlansById.get(plan.id)),
+            );
+            const hydratedPlans = appendOwnerBoundLocalPlans(
+              normalizedServerPlans,
+              initial.plans,
+              initial.ownerId,
+              currentOwnerId,
+              isSignedIn,
             );
             setPlans(hydratedPlans);
             setOwnerId(currentOwnerId);

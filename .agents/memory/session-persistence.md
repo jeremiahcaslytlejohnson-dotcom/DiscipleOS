@@ -26,9 +26,11 @@ Exposed via `GET /api/session/info` → `{ userId, established: boolean }`.
 ## Frontend defensive hydration (Home.tsx loadData)
 
 1. Fetch `/api/session/info` in parallel with events and plans.
-2. If `established === true` → always apply server state (even if empty).
+2. If `established === true` → apply server state, but retain owner-matched anonymous local plans absent from the response as unsynced local data.
 3. If `established === false` AND server data is non-empty → apply server data.
 4. If `established === false` AND server data is empty → keep localStorage data (do NOT call setEvents/setPlans with empty).
+
+An established empty response is not proof that a valid, same-owner anonymous local plan was deleted. Append owner-matched local plans that are absent from the server response; never use a missing or mismatched owner marker to expose or relabel local data. Preserve those unverified cache entries and pending operations without replaying or overwriting them.
 
 This avoids the original failure mode while also not incorrectly ignoring real server data when it exists.
 

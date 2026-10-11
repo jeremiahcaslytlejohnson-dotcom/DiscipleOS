@@ -213,6 +213,23 @@ export function reconcileSessionBoundary(
   };
 }
 
+export function appendOwnerBoundLocalPlans(
+  serverPlans: any[],
+  localPlans: any[],
+  localOwnerId: string | null,
+  currentOwnerId: string,
+  isSignedIn: boolean,
+) {
+  if (isSignedIn || !localOwnerId || localOwnerId !== currentOwnerId) {
+    return serverPlans;
+  }
+  const serverPlanIds = new Set(serverPlans.map((plan) => plan?.id).filter(Boolean));
+  return [
+    ...serverPlans,
+    ...localPlans.filter((plan) => plan?.id && !serverPlanIds.has(plan.id)),
+  ];
+}
+
 export function loadPendingOpsState(): PendingOpsState {
   try {
     if (typeof localStorage === "undefined") {

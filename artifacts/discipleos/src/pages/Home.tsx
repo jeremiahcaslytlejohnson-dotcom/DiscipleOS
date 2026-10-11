@@ -36,6 +36,7 @@ import {
 import {
   type PendingOp,
   addPendingOp,
+  appendOwnerBoundLocalPlans,
   flushPendingOps,
   getVerifiedSessionOwner,
   loadLocalOnlyAfterSignOut,
@@ -1714,6 +1715,7 @@ export default function DiscipleOSApp() {
   const pendingOpsStateRef = useRef(loadPendingOpsState());
   const pendingOpsRef = useRef(pendingOpsStateRef.current.ops);
   const pendingOpsOwnerRef = useRef(pendingOpsStateRef.current.ownerId);
+  const pendingOpsQuarantinedRef = useRef(false);
   const serverOwnerRef = useRef<string | null>(null);
   // Coalesce overlapping sync requests, then run once more so writes added
   // during an in-flight push are not left queued or overwritten.
@@ -1724,6 +1726,8 @@ export default function DiscipleOSApp() {
   const authGenerationRef = useRef(0);
   const authTransitionRef = useRef<"signed-in" | "signed-out" | null>(null);
   const localOnlyAfterSignOutRef = useRef(loadLocalOnlyAfterSignOut());
+  const localOnlyOwnerVerifiedRef = useRef(false);
+  const preserveUnverifiedLocalCacheRef = useRef(false);
 
   // A cross-tab logout changes the AuthProvider identity before its network
   // refresh finishes. Advance the generation during render so any in-flight
@@ -1750,11 +1754,13 @@ export default function DiscipleOSApp() {
       // Do not replay the old account's queue through a newly anonymous
       // session after the server session has been destroyed in another tab.
       localOnlyAfterSignOutRef.current = true;
+      localOnlyOwnerVerifiedRef.current = false;
+      preserveUnverifiedLocalCacheRef.current = true;
       saveLocalOnlyAfterSignOut(true);
       serverOwnerRef.current = null;
       pendingOpsRef.current = [];
       pendingOpsOwnerRef.current = null;
-      savePendingOps([], null);
+      pendingOpsQuarantinedRef.current = true;
       setServerOwnerId(null);
       setEvents([]);
       setPlans([]);
@@ -2456,6 +2462,12 @@ export default function DiscipleOSApp() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!hasHydrated) return;
+    if (
+      preserveUnverifiedLocalCacheRef.current ||
+      (!isSignedIn &&
+        localOnlyAfterSignOutRef.current &&
+        !localOnlyOwnerVerifiedRef.current)
+    ) return;
 
     const localOwnerId = localDataRef.current.ownerId;
     const persistedOwnerId =
@@ -2529,11 +2541,6 @@ export default function DiscipleOSApp() {
       authIdentityRef.current.isSignedIn === syncIsSignedIn &&
       authIdentityRef.current.userId === syncUserId;
 
-    // A tab that learned about a logout remains local-only until a new
-    // explicit sign-in. This avoids creating an anonymous server session or
-    // replaying account-bound work just because focus/visibility fired.
-    if (!syncIsSignedIn && localOnlyAfterSignOutRef.current) return;
-
     isSyncingRef.current = true;
     try {
       // Establish and validate ownership before replaying any local writes.
@@ -2561,6 +2568,29 @@ export default function DiscipleOSApp() {
         return;
       }
       if (!syncIsCurrent()) return;
+
+      // A signed-out browser may display only cache already bound to the
+      // verified anonymous owner. It must not claim, replay, or pull account
+      // data while the local-only-after-sign-out guard is active.
+      if (!syncIsSignedIn && localOnlyAfterSignOutRef.current) {
+        const localData = localDataRef.current;
+        if (localData.ownerId === currentOwnerId) {
+          localOnlyOwnerVerifiedRef.current = true;
+          preserveUnverifiedLocalCacheRef.current = false;
+          serverOwnerRef.current = currentOwnerId;
+          setServerOwnerId(currentOwnerId);
+          setHydratedPlanOwnerId(currentOwnerId);
+          setEvents(localData.events);
+          setPlans(localData.plans);
+          setEventCompletions(localData.eventCompletions);
+          setSelectedPlanId(
+            resolveSelectedPlanId(localData.plans, localData.selectedPlanId),
+          );
+        } else {
+          preserveUnverifiedLocalCacheRef.current = true;
+        }
+        return;
+      }
 
       // A sign-in is the explicit ownership proof for migrating records from
       // this browser's anonymous session. Keep local state intact if the
@@ -2599,9 +2629,7 @@ export default function DiscipleOSApp() {
       setServerOwnerId(currentOwnerId);
 
       if (reconciled.localDataWasCleared) {
-        localDataRef.current.events = [];
-        localDataRef.current.plans = [];
-        localDataRef.current.eventCompletions = {};
+        preserveUnverifiedLocalCacheRef.current = true;
         setEvents([]);
         setPlans([]);
         setEventCompletions({});
@@ -2609,8 +2637,14 @@ export default function DiscipleOSApp() {
       }
 
       pendingOpsRef.current = reconciled.pendingOps;
-      pendingOpsOwnerRef.current = currentOwnerId;
-      savePendingOps(reconciled.pendingOps, currentOwnerId);
+      pendingOpsOwnerRef.current = reconciled.pendingOpsWereCleared
+        ? null
+        : currentOwnerId;
+      if (reconciled.pendingOpsWereCleared) {
+        pendingOpsQuarantinedRef.current = true;
+      } else if (!pendingOpsQuarantinedRef.current) {
+        savePendingOps(reconciled.pendingOps, currentOwnerId);
+      }
 
       // Step 1: flush offline writes to the server before pulling
       if (pendingOpsRef.current.length > 0) {
@@ -2630,6 +2664,7 @@ export default function DiscipleOSApp() {
         const nextPendingOps = [...remaining, ...addedDuringFlush];
         pendingOpsRef.current = nextPendingOps;
         savePendingOps(nextPendingOps, currentOwnerId);
+        pendingOpsQuarantinedRef.current = false;
         const resetStillPending = nextPendingOps.some(
           (op) => op.type === "upsert-plan" && isResetPlan(op.payload)
         );
@@ -2690,12 +2725,25 @@ export default function DiscipleOSApp() {
               )
               .map((plan) => plan.id),
           );
-          const normalizedPlans = serverPlans.map((serverPlan) =>
+          const normalizedServerPlans = serverPlans.map((serverPlan) =>
             mergeLocalCompletionHistory(
               normalizeStoredPlan(serverPlan),
               localPlansById.get(serverPlan.id),
             ),
           );
+          const normalizedPlans = appendOwnerBoundLocalPlans(
+            normalizedServerPlans,
+            localDataRef.current.plans,
+            localDataRef.current.ownerId,
+            currentOwnerId,
+            syncIsSignedIn,
+          );
+          if (
+            localDataRef.current.ownerId === currentOwnerId &&
+            !reconciled.localDataWasCleared
+          ) {
+            preserveUnverifiedLocalCacheRef.current = false;
+          }
           localDataRef.current.plans = normalizedPlans;
           localDataRef.current.ownerId = currentOwnerId;
           setPlans(normalizedPlans);
