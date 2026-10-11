@@ -1476,6 +1476,9 @@ function urlBase64ToUint8Array(base64String: string) {
 
 const STORAGE_KEY = "discipleos-data";
 
+function guidedClimbReminderEventId(planId: string) {
+  return `guided-climb-reminder:${planId}`;
+}
 function defaultRhythmOptIn(type: string) {
   const normalized = String(type || "").trim().toLowerCase();
   return ["prayer", "fast", "fasting", "church"].includes(normalized);
@@ -2901,7 +2904,7 @@ export default function DiscipleOSApp() {
     }
     if (guidedClimbReminderEnabled && reminderReady) {
       const reminderEvent = {
-        id: `guided-climb-reminder:${plan.id}`,
+        id: guidedClimbReminderEventId(plan.id),
         title: "Discover Scripture reading",
         type: "event",
         date: plan.startDate,
@@ -4266,6 +4269,7 @@ export default function DiscipleOSApp() {
   const deletePlan = (planId: string) => {
     const planToDelete = plans.find((plan) => plan.id === planId);
     if (planToDelete && isGuidedClimbSetOnePlan(planToDelete)) {
+      const linkedReminderId = guidedClimbReminderEventId(planToDelete.id);
       // Older app versions used random event IDs, so also recognize their
       // exact generated reminder signature for safe cleanup after an upgrade.
       const reminderNote =
@@ -4281,7 +4285,7 @@ export default function DiscipleOSApp() {
           event.reminderMinutes === 0 &&
           event.repeat === "daily" &&
           event.repeatUntil === planToDelete.endDate;
-        return generatedReminder;
+        return event.id === linkedReminderId || generatedReminder;
       });
       matchingReminderEvents.forEach((event) => deleteEvent(event.id));
     }
@@ -4292,9 +4296,13 @@ export default function DiscipleOSApp() {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: planId }),
-      }).catch(() => {
-        queuePendingOp({ type: "delete-plan", id: planId, ts: Date.now() });
-      });
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error("Failed to delete plan");
+        })
+        .catch(() => {
+          queuePendingOp({ type: "delete-plan", id: planId, ts: Date.now() });
+        });
     }
 
     if (selectedPlanId === planId) {

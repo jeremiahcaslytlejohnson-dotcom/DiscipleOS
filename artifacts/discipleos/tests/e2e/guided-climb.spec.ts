@@ -71,12 +71,15 @@ async function stubAppApi(
     initialEvents?: any[];
     eventCalls?: { saved: any[]; deletedIds: string[] };
     failFirstEventDelete?: boolean;
+    planCalls?: { deletedIds: string[] };
+    failFirstPlanDelete?: boolean;
   } = {},
 ) {
   const savedPlans: any[] = [];
   const serverPlans = [...initialPlans];
   const serverEvents = [...(options.initialEvents || [])];
   let eventDeleteAttempts = 0;
+  let planDeleteAttempts = 0;
   await page.addInitScript(() => {
     if (sessionStorage.getItem("guided-climb-e2e-initialized")) return;
     localStorage.clear();
@@ -126,12 +129,17 @@ async function stubAppApi(
       }
       if (request.method() === "DELETE") {
         const { id } = request.postDataJSON();
-        const index = serverPlans.findIndex((plan) => plan.id === id);
-        if (index >= 0) serverPlans.splice(index, 1);
+        options.planCalls?.deletedIds.push(id);
+        const failThisDelete =
+          options.failFirstPlanDelete && planDeleteAttempts++ === 0;
+        if (!failThisDelete) {
+          const index = serverPlans.findIndex((plan) => plan.id === id);
+          if (index >= 0) serverPlans.splice(index, 1);
+        }
         await route.fulfill({
-          status: 200,
+          status: failThisDelete ? 503 : 200,
           contentType: "application/json",
-          body: JSON.stringify({ success: true }),
+          body: JSON.stringify({ success: !failThisDelete }),
         });
         return;
       }
@@ -571,12 +579,91 @@ test("denied notification permission does not create a Guided Climb reminder", a
   expect(eventCalls.saved).toHaveLength(0);
 });
 
-test("removing Guided Climb deletes only its reminder and preserves unrelated events", async ({
+test("removing Guided Climb locally deletes its plan-linked reminder only", async ({ page }) => {
+  const plan = makeGuidedPlan();
+  const guidedReminder = {
+    id: `guided-climb-reminder:${plan.id}`,
+    title: "Discover Scripture reading",
+    type: "event",
+    date: plan.startDate,
+    time: plan.readingTime,
+    notes: "Daily reading reminder for Guided Climb: Discover Scripture.",
+    remind: true,
+    reminderMinutes: 0,
+    repeat: "daily",
+    repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    repeatUntil: plan.endDate,
+    countsTowardRhythm: false,
+  };
+  const legacyGuidedReminder = {
+    ...guidedReminder,
+    id: "legacy-guided-reminder",
+  };
+  const unrelatedEvent = {
+    ...guidedReminder,
+    id: "unrelated-event",
+    title: "Morning prayer",
+    notes: "Personal prayer reminder",
+  };
+  const deletedIds: string[] = [];
+  await stubAppApi(page, [plan], {
+    initialEvents: [guidedReminder, legacyGuidedReminder, unrelatedEvent],
+    eventCalls: { saved: [], deletedIds },
+  });
+
+  await page.goto("/");
+  await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
+  await page.getByTestId(`plan-delete-${plan.id}`).click();
+  await expect.poll(() => deletedIds.length).toBe(2);
+  expect(deletedIds).toEqual([
+    `guided-climb-reminder:${plan.id}`,
+    "legacy-guided-reminder",
+  ]);
+  await page.getByTestId("dashboard-navigation-row").getByText("Calendar", { exact: true }).click();
+  await expect(page.getByText("Morning prayer", { exact: true })).toBeVisible();
+  await expect(page.getByText("Discover Scripture reading", { exact: true })).toHaveCount(0);
+});
+
+test("server-sync retry removes the reminder and plan without changing Mountain Rhythm progress", async ({
   page,
 }) => {
   const plan = makeGuidedPlan();
+  const unrelatedPlan = {
+    ...plan,
+    id: "unrelated-reading-plan",
+    name: "Personal reading plan",
+    guidedClimb: undefined,
+    completed: { ...plan.completed, [plan.assignments[0].readings[0].key]: true },
+  };
+  const mountainStartDate = todayISO();
+  const mountainAssignments = Array.from({ length: 7 }, (_, dayIndex) => ({
+    date: addDaysISO(mountainStartDate, dayIndex),
+    readings: [
+      { key: `unrelated-mountain-plan-${dayIndex}-a`, label: `Reading ${dayIndex + 1}A` },
+      { key: `unrelated-mountain-plan-${dayIndex}-b`, label: `Reading ${dayIndex + 1}B` },
+    ],
+  }));
+  const mountainPlan = {
+    id: "unrelated-mountain-plan",
+    name: "Seven-day reading climb",
+    journeyKey: "7-day-climb",
+    journeyType: "7-day-climb",
+    journeyDays: 7,
+    durationDays: 7,
+    totalDays: 7,
+    startDate: mountainStartDate,
+    endDate: addDaysISO(mountainStartDate, 6),
+    assignments: mountainAssignments,
+    completed: Object.fromEntries(
+      mountainAssignments[0].readings.map((reading) => [reading.key, true]),
+    ),
+    earnedDayKeys: [mountainAssignments[0].date],
+    dayCompletionDates: {
+      [mountainAssignments[0].date]: mountainAssignments[0].date,
+    },
+  };
   const guidedReminder = {
-    id: "legacy-guided-reminder",
+    id: `guided-climb-reminder:${plan.id}`,
     title: "Discover Scripture reading",
     type: "event",
     date: plan.startDate,
@@ -595,29 +682,65 @@ test("removing Guided Climb deletes only its reminder and preserves unrelated ev
     title: "Morning prayer",
     notes: "Personal prayer reminder",
   };
-  const deletedIds: string[] = [];
-  await stubAppApi(page, [plan], {
+  const deletedEventIds: string[] = [];
+  const deletedPlanIds: string[] = [];
+  await stubAppApi(page, [plan, unrelatedPlan, mountainPlan], {
+    // Keep an ordinary plan in the visible Plans list as well as a structured
+    // climb whose append-only history backs Mountain Rhythm.
     initialEvents: [guidedReminder, unrelatedEvent],
-    eventCalls: { saved: [], deletedIds },
+    eventCalls: { saved: [], deletedIds: deletedEventIds },
     failFirstEventDelete: true,
+    planCalls: { deletedIds: deletedPlanIds },
+    failFirstPlanDelete: true,
   });
 
   await page.goto("/");
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
   await page.getByTestId(`plan-delete-${plan.id}`).click();
-  await expect.poll(() => deletedIds.length).toBe(1);
+  await expect.poll(() => deletedEventIds.length).toBe(1);
+  await expect.poll(() => deletedPlanIds.length).toBe(1);
   await expect.poll(() =>
-    page.evaluate(() => {
+    page.evaluate(({ planId, reminderId }) => {
       const state = JSON.parse(localStorage.getItem("discipleos:pendingOps") || "{}");
-      return state.ops?.some(
-        (op: any) => op.type === "delete-event" && op.id === "legacy-guided-reminder",
+      return ["delete-event", "delete-plan"].every((type) =>
+        state.ops?.some((op: any) =>
+          type === "delete-event"
+            ? op.type === type && op.id === reminderId
+            : op.type === type && op.id === planId,
+        ),
       );
-    }),
+    }, { planId: plan.id, reminderId: `guided-climb-reminder:${plan.id}` }),
   ).toBe(true);
 
   await page.reload();
-  await expect.poll(() => deletedIds.length).toBe(2);
-  expect(deletedIds).toEqual(["legacy-guided-reminder", "legacy-guided-reminder"]);
+  await expect.poll(() => deletedEventIds.length).toBe(2);
+  await expect.poll(() => deletedPlanIds.length).toBe(2);
+  expect(deletedEventIds).toEqual([
+    `guided-climb-reminder:${plan.id}`,
+    `guided-climb-reminder:${plan.id}`,
+  ]);
+  expect(deletedPlanIds).toEqual([plan.id, plan.id]);
+
+  await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
+  await expect(page.getByTestId(`planned-reading-card-${plan.id}`)).toHaveCount(0);
+  await expect(page.getByTestId(`planned-reading-card-${unrelatedPlan.id}`)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Mountain Rhythm, 7-Day Climb" }),
+  ).toBeVisible();
+  const storedData = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  expect(storedData.plans).toHaveLength(2);
+  const storedUnrelatedPlan = storedData.plans.find((item: any) => item.id === unrelatedPlan.id);
+  expect(storedUnrelatedPlan?.completed).toMatchObject(unrelatedPlan.completed);
+  const storedMountainPlan = storedData.plans.find((item: any) => item.id === mountainPlan.id);
+  expect(storedMountainPlan).toMatchObject({
+    id: mountainPlan.id,
+    completed: mountainPlan.completed,
+    earnedDayKeys: mountainPlan.earnedDayKeys,
+    dayCompletionDates: mountainPlan.dayCompletionDates,
+  });
+
   await page.getByTestId("dashboard-navigation-row").getByText("Calendar", { exact: true }).click();
   await expect(page.getByText("Morning prayer", { exact: true })).toBeVisible();
   await expect(page.getByText("Discover Scripture reading", { exact: true })).toHaveCount(0);
