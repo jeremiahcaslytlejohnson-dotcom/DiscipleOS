@@ -257,6 +257,118 @@ function makeActiveClimbPlan() {
   };
 }
 
+function makeFiveOfSevenClimb() {
+  const today = todayISO();
+  const addDays = (amount: number) => {
+    const date = new Date(`${today}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + amount);
+    return date.toISOString().slice(0, 10);
+  };
+  const assignments = Array.from({ length: 7 }, (_, index) => ({
+    date: addDays(index - 4),
+    readings: [{
+      key: `synthetic-climb-day-${index + 1}`,
+      label: `Synthetic reading ${index + 1}`,
+      book: "Psalms",
+      chapter: index + 1,
+      estimatedMinutes: 5,
+    }],
+  }));
+  const earnedDayKeys = assignments.slice(0, 5).map((assignment) => assignment.date);
+  const completed = Object.fromEntries(
+    assignments.slice(0, 5).flatMap((assignment) =>
+      assignment.readings.map((reading) => [reading.key, true]),
+    ),
+  );
+  const dayCompletionDates = Object.fromEntries(
+    earnedDayKeys.map((date, index) => [date, index === 0 || index === 4 ? date : today]),
+  );
+
+  return {
+    id: "synthetic-seven-day-climb",
+    name: "Synthetic 7-Day Climb",
+    journeyKey: "7-day-climb",
+    journeyType: "7-day-climb",
+    journeyDays: 7,
+    selectedBooks: ["Psalms"],
+    startDate: addDays(-4),
+    endDate: addDays(2),
+    durationDays: 7,
+    totalDays: 7,
+    dailyMinutes: 15,
+    readingTime: "07:00",
+    readingMode: "consecutive",
+    color: "from-[#D4A017] to-[#8A6414]",
+    assignments,
+    completed,
+    earnedDayKeys,
+    dayCompletionDates,
+  };
+}
+
+async function stubAuthenticatedPlanApi(
+  page: Page,
+  ownerId: string,
+  getPlans: () => any[],
+  getEvents: () => any[] = () => [],
+) {
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        json: { authenticated: true, user: { id: ownerId, email: "fixture@example.test" } },
+      });
+      return;
+    }
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          authenticated: true,
+          established: true,
+          userId: ownerId,
+          capabilities: { mountainRhythm: "full", namedJourneys: true },
+        },
+      });
+      return;
+    }
+    if (pathname.endsWith("/account/claim")) {
+      await route.fulfill({ status: 200, json: { success: true } });
+      return;
+    }
+    if (pathname.endsWith("/reading/plans") && request.method() === "GET") {
+      await route.fulfill({ status: 200, json: { success: true, plans: getPlans() } });
+      return;
+    }
+    if (pathname.endsWith("/events")) {
+      await route.fulfill({ status: 200, json: { success: true, events: getEvents() } });
+      return;
+    }
+    if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        json: { success: true, commitments: [], eventCompletions: [] },
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, json: { success: true, settings: {} } });
+  });
+}
+
+function makeFutureSyntheticEvent() {
+  const date = new Date(`${todayISO()}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return {
+    id: "synthetic-future-activity",
+    title: "Synthetic future activity",
+    type: "prayer",
+    date: date.toISOString().slice(0, 10),
+    repeat: "none",
+  };
+}
+
 type ReadingApiState = {
   plan: any;
   offline: boolean;
@@ -689,4 +801,147 @@ test("an offline active-climb reading keeps its date and progress after reconnec
   } finally {
     await otherContext.close();
   }
+});
+
+test("reproduces cross-tab Mountain Rhythm staleness after Home receives an established empty plan list", async ({
+  page,
+}) => {
+  const ownerId = "synthetic-climb-owner";
+  const plan = makeFiveOfSevenClimb();
+  await page.addInitScript(({ ownerId, plan }) => {
+    localStorage.setItem("discipleos-data", JSON.stringify({
+      ownerId,
+      plans: [plan],
+      events: [],
+      eventCompletions: {},
+      selectedPlanId: plan.id,
+    }));
+  }, { ownerId, plan });
+  await stubAuthenticatedPlanApi(page, ownerId, () => [plan]);
+
+  await page.goto("/mountain-rhythm");
+  const journeyMetric = page.getByTestId("mountain-rhythm-metric-journey");
+  await expect(journeyMetric).toContainText("71.4%");
+  await expect(journeyMetric).toContainText("5 of 7 planned days");
+  await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("Complete");
+  await expect(page.getByTestId("mountain-rhythm-metric-rhythm")).toContainText("40%");
+
+  const homePage = await page.context().newPage();
+  try {
+    await stubAuthenticatedPlanApi(homePage, ownerId, () => [], () => [makeFutureSyntheticEvent()]);
+    await homePage.goto("/");
+    await expect(homePage.getByTestId("dashboard-mountain-rhythm-climb"))
+      .toContainText("No active climb");
+    await expect(homePage.getByTestId("dashboard-mountain-rhythm-progress"))
+      .toContainText("Not started");
+    await expect(homePage.getByTestId("dashboard-mountain-rhythm-today-status"))
+      .toContainText("Not complete");
+
+    await homePage.getByTestId("dashboard-navigation-row")
+      .getByRole("button", { name: "Calendar", exact: true })
+      .click();
+    await expect(homePage.getByText("No activities for this day yet.")).toBeVisible();
+    await expect(homePage.locator('[data-testid^="calendar-plan-item-"]')).toHaveCount(0);
+
+    await expect.poll(() => homePage.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return data.plans?.length || 0;
+    })).toBe(0);
+    // The already-mounted Mountain Rhythm tab has no storage/focus refresh listener.
+    await expect(journeyMetric).toContainText("5 of 7 planned days");
+  } finally {
+    await homePage.close();
+  }
+});
+
+test("sequential same-tab navigation remounts Mountain Rhythm against the new empty server snapshot", async ({
+  page,
+}) => {
+  const ownerId = "synthetic-climb-owner";
+  const plan = makeFiveOfSevenClimb();
+  const futureEvent = makeFutureSyntheticEvent();
+  let homeSnapshotObserved = false;
+  await page.addInitScript(({ ownerId, plan }) => {
+    localStorage.setItem("discipleos-data", JSON.stringify({
+      ownerId,
+      plans: [plan],
+      events: [],
+      eventCompletions: {},
+      selectedPlanId: plan.id,
+    }));
+  }, { ownerId, plan });
+  await stubAuthenticatedPlanApi(
+    page,
+    ownerId,
+    () => {
+      if (new URL(page.url()).pathname === "/") homeSnapshotObserved = true;
+      return homeSnapshotObserved ? [] : [plan];
+    },
+    () => [futureEvent],
+  );
+
+  await page.goto("/mountain-rhythm");
+  const journeyMetric = page.getByTestId("mountain-rhythm-metric-journey");
+  await expect(journeyMetric).toContainText("71.4%");
+  await expect(journeyMetric).toContainText("5 of 7 planned days");
+
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
+    .toContainText("No active climb");
+  await page.getByTestId("dashboard-navigation-row")
+    .getByRole("button", { name: "Calendar", exact: true })
+    .click();
+  await expect(page.getByText("No activities for this day yet.")).toBeVisible();
+  await expect(page.locator('[data-testid^="calendar-plan-item-"]')).toHaveCount(0);
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("route-day-1")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-metric-journey")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    return data.plans?.length || 0;
+  })).toBe(0);
+});
+
+test("same-owner plan snapshot keeps Mountain Rhythm, Home, and the selected Calendar day aligned", async ({
+  page,
+}) => {
+  const ownerId = "synthetic-climb-owner";
+  const plan = makeFiveOfSevenClimb();
+  await page.addInitScript(({ ownerId, plan }) => {
+    localStorage.setItem("discipleos-data", JSON.stringify({
+      ownerId,
+      plans: [plan],
+      events: [],
+      eventCompletions: {},
+      selectedPlanId: plan.id,
+    }));
+  }, { ownerId, plan });
+  await stubAuthenticatedPlanApi(page, ownerId, () => [plan]);
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("mountain-rhythm-metric-journey"))
+    .toContainText("5 of 7 planned days");
+  await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("Complete");
+
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
+    .toContainText("7-Day Climb");
+  await expect(page.getByTestId("dashboard-mountain-rhythm-progress"))
+    .toContainText("71.4%");
+  await expect(page.getByTestId("dashboard-mountain-rhythm-today-status"))
+    .toContainText("Complete");
+
+  await page.getByTestId("dashboard-navigation-row")
+    .getByRole("button", { name: "Calendar", exact: true })
+    .click();
+  await page.getByTestId(`calendar-day-${todayISO()}`).click();
+  await expect(page.getByTestId(`calendar-plan-item-${plan.id}`)).toBeVisible();
+  await expect(page.getByTestId("calendar-items-list"))
+    .toContainText("Synthetic reading 5");
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("mountain-rhythm-metric-journey"))
+    .toContainText("5 of 7 planned days");
+  await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("Complete");
 });
