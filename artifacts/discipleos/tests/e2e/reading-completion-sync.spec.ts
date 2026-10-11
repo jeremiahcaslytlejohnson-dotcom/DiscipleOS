@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const OWNER_ID = "reading-sync-owner";
+const OTHER_OWNER_ID = "other-reading-sync-owner";
 const PLAN_ID = "reading-sync-plan";
 const PENDING_OPS_KEY = "discipleos:pendingOps";
 const COMPLETION_KEYS = ["today-psalm-1", "today-psalm-2"];
@@ -43,8 +44,50 @@ function makePlan(readingKeys = COMPLETION_KEYS) {
   };
 }
 
+function makeActiveClimbPlan() {
+  const startDate = todayISO();
+  const addDays = (amount: number) => {
+    const date = new Date(`${startDate}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + amount);
+    return date.toISOString().slice(0, 10);
+  };
+  const id = "offline-active-climb";
+
+  return {
+    id,
+    name: "7-Day Climb",
+    journeyKey: "7-day-climb",
+    journeyType: "7-day-climb",
+    journeyDays: 7,
+    selectedBooks: ["Psalms"],
+    startDate,
+    endDate: addDays(6),
+    durationDays: 7,
+    totalDays: 7,
+    dailyMinutes: 15,
+    readingTime: "07:00",
+    readingMode: "consecutive",
+    color: "from-[#D4A017] to-[#8A6414]",
+    assignments: Array.from({ length: 7 }, (_, index) => ({
+      date: addDays(index),
+      readings: [
+        {
+          key: `${id}-day-${index + 1}`,
+          label: `Climb reading ${index + 1}`,
+          book: "Psalms",
+          chapter: index + 1,
+          estimatedMinutes: 5,
+        },
+      ],
+    })),
+    completed: {},
+    earnedDayKeys: [],
+    dayCompletionDates: {},
+  };
+}
+
 type ReadingApiState = {
-  plan: ReturnType<typeof makePlan>;
+  plan: any;
   offline: boolean;
   failFirstCompletion: boolean;
   firstCompletionDelayMs: number;
@@ -76,7 +119,11 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function stubReadingApi(page: Page, state: ReadingApiState) {
+async function stubReadingApi(
+  page: Page,
+  state: ReadingApiState,
+  ownerId = OWNER_ID,
+) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
@@ -103,7 +150,7 @@ async function stubReadingApi(page: Page, state: ReadingApiState) {
           success: true,
           established: true,
           authenticated: false,
-          userId: OWNER_ID,
+          userId: ownerId,
         }),
       });
       return;
@@ -114,7 +161,10 @@ async function stubReadingApi(page: Page, state: ReadingApiState) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, plans: [state.plan] }),
+        body: JSON.stringify({
+          success: true,
+          plans: ownerId === OWNER_ID ? [state.plan] : [],
+        }),
       });
       return;
     }
@@ -144,13 +194,35 @@ async function stubReadingApi(page: Page, state: ReadingApiState) {
         }
 
         const payload = request.postDataJSON() as {
+          planId: string;
           key: string;
           completed: boolean;
+          earnedDay?: string;
+          completionDate?: string;
         };
+        if (ownerId !== OWNER_ID || payload.planId !== state.plan.id) {
+          await route.fulfill({
+            status: 409,
+            contentType: "application/json",
+            body: JSON.stringify({ success: false }),
+          });
+          return;
+        }
         state.plan.completed = {
           ...(state.plan.completed || {}),
           [payload.key]: Boolean(payload.completed),
         };
+        if (payload.earnedDay && payload.completionDate && payload.completed) {
+          state.plan.earnedDayKeys = [
+            ...new Set([...(state.plan.earnedDayKeys || []), payload.earnedDay]),
+          ];
+          state.plan.dayCompletionDates = {
+            ...(state.plan.dayCompletionDates || {}),
+            [payload.earnedDay]:
+              state.plan.dayCompletionDates?.[payload.earnedDay] ||
+              payload.completionDate,
+          };
+        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -209,7 +281,7 @@ async function stubReadingApi(page: Page, state: ReadingApiState) {
   });
 }
 
-async function seedReadingState(page: Page, plan: ReturnType<typeof makePlan>) {
+async function seedReadingState(page: Page, plan: any) {
   await page.addInitScript(
     ({ ownerId, initialPlan, pendingOpsKey }) => {
       // Init scripts run again on reload; only seed a fresh browser context.
@@ -319,4 +391,131 @@ test("an offline chapter check replays and reconciles after reconnect", async ({
   await expect.poll(() => state.plan.completed[COMPLETION_KEYS[0]]).toBe(true);
   await expect.poll(() => readPendingCount(page)).toBe(0);
   await expect(reading).toHaveAttribute("aria-pressed", "true");
+});
+
+test("an offline active-climb reading keeps its date and progress after reconnect and refresh", async ({
+  page,
+  browser,
+}) => {
+  const plan = makeActiveClimbPlan();
+  const readingKey = plan.assignments[0].readings[0].key;
+  const state = createApiState({ plan });
+  await stubReadingApi(page, state);
+  await seedReadingState(page, plan);
+  await openToday(page, state);
+
+  const todayReading = page.getByTestId(`today-reading-${readingKey}`);
+  state.offline = true;
+  await todayReading.click();
+  await expect(todayReading).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => readPendingCount(page)).toBe(1);
+  expect(state.plan.completed[readingKey]).toBeUndefined();
+
+  const queuedCompletion = await page.evaluate((key) => {
+    const pending = JSON.parse(
+      localStorage.getItem("discipleos:pendingOps") || "{}",
+    );
+    return {
+      ownerId: pending.ownerId,
+      op: pending.ops?.find((item: any) => item.key === key),
+    };
+  }, readingKey);
+  expect(queuedCompletion).toMatchObject({
+    ownerId: OWNER_ID,
+    op: {
+      type: "chapter-complete",
+      planId: plan.id,
+      key: readingKey,
+      completed: true,
+      earnedDay: todayISO(),
+      completionDate: todayISO(),
+    },
+  });
+
+  state.offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => readPendingCount(page)).toBe(0);
+  await expect.poll(() => state.plan.completed[readingKey]).toBe(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator(".launch-splash")).toHaveCount(0);
+  await expect(
+    page.getByTestId(`today-reading-${readingKey}`),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`today-complete-day-${plan.id}`)).toContainText(
+    "Day complete",
+  );
+
+  const expectedHistory = {
+    completed: { [readingKey]: true },
+    earnedDayKeys: [todayISO()],
+    dayCompletionDates: { [todayISO()]: todayISO() },
+  };
+  expect(state.plan).toMatchObject(expectedHistory);
+  const refreshedData = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+  );
+  expect(refreshedData.ownerId).toBe(OWNER_ID);
+  expect(refreshedData.plans.find((item: any) => item.id === plan.id)).toMatchObject(
+    expectedHistory,
+  );
+
+  const navigation = page.getByTestId("dashboard-navigation-row");
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+  const activeClimb = page.getByTestId("dashboard-active-climb");
+  await expect(activeClimb).toContainText("14% complete");
+  await expect(
+    activeClimb.getByTestId(`plan-day-section-${plan.id}-${todayISO()}`),
+  ).toContainText("1/1 chapters complete");
+
+  await page
+    .getByTestId("dashboard-navigation-row")
+    .getByRole("button", { name: "Calendar", exact: true })
+    .click();
+  await page.getByTestId(`calendar-day-${todayISO()}`).click();
+  const calendarPlan = page.getByTestId(`calendar-plan-item-${plan.id}`);
+  await expect(calendarPlan).toBeVisible();
+  await calendarPlan.getByTestId(`calendar-plan-toggle-${plan.id}`).click();
+  await expect(
+    calendarPlan.getByTestId(`calendar-plan-readings-${plan.id}`).getByRole("button"),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  await page.goto("/mountain-rhythm", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("route-day-1")).toBeVisible();
+  await expect(page.getByTestId("route-day-status-1")).toContainText("Complete");
+
+  const otherContext = await browser.newContext();
+  try {
+    const otherPage = await otherContext.newPage();
+    await otherPage.addInitScript((ownerId) => {
+      localStorage.setItem(
+        "discipleos-data",
+        JSON.stringify({
+          ownerId,
+          plans: [],
+          events: [],
+          eventCompletions: {},
+          selectedPlanId: null,
+        }),
+      );
+      localStorage.setItem(
+        "discipleos:pendingOps",
+        JSON.stringify({ ownerId, ops: [] }),
+      );
+    }, OTHER_OWNER_ID);
+    await stubReadingApi(otherPage, state, OTHER_OWNER_ID);
+    await otherPage.goto("/");
+    await otherPage.locator(".launch-splash").waitFor({ state: "detached" });
+    await expect(
+      otherPage.getByRole("heading", { name: "How would you like to start?" }),
+    ).toBeVisible();
+    await expect(otherPage.getByTestId(`today-reading-${readingKey}`)).toHaveCount(0);
+    const otherOwnerData = await otherPage.evaluate(() =>
+      JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+    );
+    expect(otherOwnerData.ownerId).toBe(OTHER_OWNER_ID);
+    expect(otherOwnerData.plans).toEqual([]);
+    expect(state.plan).toMatchObject(expectedHistory);
+  } finally {
+    await otherContext.close();
+  }
 });
