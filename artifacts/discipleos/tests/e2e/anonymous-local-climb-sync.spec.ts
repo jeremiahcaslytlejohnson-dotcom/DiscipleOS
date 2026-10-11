@@ -102,6 +102,44 @@ async function seedLocalClimb(
   );
 }
 
+function makeOrdinaryPlan(id: string, name: string, date = todayISO(), completed = false) {
+  const reading = {
+    key: `${id}-reading`,
+    label: `${name} reading`,
+    book: "Psalms",
+    chapter: 1,
+  };
+  return {
+    id,
+    name,
+    selectedBooks: ["Psalms"],
+    startDate: date,
+    endDate: date,
+    assignments: [{ date, readings: [reading] }],
+    completed: completed ? { [reading.key]: true } : {},
+  };
+}
+
+async function seedLocalPlans(page: Page, plans: any[], selectedPlanId = plans[0]?.id) {
+  await page.addInitScript(
+    ({ plans, selectedPlanId }) => {
+      localStorage.setItem("discipleos-data", JSON.stringify({
+        ownerId: "synthetic-anonymous-owner",
+        plans,
+        events: [],
+        eventCompletions: {},
+        selectedPlanId,
+      }));
+      localStorage.setItem("discipleos:pendingOps", JSON.stringify({
+        ownerId: "synthetic-anonymous-owner",
+        ops: [],
+      }));
+      localStorage.removeItem("discipleos:local-only-after-signout");
+    },
+    { plans, selectedPlanId },
+  );
+}
+
 async function stubAnonymousApi(
   page: Page,
   options: {
@@ -159,13 +197,22 @@ async function stubAnonymousApi(
   return requests;
 }
 
+async function openTodayProgress(page: Page) {
+  const toggle = page.getByTestId("dashboard-progress")
+    .getByRole("button", { name: /^Progress/ });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+}
+
 async function expectClimbOnHome(page: Page, planId: string) {
-  await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
-    .toContainText("7-Day Climb");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-progress"))
-    .toContainText("71.4%");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-today-status"))
-    .toContainText("Complete");
+  await openTodayProgress(page);
+  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveValue(planId);
+  await expect(page.getByTestId("dashboard-progress-detail"))
+    .toHaveAttribute("data-plan-id", planId);
+  await expect(page.getByTestId("dashboard-progress-selected-plan"))
+    .toContainText("Mountain Rhythm · 7-Day Climb");
+  await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
+  await expect(page.getByTestId("dashboard-progress-detail")).toContainText("5 of 7 planned days");
+  await expect(page.getByTestId("dashboard-progress-detail")).toContainText("Today’s climb complete");
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Plans", exact: true }).click();
   await expect(page.getByTestId("dashboard-active-climb"))
@@ -239,8 +286,9 @@ for (const ownerId of [null, "previous-anonymous-owner"]) {
     await seedLocalClimb(page, plan, ownerId, false, true);
     const requests = await stubAnonymousApi(page, { ownerId: OWNER_ID, established: false });
     await page.goto("/");
-    await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
-      .toContainText("No active climb");
+    await openTodayProgress(page);
+    await expect(page.getByTestId("dashboard-progress-empty")).toBeVisible();
+    await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => {
       const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
       const pending = JSON.parse(localStorage.getItem("discipleos:pendingOps") || "{}");
@@ -297,4 +345,107 @@ test("established empty anonymous API preserves a matching owner-bound local cli
   } finally {
     await home.close();
   }
+});
+
+test("Today progress selects one saved plan without changing readings, Calendar, or storage", async ({
+  page,
+}) => {
+  const guided = {
+    ...makeOrdinaryPlan("synthetic-guided", "Discover Scripture"),
+    guidedClimb: { series: "Guided Climb", set: 1, slug: "find-your-footing" },
+  };
+  const freeOne = makeOrdinaryPlan("synthetic-free-one", "Morning Psalms");
+  const freeTwo = makeOrdinaryPlan("synthetic-free-two", "Evening Wisdom");
+  const mountain = makeFiveOfSevenClimb();
+  const plans = [guided, freeOne, freeTwo, mountain];
+  await seedLocalPlans(page, plans, guided.id);
+  const requests = await stubAnonymousApi(page, { ownerId: OWNER_ID, established: false });
+
+  await page.goto("/");
+  await openTodayProgress(page);
+  const select = page.getByTestId("dashboard-progress-plan-select");
+  await expect(select.locator("option")).toHaveCount(4);
+  await expect(select.locator("option").nth(0)).toContainText("Guided Climb · Discover Scripture");
+  await expect(select.locator("option").nth(1)).toContainText("Free Climb · Morning Psalms");
+  await expect(select.locator("option").nth(2)).toContainText("Free Climb · Evening Wisdom");
+  await expect(select.locator("option").nth(3)).toContainText("Mountain Rhythm · 7-Day Climb");
+  await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(1);
+  await expect(page.getByTestId(`today-reading-${guided.id}-reading`)).toBeVisible();
+  await expect(page.getByTestId(`today-reading-${freeOne.id}-reading`)).toBeVisible();
+  await expect(page.getByTestId(`today-reading-${freeTwo.id}-reading`)).toBeVisible();
+  await expect(page.getByTestId("today-reading-anon-climb-day-5")).toBeVisible();
+
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    return data.plans?.length || 0;
+  })).toBe(4);
+  const before = await page.evaluate(() => ({
+    data: localStorage.getItem("discipleos-data"),
+    pending: localStorage.getItem("discipleos:pendingOps"),
+  }));
+  for (const plan of [freeOne, freeTwo, mountain]) {
+    await select.selectOption(plan.id);
+    await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(1);
+    await expect(page.getByTestId("dashboard-progress-detail"))
+      .toHaveAttribute("data-plan-id", plan.id);
+  }
+  const after = await page.evaluate(() => ({
+    data: localStorage.getItem("discipleos-data"),
+    pending: localStorage.getItem("discipleos:pendingOps"),
+  }));
+  expect(after).toEqual(before);
+  expect(requests).toEqual({ claims: 0, planWrites: 0 });
+  for (const plan of plans) {
+    if (plan === mountain) {
+      await expect(page.getByTestId("today-reading-anon-climb-day-5")).toBeVisible();
+    } else {
+      await expect(page.getByTestId(`today-reading-${plan.id}-reading`)).toBeVisible();
+    }
+  }
+
+  await page.getByTestId("dashboard-navigation-row")
+    .getByRole("button", { name: "Plans", exact: true }).click();
+  await expect(page.getByTestId("dashboard-plan-details")).toContainText("Discover Scripture");
+
+  await page.getByTestId("dashboard-navigation-row")
+    .getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByTestId(`calendar-day-${todayISO()}`).click();
+  for (const plan of plans) {
+    await expect(page.getByTestId(`calendar-plan-item-${plan.id}`)).toBeVisible();
+  }
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("mountain-rhythm-metric-journey"))
+    .toContainText("5 of 7 planned days");
+});
+
+test("Today progress omits completed plans and shows an empty state when all are complete", async ({
+  page,
+}) => {
+  const active = makeOrdinaryPlan("synthetic-only-active", "Current Free Plan");
+  const completed = makeOrdinaryPlan("synthetic-complete", "Finished Plan", todayISO(), true);
+  await seedLocalPlans(page, [active, completed], completed.id);
+  await stubAnonymousApi(page, { ownerId: OWNER_ID, established: false });
+  await page.goto("/");
+
+  await openTodayProgress(page);
+  const select = page.getByTestId("dashboard-progress-plan-select");
+  await expect(select.locator("option")).toHaveCount(1);
+  await expect(select.locator("option")).toContainText("Free Climb · Current Free Plan");
+  await expect(page.getByTestId("dashboard-progress-detail"))
+    .toHaveAttribute("data-plan-id", active.id);
+  await expect(select).not.toContainText(completed.name);
+});
+
+test("Today progress shows no plan choices when all saved plans are complete", async ({ page }) => {
+  const completeOne = makeOrdinaryPlan("synthetic-complete-one", "Finished Psalms", todayISO(), true);
+  const completeTwo = makeOrdinaryPlan("synthetic-complete-two", "Finished Proverbs", todayISO(), true);
+  await seedLocalPlans(page, [completeOne, completeTwo], completeOne.id);
+  await stubAnonymousApi(page, { ownerId: OWNER_ID, established: false });
+  await page.goto("/");
+
+  await openTodayProgress(page);
+  await expect(page.getByTestId("dashboard-progress-empty")).toBeVisible();
+  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(0);
 });

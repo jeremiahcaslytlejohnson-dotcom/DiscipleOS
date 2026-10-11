@@ -89,7 +89,7 @@ test("Home and Mountain Rhythm reject plan hydration when auth and server owners
   });
 
   await page.goto("/");
-  await expect(page.getByText("Climb reading 1")).toBeVisible();
+  await expect(page.getByTestId("today-reading-offline-active-climb-day-1")).toBeVisible();
   await expect(page.getByText("Foreign Session Climb")).toHaveCount(0);
 
   await page.goto("/mountain-rhythm");
@@ -830,12 +830,9 @@ test("reproduces cross-tab Mountain Rhythm staleness after Home receives an esta
   try {
     await stubAuthenticatedPlanApi(homePage, ownerId, () => [], () => [makeFutureSyntheticEvent()]);
     await homePage.goto("/");
-    await expect(homePage.getByTestId("dashboard-mountain-rhythm-climb"))
-      .toContainText("No active climb");
-    await expect(homePage.getByTestId("dashboard-mountain-rhythm-progress"))
-      .toContainText("Not started");
-    await expect(homePage.getByTestId("dashboard-mountain-rhythm-today-status"))
-      .toContainText("Not complete");
+    await homePage.getByTestId("dashboard-progress")
+      .getByRole("button", { name: /^Progress/ }).click();
+    await expect(homePage.getByTestId("dashboard-progress-empty")).toBeVisible();
 
     await homePage.getByTestId("dashboard-navigation-row")
       .getByRole("button", { name: "Calendar", exact: true })
@@ -886,8 +883,9 @@ test("sequential same-tab navigation remounts Mountain Rhythm against the new em
   await expect(journeyMetric).toContainText("5 of 7 planned days");
 
   await page.goto("/");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
-    .toContainText("No active climb");
+  await page.getByTestId("dashboard-progress")
+    .getByRole("button", { name: /^Progress/ }).click();
+  await expect(page.getByTestId("dashboard-progress-empty")).toBeVisible();
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Calendar", exact: true })
     .click();
@@ -925,12 +923,12 @@ test("same-owner plan snapshot keeps Mountain Rhythm, Home, and the selected Cal
   await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("Complete");
 
   await page.goto("/");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-climb"))
-    .toContainText("7-Day Climb");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-progress"))
-    .toContainText("71.4%");
-  await expect(page.getByTestId("dashboard-mountain-rhythm-today-status"))
-    .toContainText("Complete");
+  await page.getByTestId("dashboard-progress")
+    .getByRole("button", { name: /^Progress/ }).click();
+  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveValue(plan.id);
+  await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
+  await expect(page.getByTestId("dashboard-progress-detail"))
+    .toContainText("Today’s climb complete");
 
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Calendar", exact: true })

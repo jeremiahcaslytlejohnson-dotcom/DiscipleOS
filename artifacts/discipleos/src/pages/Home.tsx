@@ -1,7 +1,10 @@
 // @ts-nocheck
 import { apiFetch } from "@/lib/api-fetch";
 const fetch = apiFetch;
-import { getLocalPlanTimeZone } from "@workspace/structured-plan-lifecycle";
+import {
+  getLocalPlanTimeZone,
+  getStructuredPlanLifecycle,
+} from "@workspace/structured-plan-lifecycle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useAuth } from "../lib/auth";
 import { Link } from "wouter";
@@ -1135,95 +1138,6 @@ function getCalendarActivityMarkers(dayEvents: any[], eventCompletions: Record<s
   }));
 }
 
-function ClimbProgressSummaryBar({ score }: any) {
-  const hasJourney = Number(score?.journeyDays || 0) > 0;
-  const climbName = hasJourney ? score.journeyLabel : "No active climb";
-  const journeyProgress = hasJourney ? `${score.journeyProgress}%` : "Not started";
-  const journeyDetail = hasJourney
-    ? `${score.completedDays} of ${score.journeyDays} planned days`
-    : "Choose a climb to begin";
-  const todayClimbComplete = Boolean(
-    hasJourney && score.todayPlanned && score.todayPercentage >= 100,
-  );
-
-  return (
-    <ResponsiveSection
-      testId="dashboard-mountain-rhythm"
-      title="Mountain Rhythm"
-      icon={Mountain}
-      summary="Long-term climb progress"
-      summaryTestId="dashboard-mountain-rhythm-description"
-      disclosureKey="mountainRhythm"
-      collapsible
-      headerAction={
-        <Link
-          href="/mountain-rhythm"
-          data-testid="dashboard-mountain-rhythm-details"
-          className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
-        >
-          Details
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-      }
-    >
-      <div data-testid="dashboard-mountain-rhythm-summary" className="grid grid-cols-3 gap-1 sm:gap-2">
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center first:border-l-0 sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Active climb
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-climb"
-            className="discipleos-safe-text mt-1 break-words text-sm font-semibold leading-5 sm:text-base"
-          >
-            {climbName}
-          </div>
-        </div>
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Journey progress
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-progress"
-            className="mt-1 text-xl font-semibold leading-none text-emerald-200 sm:text-2xl"
-          >
-            {journeyProgress}
-          </div>
-          <div className="discipleos-meta-copy mt-1 break-words text-[10px] leading-4 sm:text-xs">
-            {journeyDetail}
-          </div>
-        </div>
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Today’s Climb
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-today-status"
-            className={`discipleos-safe-text mt-1 break-words text-sm font-semibold leading-5 sm:text-base ${
-              todayClimbComplete ? "text-emerald-200" : "text-[#F4D77A]"
-            }`}
-          >
-            {todayClimbComplete ? "Complete" : "Not complete"}
-          </div>
-          {todayClimbComplete ? (
-            <div className="discipleos-meta-copy mt-1 break-words text-[10px] leading-4 sm:text-xs">
-              Today’s reading finished
-            </div>
-          ) : (
-            <Link
-              href="/mountain-rhythm"
-              data-testid="dashboard-mountain-rhythm-today-action"
-              aria-label="Open today’s Mountain Rhythm reading"
-              className="mt-1 inline-flex min-h-8 items-center justify-center break-words text-[10px] font-semibold leading-4 text-[#F4D77A] underline decoration-[#F4D77A]/50 underline-offset-2 hover:text-white sm:text-xs"
-            >
-              Open today’s reading
-            </Link>
-          )}
-        </div>
-      </div>
-    </ResponsiveSection>
-  );
-}
-
 function SectionCard({ className = "", children, ...props }: any) {
   return (
     <div
@@ -1668,6 +1582,7 @@ export default function DiscipleOSApp() {
   const [serverOwnerId, setServerOwnerId] = useState<string | null>(null);
   const [hydratedPlanOwnerId, setHydratedPlanOwnerId] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [todayProgressPlanId, setTodayProgressPlanId] = useState<string | null>(null);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1943,6 +1858,64 @@ export default function DiscipleOSApp() {
   const activeClimbPlan = useMemo(
     () => findActiveStructuredClimb(plans, todayISO()),
     [plans],
+  );
+  const todayProgressPlans = useMemo(() => {
+    const hasRemainingWork = (plan: any) => {
+      const stats = getPlanStats(plan);
+      return stats.totalChapters > 0 && stats.remainingChapters > 0;
+    };
+    const ordinary = ordinaryPlans
+      .filter(
+        (plan: any) =>
+          !isStructuredClimbPlan(plan) &&
+          Array.isArray(plan.assignments) &&
+          plan.assignments.some((day: any) => day.readings?.length) &&
+          hasRemainingWork(plan),
+      )
+      .map((plan: any) => ({
+        plan,
+        kind: isGuidedClimbSetOnePlan(plan) ? "guided" : "free",
+        optionLabel: `${isGuidedClimbSetOnePlan(plan) ? "Guided Climb" : "Free Climb"} · ${getGuidedClimbPlanDisplayName(plan) || plan.name}`,
+      }));
+    const structured = plans
+      .filter((plan: any) => {
+        if (
+          !isStructuredClimbPlan(plan) ||
+          !Array.isArray(plan.assignments) ||
+          !plan.assignments.some((day: any) => day.readings?.length) ||
+          !hasRemainingWork(plan)
+        ) {
+          return false;
+        }
+        const lifecycle = getStructuredPlanLifecycle(plan, todayISO());
+        return lifecycle === "active" || lifecycle === "expired";
+      })
+      .map((plan: any) => ({
+        plan,
+        kind: "mountain",
+        optionLabel: `Mountain Rhythm · ${plan.name || "Reading climb"}`,
+      }));
+    return [...ordinary, ...structured];
+  }, [ordinaryPlans, plans]);
+  const effectiveTodayProgressPlanId = todayProgressPlans.some(
+    ({ plan }) => plan.id === todayProgressPlanId,
+  )
+    ? todayProgressPlanId
+    : todayProgressPlans[0]?.plan.id ?? null;
+  const selectedTodayProgress = todayProgressPlans.find(
+    ({ plan }) => plan.id === effectiveTodayProgressPlanId,
+  ) || null;
+  const selectedTodayRhythmScore = useMemo(
+    () =>
+      selectedTodayProgress?.kind === "mountain"
+        ? calculateMountainRhythm({
+            today: todayISO(),
+            plans,
+            accessTier: rhythmAccessTier,
+            selectedPlanId: selectedTodayProgress.plan.id,
+          })
+        : null,
+    [plans, rhythmAccessTier, selectedTodayProgress],
   );
   const selectedGuidedClimbIsComplete = isGuidedClimbSetOneComplete(
     selectedPlan,
@@ -5234,53 +5207,119 @@ export default function DiscipleOSApp() {
               title="Progress"
               icon={Bookmark}
               disclosureKey="progress"
-              summary="Ordinary reading plans"
+              summary="One active plan at a time"
               collapsible
             >
-              <div data-testid="dashboard-progress-list" className="discipleos-flat-list">
-                {ordinaryPlans.length === 0 ? (
-                  <div className="discipleos-empty-state text-sm">No ordinary reading plans yet.</div>
+              <div data-testid="dashboard-progress-list" className="space-y-4">
+                {todayProgressPlans.length === 0 ? (
+                  <div
+                    data-testid="dashboard-progress-empty"
+                    className="discipleos-empty-state text-sm"
+                  >
+                    No active reading plans. Progress will appear here when you start a plan.
+                  </div>
                 ) : (
-                  ordinaryPlans.map((plan) => {
-                    const stats = getPlanStats(plan);
-                    const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
-                    return (
-                      <div
-                        key={plan.id}
-                        data-testid={`dashboard-progress-row-${plan.id}`}
-                        className="discipleos-flat-row py-3 first:pt-0 last:pb-0"
+                  <>
+                    <label className="flex min-w-0 flex-col gap-2 sm:max-w-xl">
+                      <span className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">
+                        Plan progress
+                      </span>
+                      <select
+                        data-testid="dashboard-progress-plan-select"
+                        aria-label="Choose a plan for progress"
+                        value={effectiveTodayProgressPlanId || ""}
+                        onChange={(event) => setTodayProgressPlanId(event.target.value)}
+                        className="discipleos-control min-h-11 w-full border border-white/15 bg-[#11161D] px-3 py-2 text-sm text-white"
                       >
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                          <div className="discipleos-safe-text min-w-0 font-medium">{getGuidedClimbPlanDisplayName(plan)}</div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPlanId(plan.id);
-                              setActiveTab("plans");
-                            }}
-                            className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
-                          >
-                            Open plan
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </div>
+                        {todayProgressPlans.map(({ plan, optionLabel }) => (
+                          <option key={plan.id} value={plan.id}>
+                            {optionLabel}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {selectedTodayProgress ? (() => {
+                      const plan = selectedTodayProgress.plan;
+                      const stats = getPlanStats(plan);
+                      const nextAssignment = [...(plan.assignments || [])]
+                        .filter((day: any) =>
+                          day.readings?.length && !isPlanDayComplete(plan, day.date),
+                        )
+                        .sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)))[0];
+                      const nextReading = nextAssignment
+                        ? nextAssignment.readings
+                            .slice(0, 3)
+                            .map((reading: any) =>
+                              reading.label || `${reading.book || ""} ${reading.chapter || ""}`.trim(),
+                            )
+                            .filter(Boolean)
+                            .join(", ")
+                        : "";
+                      const isMountainRhythm = selectedTodayProgress.kind === "mountain";
+                      const progressPercent = isMountainRhythm
+                        ? Number(selectedTodayRhythmScore?.journeyProgress || 0)
+                        : stats.percent;
+                      const status = isMountainRhythm
+                        ? !selectedTodayRhythmScore?.todayPlanned
+                          ? "No reading scheduled today"
+                          : selectedTodayRhythmScore.todayPercentage >= 100
+                            ? "Today’s climb complete"
+                            : selectedTodayRhythmScore.todayPercentage > 0
+                              ? "Today’s climb in progress"
+                              : "Ready for today"
+                        : isPlanCaughtUpThroughToday(plan, todayISO())
+                          ? "Up to date"
+                          : "Catch-up needed";
+                      const dateLabel = nextAssignment
+                        ? nextAssignment.date < todayISO()
+                          ? `Catch-up reading · ${nextAssignment.date}`
+                          : nextAssignment.date === todayISO()
+                            ? "Next reading · Today"
+                            : `Next reading · ${nextAssignment.date}`
+                        : "All assigned readings complete";
+
+                      return (
                         <div
-                          className="discipleos-meta-copy mt-1 w-full text-left text-sm"
-                          style={{
-                            color: isUpToDate ? "#86EFAC" : "#F4D77A",
-                          }}
-                          data-testid={`dashboard-plan-status-${plan.id}`}
+                          data-testid="dashboard-progress-detail"
+                          data-plan-id={plan.id}
+                          className="discipleos-flat-row space-y-2 py-3"
                         >
-                          {stats.percent}% complete · {stats.remainingChapters} chapters remaining
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                            <div
+                              data-testid="dashboard-progress-selected-plan"
+                              className="discipleos-safe-text min-w-0 font-medium"
+                            >
+                              {selectedTodayProgress.optionLabel}
+                            </div>
+                            <div
+                              data-testid="dashboard-progress-percent"
+                              className="shrink-0 text-lg font-semibold text-emerald-200"
+                            >
+                              {progressPercent}% complete
+                            </div>
+                          </div>
+                          <div className="discipleos-meta-copy text-sm">
+                            {isMountainRhythm
+                              ? `${selectedTodayRhythmScore?.completedDays || 0} of ${selectedTodayRhythmScore?.journeyDays || 0} planned days · ${status}`
+                              : `${stats.remainingChapters} chapters remaining · ${status}`}
+                          </div>
+                          <div
+                            data-testid="dashboard-progress-next-reading"
+                            className="discipleos-safe-text text-sm text-white/80"
+                          >
+                            {dateLabel}{nextReading ? `: ${nextReading}` : ""}
+                            {nextAssignment && nextAssignment.readings.length > 3
+                              ? ` +${nextAssignment.readings.length - 3} more`
+                              : ""}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })() : null}
+                  </>
                 )}
               </div>
             </ResponsiveSection>
 
-            <ClimbProgressSummaryBar score={mountainRhythm} />
           </div>
         )}
 

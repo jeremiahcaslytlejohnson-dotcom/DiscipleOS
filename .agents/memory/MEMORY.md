@@ -23,6 +23,7 @@
 - [Calendar form handlers](calendar-form-handlers.md) — optional arguments on form reset helpers must be passed through zero-argument React click wrappers.
 - [Calendar visual test selectors](calendar-visual-test-selectors.md) — reserve the `calendar-day-*` test-id prefix for actual date cells, not list containers.
 - [Calendar reading disclosure tests](calendar-reading-disclosure-tests.md) — test disclosure separately from completion state; plan rows may render as already complete.
+- [Today progress selection](today-progress-selection.md) — Today’s progress picker is transient UI state; derive options from real incomplete plans without changing reading, Calendar, plan-selection, or sync state.
 - [Feedback operations](feedback-operations.md) — feedback is permanent in Postgres; owner access is server-gated and notification failures never roll back saved rows.
 - [Plan-day grouping](plan-day-grouping.md) — preserve date-based grouping and keep plan-summary wording unchanged when color-coding schedule status.
 - [Git credential safety](git-credential-safety.md) — keep GitHub tokens out of remote URLs; Replit blocks local `.git` writes unless explicitly enabled.
