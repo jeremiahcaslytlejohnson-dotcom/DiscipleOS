@@ -178,14 +178,14 @@ export default function InstallButton({
       className={[
         "inline-flex w-full items-center justify-center whitespace-nowrap border transition-[background-color,border-color,transform] active:translate-y-px",
         compact
-          ? "discipleos-control--compact h-9 gap-1.5 px-3 py-2 text-xs md:h-11"
+          ? "discipleos-action h-11 gap-1.5 px-3 py-2 text-xs"
           : "discipleos-action h-11 gap-2 px-4 text-sm",
         isInstalled
           ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
           : disabled
             ? "border-white/10 bg-white/5 text-white/45"
             : compact
-              ? "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:-translate-y-0.5 hover:border-[#D4A017]/50 hover:bg-white/10 hover:text-white"
+              ? "border-white/10 bg-white/[0.04] text-[#94A3B8] hover:bg-white/10 hover:text-white"
               : "border-white/10 bg-white/5 text-[#F8FAFC] hover:bg-white/10",
       ].join(" ")}
     >

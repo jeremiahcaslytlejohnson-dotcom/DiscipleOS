@@ -3069,6 +3069,9 @@ test("keeps every desktop and tablet navigation control visible without overflow
           left: controlRect.left,
           right: controlRect.right,
           height: controlRect.height,
+          borderRadius: getComputedStyle(control).borderRadius,
+          borderColor: getComputedStyle(control).borderTopColor,
+          backgroundColor: getComputedStyle(control).backgroundColor,
           textRight: Math.max(...textBounds.map(({ right }) => right)),
           controlRight: controlRect.right,
         };
@@ -3090,6 +3093,12 @@ test("keeps every desktop and tablet navigation control visible without overflow
     expect(layout.rowScrollWidth).toBeLessThanOrEqual(layout.rowClientWidth + 1);
     expect(layout.overflowX).not.toMatch(/auto|scroll/);
     expect(layout.controls).toHaveLength(6);
+    const inactiveControlStyle = layout.controls[1];
+    for (const control of layout.controls.slice(2)) {
+      expect(control.borderRadius).toBe(inactiveControlStyle.borderRadius);
+      expect(control.borderColor).toBe(inactiveControlStyle.borderColor);
+      expect(control.backgroundColor).toBe(inactiveControlStyle.backgroundColor);
+    }
     for (const control of layout.controls) {
       expect(control.left).toBeGreaterThanOrEqual(layout.rowLeft - 1);
       expect(control.right).toBeLessThanOrEqual(layout.rowRight + 1);
