@@ -2355,6 +2355,12 @@ test("lists Guided, Mountain, and Free plans together in Home Progress", async (
     await expect(row).toBeVisible();
     await expect(row).toContainText(`${kind} plan`);
   }
+  const mountainProgress = page.getByTestId(
+    `dashboard-mountain-rhythm-progress-${mountainPlan.id}`,
+  );
+  await expect(mountainProgress).toContainText(/Journey progress \d+%/);
+  await expect(mountainProgress).toContainText("of 7 days");
+  await expect(mountainProgress).toContainText(/Consistency \d+%/);
   await expect(page.getByTestId(`dashboard-open-plan-${mountainPlan.id}`)).toHaveAttribute(
     "href",
     "/mountain-rhythm",
