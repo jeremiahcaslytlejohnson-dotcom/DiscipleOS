@@ -205,14 +205,20 @@ async function openTodayProgress(page: Page) {
 
 async function expectClimbOnHome(page: Page, planId: string) {
   await openTodayProgress(page);
-  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveValue(planId);
+  await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-progress-detail"))
     .toHaveAttribute("data-plan-id", planId);
   await expect(page.getByTestId("dashboard-progress-selected-plan"))
-    .toContainText("Mountain Rhythm · 7-Day Climb");
+    .toContainText("Rhythm · 7-Day Climb");
+  await expect(page.getByTestId(`today-complete-day-${planId}`))
+    .toContainText("Day complete");
   await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
-  await expect(page.getByTestId("dashboard-progress-detail")).toContainText("5 of 7 planned days");
-  await expect(page.getByTestId("dashboard-progress-detail")).toContainText("Today’s climb complete");
+  await expect(page.getByTestId("dashboard-progress-detail")).not.toContainText("5 of 7 planned days");
+  await expect(page.getByTestId("dashboard-progress-detail")).not.toContainText("Today’s climb complete");
+  await expect(page.getByTestId("dashboard-progress-next-reading"))
+    .toContainText(/Next reading · [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+  await expect(page.getByTestId("dashboard-progress-next-reading"))
+    .not.toContainText(/\d{4}-\d{2}-\d{2}/);
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Plans", exact: true }).click();
   await expect(page.getByTestId("dashboard-active-climb"))
@@ -288,7 +294,7 @@ for (const ownerId of [null, "previous-anonymous-owner"]) {
     await page.goto("/");
     await openTodayProgress(page);
     await expect(page.getByTestId("dashboard-progress-empty")).toBeVisible();
-    await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => {
       const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
       const pending = JSON.parse(localStorage.getItem("discipleos:pendingOps") || "{}");
@@ -355,7 +361,10 @@ test("Today progress selects one saved plan without changing readings, Calendar,
     guidedClimb: { series: "Guided Climb", set: 1, slug: "find-your-footing" },
   };
   const freeOne = makeOrdinaryPlan("synthetic-free-one", "Morning Psalms");
-  const freeTwo = makeOrdinaryPlan("synthetic-free-two", "Evening Wisdom");
+  const freeTwo = makeOrdinaryPlan(
+    "synthetic-free-two",
+    "Evening Wisdom and Psalms for Busy Weeks",
+  );
   const mountain = makeFiveOfSevenClimb();
   const plans = [guided, freeOne, freeTwo, mountain];
   await seedLocalPlans(page, plans, guided.id);
@@ -363,13 +372,23 @@ test("Today progress selects one saved plan without changing readings, Calendar,
 
   await page.goto("/");
   await openTodayProgress(page);
-  const select = page.getByTestId("dashboard-progress-plan-select");
-  await expect(select.locator("option")).toHaveCount(4);
-  await expect(select.locator("option").nth(0)).toContainText("Guided Climb · Discover Scripture");
-  await expect(select.locator("option").nth(1)).toContainText("Free Climb · Morning Psalms");
-  await expect(select.locator("option").nth(2)).toContainText("Free Climb · Evening Wisdom");
-  await expect(select.locator("option").nth(3)).toContainText("Mountain Rhythm · 7-Day Climb");
+  const choices = page.getByTestId("dashboard-progress-plan-choices");
+  await expect(choices).toHaveAttribute("role", "group");
+  const guidedChoice = page.getByTestId(`dashboard-progress-choice-${guided.id}`);
+  const freeOneChoice = page.getByTestId(`dashboard-progress-choice-${freeOne.id}`);
+  const freeTwoChoice = page.getByTestId(`dashboard-progress-choice-${freeTwo.id}`);
+  const mountainChoice = page.getByTestId(`dashboard-progress-choice-${mountain.id}`);
+  await expect(guidedChoice).toContainText("Guided · Discover Scripture");
+  await expect(freeOneChoice).toContainText("Free · Morning Psalms");
+  await expect(freeTwoChoice)
+    .toContainText("Free · Evening Wisdom and Psalms for Busy Weeks");
+  await expect(mountainChoice).toContainText("Rhythm · 7-Day Climb");
+  await expect(choices.getByRole("button", { name: "Free · Morning Psalms" })).toBeVisible();
+  await expect(choices.getByRole("button", { name: /^Free · Evening Wisdom/ })).toBeVisible();
+  await expect(guidedChoice).toHaveAttribute("aria-pressed", "true");
+  await expect(choices.locator('button[aria-pressed="true"]')).toHaveCount(1);
   await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(1);
+  await expect(page.getByTestId("dashboard-progress-selected-plan")).toHaveCount(0);
   await expect(page.getByTestId(`today-reading-${guided.id}-reading`)).toBeVisible();
   await expect(page.getByTestId(`today-reading-${freeOne.id}-reading`)).toBeVisible();
   await expect(page.getByTestId(`today-reading-${freeTwo.id}-reading`)).toBeVisible();
@@ -384,7 +403,10 @@ test("Today progress selects one saved plan without changing readings, Calendar,
     pending: localStorage.getItem("discipleos:pendingOps"),
   }));
   for (const plan of [freeOne, freeTwo, mountain]) {
-    await select.selectOption(plan.id);
+    const choice = page.getByTestId(`dashboard-progress-choice-${plan.id}`);
+    await choice.click();
+    await expect(choice).toHaveAttribute("aria-pressed", "true");
+    await expect(choices.locator('button[aria-pressed="true"]')).toHaveCount(1);
     await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(1);
     await expect(page.getByTestId("dashboard-progress-detail"))
       .toHaveAttribute("data-plan-id", plan.id);
@@ -402,6 +424,27 @@ test("Today progress selects one saved plan without changing readings, Calendar,
       await expect(page.getByTestId(`today-reading-${plan.id}-reading`)).toBeVisible();
     }
   }
+  for (const width of [320, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+    }));
+    expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
+    const choicesBox = await choices.boundingBox();
+    expect(choicesBox).not.toBeNull();
+    for (const choice of [guidedChoice, freeOneChoice, freeTwoChoice, mountainChoice]) {
+      const box = await choice.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(choicesBox!.x - 1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(choicesBox!.x + choicesBox!.width + 1);
+    }
+    if (width === 320) {
+      const wrappedChoiceBox = await freeTwoChoice.boundingBox();
+      expect(wrappedChoiceBox?.height).toBeGreaterThan(44);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Plans", exact: true }).click();
@@ -429,12 +472,16 @@ test("Today progress omits completed plans and shows an empty state when all are
   await page.goto("/");
 
   await openTodayProgress(page);
-  const select = page.getByTestId("dashboard-progress-plan-select");
-  await expect(select.locator("option")).toHaveCount(1);
-  await expect(select.locator("option")).toContainText("Free Climb · Current Free Plan");
+  await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-selected-plan"))
+    .toHaveText("Free · Current Free Plan");
+  await expect(page.getByTestId("dashboard-progress-detail")).toHaveAttribute(
+    "data-plan-id",
+    active.id,
+  );
   await expect(page.getByTestId("dashboard-progress-detail"))
     .toHaveAttribute("data-plan-id", active.id);
-  await expect(select).not.toContainText(completed.name);
+  await expect(page.getByTestId("dashboard-progress-detail")).not.toContainText(completed.name);
 });
 
 test("Today progress shows no plan choices when all saved plans are complete", async ({ page }) => {
@@ -446,6 +493,6 @@ test("Today progress shows no plan choices when all saved plans are complete", a
 
   await openTodayProgress(page);
   await expect(page.getByTestId("dashboard-progress-empty")).toBeVisible();
-  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(0);
 });

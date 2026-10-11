@@ -281,9 +281,13 @@ test("claims an anonymous Mountain Rhythm climb with its dates and progress when
     .toContainText("Day complete");
   await page.getByTestId("dashboard-progress")
     .getByRole("button", { name: /^Progress/ }).click();
-  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveValue(expectedClimb.id);
+  await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-selected-plan"))
+    .toHaveText("Rhythm · 7-Day Climb");
   await expect(page.getByTestId("dashboard-progress-percent"))
-    .toHaveText(`${expectedClimb.progressPercent}% complete`);
+    .toContainText(`${expectedClimb.progressPercent}% complete`);
+  await expect(page.getByTestId("dashboard-progress-detail"))
+    .not.toContainText("Today’s climb complete");
   expect(await getActiveClimbSnapshot(page)).toEqual(expectedClimb);
 
   await page.goto("/mountain-rhythm");

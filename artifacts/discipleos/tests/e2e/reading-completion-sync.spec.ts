@@ -925,10 +925,14 @@ test("same-owner plan snapshot keeps Mountain Rhythm, Home, and the selected Cal
   await page.goto("/");
   await page.getByTestId("dashboard-progress")
     .getByRole("button", { name: /^Progress/ }).click();
-  await expect(page.getByTestId("dashboard-progress-plan-select")).toHaveValue(plan.id);
+  await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-selected-plan"))
+    .toHaveText("Rhythm · 7-Day Climb");
   await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
   await expect(page.getByTestId("dashboard-progress-detail"))
-    .toContainText("Today’s climb complete");
+    .not.toContainText("Today’s climb complete");
+  await expect(page.getByTestId(`today-complete-day-${plan.id}`))
+    .toContainText("Day complete");
 
   await page.getByTestId("dashboard-navigation-row")
     .getByRole("button", { name: "Calendar", exact: true })

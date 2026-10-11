@@ -476,7 +476,7 @@ test("keeps audited secondary text readable across responsive DiscipleOS states"
     await page.goto("/");
     await page.locator(".launch-splash").waitFor({ state: "detached" });
     await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
-    await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
+    await expect(page.getByTestId("today-open-day-view")).toBeVisible();
 
     const palette = await page.evaluate(() => {
       const shell = document.querySelector(".discipleos-shell");
@@ -588,10 +588,19 @@ test("completes a plan day in one tap, persists it, and exposes undo", async ({ 
   if (await todayReadingToggle.getAttribute("aria-expanded") !== "true") {
     await todayReadingToggle.click();
   }
+  const assignedSummary = todayReading.getByTestId("dashboard-assigned-reading-summary");
+  await expect(assignedSummary).toBeVisible();
+  await expect(todayReading.getByText(await assignedSummary.innerText(), { exact: true }))
+    .toHaveCount(1);
+  await expect(todayReading.getByText("Today’s completion", { exact: true })).toHaveCount(0);
+  await expect(todayReading.getByTestId("today-total-estimated-reading-time")).toHaveCount(0);
+  await expect(todayReading.getByTestId("dashboard-assigned-reading-estimate")).toHaveCount(0);
   await expect(
     todayReading.getByTestId("today-estimated-reading-time-complete-day-plan"),
   ).toHaveText("≈ 4 min");
   const todayCompleteDay = page.getByTestId("today-complete-day-complete-day-plan");
+  await expect(todayCompleteDay).toHaveText("Day complete");
+  await expect(todayReading.getByText("Day complete", { exact: true })).toHaveCount(1);
   const todayCompleteDayGeometry = await todayCompleteDay.evaluate((button) => ({
     height: button.getBoundingClientRect().height,
     scrollWidth: button.scrollWidth,
@@ -2314,7 +2323,9 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
     const activities = page.getByTestId("dashboard-schedule");
     const progress = page.getByTestId("dashboard-progress");
     await expect(assigned.getByRole("button", { name: /Today’s Reading/ })).toHaveAttribute("aria-expanded", "true");
-    await expect(assigned.getByTestId("dashboard-assigned-reading-values")).toContainText("0 of 2 chapters complete");
+    await expect(assigned.getByTestId("dashboard-assigned-reading-summary"))
+      .toContainText("0 of 2 chapters complete");
+    await expect(assigned.getByText("0 of 2 chapters complete", { exact: true })).toHaveCount(1);
     await expect(assigned.getByText("Morning Psalms", { exact: true })).toBeVisible();
     await expect(assigned.getByText("Evening Proverbs", { exact: true })).toBeVisible();
     await expect(activities.getByRole("button", { name: /Today’s Activities/ })).toHaveAttribute("aria-expanded", "true");
@@ -2404,13 +2415,19 @@ test("colors original reading-plan progress summaries by schedule status", async
 
   const progress = page.getByTestId("dashboard-progress");
   await progress.getByRole("button", { name: /^Progress/ }).click();
-  const progressSelect = progress.getByTestId("dashboard-progress-plan-select");
+  const upToDateChoice = progress.getByTestId(`dashboard-progress-choice-${upToDatePlan.id}`);
+  const behindChoice = progress.getByTestId(`dashboard-progress-choice-${behindPlan.id}`);
   const progressDetail = progress.getByTestId("dashboard-progress-detail");
-  await progressSelect.selectOption(upToDatePlan.id);
+  await expect(progress.getByTestId("dashboard-progress-plan-choices"))
+    .toHaveAttribute("role", "group");
+  await upToDateChoice.click();
+  await expect(upToDateChoice).toHaveAttribute("aria-pressed", "true");
   await expect(progressDetail).toHaveAttribute("data-plan-id", upToDatePlan.id);
   await expect(progressDetail).toContainText("67% complete");
   await expect(progressDetail).toContainText("Up to date");
-  await progressSelect.selectOption(behindPlan.id);
+  await behindChoice.click();
+  await expect(upToDateChoice).toHaveAttribute("aria-pressed", "false");
+  await expect(behindChoice).toHaveAttribute("aria-pressed", "true");
   await expect(progressDetail).toHaveAttribute("data-plan-id", behindPlan.id);
   await expect(progressDetail).toContainText("33% complete");
   await expect(progressDetail).toContainText("Catch-up needed");
@@ -2555,7 +2572,11 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       const assignedToggle = assigned.getByRole("button", { name: /Today’s Reading/ });
       await expect(assigned).toBeVisible();
       await expect(assignedToggle).toHaveAttribute("aria-expanded", "true");
-      await expect(assigned.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
+      if (state.ordinaryNames.length || state.climbReading) {
+        await expect(assigned.getByTestId("today-open-day-view")).toBeVisible();
+      } else {
+        await expect(assigned.getByTestId("today-open-day-view")).toHaveCount(0);
+      }
       await expect(schedule).toBeVisible();
       await expect(page.getByTestId("dashboard-verse-of-day")).toContainText("Psalm 1:1");
       await expect(page.getByTestId("dashboard-stats")).toHaveCount(0);
@@ -2578,17 +2599,30 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       }
       const progressToggle = progress.getByRole("button", { name: /^Progress/ });
       await progressToggle.click();
-      const progressSelect = progress.getByTestId("dashboard-progress-plan-select");
       const progressDetail = progress.getByTestId("dashboard-progress-detail");
       if (state.climbReading) {
         const structuredPlan = state.plans.find((plan: any) => plan.journeyKey === "7-day-climb");
-        await progressSelect.selectOption(structuredPlan.id);
+        const structuredChoice = progress.getByTestId(
+          `dashboard-progress-choice-${structuredPlan.id}`,
+        );
+        if (await structuredChoice.count()) {
+          await structuredChoice.click();
+          await expect(structuredChoice).toHaveAttribute("aria-pressed", "true");
+        } else {
+          await expect(progress.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+          await expect(progress.getByTestId("dashboard-progress-selected-plan"))
+            .toHaveText("Rhythm · 7-Day Climb");
+        }
         await expect(progressDetail).toHaveAttribute("data-plan-id", structuredPlan.id);
-        await expect(progressDetail).toContainText("Mountain Rhythm · 7-Day Climb");
         await expect(progressDetail).toContainText(state.climbComplete ? "14.3%" : "0%");
-        await expect(progressDetail).toContainText(state.climbComplete ? "Today’s climb complete" : "Ready for today");
+        await expect(progressDetail).not.toContainText("Today’s climb complete");
+        await expect(progressDetail).not.toContainText("planned days");
       } else if (state.ordinaryNames.length) {
         await expect(progressDetail).toHaveCount(1);
+        if (state.plans.length === 1) {
+          await expect(progress.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+          await expect(progress.getByTestId("dashboard-progress-selected-plan")).toBeVisible();
+        }
       } else {
         await expect(progress.getByTestId("dashboard-progress-empty")).toBeVisible();
       }
@@ -2796,7 +2830,7 @@ test("remembers Today section disclosures and restores defaults after local data
   await expect(assignedReadingToggle).toHaveAttribute("aria-expanded", "true");
   await expect(progressToggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
-  await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
+  await expect(page.getByTestId("today-open-day-view")).toBeVisible();
 
   await scheduleToggle.click();
   await assignedReadingToggle.click();
@@ -2813,7 +2847,7 @@ test("remembers Today section disclosures and restores defaults after local data
   await expect(reloadedAssignedReadingToggle).toHaveAttribute("aria-expanded", "false");
   await expect(reloadedProgressToggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
-  await expect(page.getByTestId("dashboard-assigned-reading-overview")).toBeHidden();
+  await expect(page.getByTestId("today-open-day-view")).toBeHidden();
 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -3189,7 +3223,7 @@ test("keeps long content inset and fully visible across responsive dashboard wid
       await assignedToggle.click();
     }
     await expect(assignedToggle).toHaveAttribute("aria-expanded", "true");
-    await expect(assigned.getByTestId("dashboard-assigned-reading-overview")).toBeVisible();
+    await expect(assigned.getByTestId("today-open-day-view")).toBeVisible();
     await expect(assigned.getByText(longPlanName, { exact: true })).toBeVisible();
 
     const homeLayout = await page.evaluate(() => {

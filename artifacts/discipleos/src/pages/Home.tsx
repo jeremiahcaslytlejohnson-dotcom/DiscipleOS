@@ -735,15 +735,6 @@ function getTodaysReading(plan: any, date = todayISO()) {
   return plan.assignments.find((a) => a.date === date);
 }
 
-function getReadingBookName(reading: any) {
-  const chapters = getReadingChapters(reading);
-  if (chapters[0]?.book) return chapters[0].book;
-  if (reading?.book) return reading.book;
-
-  const label = typeof reading?.label === "string" ? reading.label.trim() : "";
-  return label.replace(/\s+\d+(?:-\d+)?$/, "") || "Reading";
-}
-
 function getMonthGrid(baseDate: Date) {
   const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
   const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
@@ -1875,7 +1866,7 @@ export default function DiscipleOSApp() {
       .map((plan: any) => ({
         plan,
         kind: isGuidedClimbSetOnePlan(plan) ? "guided" : "free",
-        optionLabel: `${isGuidedClimbSetOnePlan(plan) ? "Guided Climb" : "Free Climb"} · ${getGuidedClimbPlanDisplayName(plan) || plan.name}`,
+        optionLabel: `${isGuidedClimbSetOnePlan(plan) ? "Guided" : "Free"} · ${getGuidedClimbPlanDisplayName(plan) || plan.name}`,
       }));
     const structured = plans
       .filter((plan: any) => {
@@ -1893,7 +1884,7 @@ export default function DiscipleOSApp() {
       .map((plan: any) => ({
         plan,
         kind: "mountain",
-        optionLabel: `Mountain Rhythm · ${plan.name || "Reading climb"}`,
+        optionLabel: `Rhythm · ${plan.name || "Reading climb"}`,
       }));
     return [...ordinary, ...structured];
   }, [ordinaryPlans, plans]);
@@ -1936,36 +1927,19 @@ export default function DiscipleOSApp() {
   }, [ordinaryPlans, activeClimbPlan]);
 
   const todayAssignedReadingSummary = useMemo(() => {
-    const books = new Set<string>();
     let total = 0;
     let completed = 0;
-    let totalMinutes = 0;
 
     todaysPlans.forEach(({ plan, todayReading }) => {
       const completedMap = getCompletedMap(plan);
-      totalMinutes += getAssignedReadingDayMinutes(todayReading.readings);
       todayReading.readings.forEach((reading: any) => {
         const units = Math.max(1, getReadingChapters(reading).length);
         total += units;
         if (completedMap[reading.key]) completed += units;
-        books.add(getReadingBookName(reading));
       });
     });
 
-    const bookList = Array.from(books);
-    const visibleBooks = bookList.slice(0, 3);
-    const extraBookCount = Math.max(0, bookList.length - visibleBooks.length);
-    const booksLabel =
-      visibleBooks.length === 0
-        ? "No books scheduled today"
-        : `${visibleBooks.join(" · ")}${extraBookCount > 0 ? ` +${extraBookCount} more` : ""}`;
-
     return {
-      booksLabel,
-      completed,
-      total,
-      totalMinutes,
-      percent: total === 0 ? 0 : Math.round((completed / total) * 100),
       label: total === 0 ? "No reading scheduled today" : `${completed} of ${total} chapters complete`,
     };
   }, [todaysPlans]);
@@ -4985,39 +4959,14 @@ export default function DiscipleOSApp() {
               icon={BookOpen}
               disclosureKey="assignedReading"
               summary={todayAssignedReadingSummary.label}
+              summaryTestId="dashboard-assigned-reading-summary"
               collapsible
             >
-              <div
-                data-testid="dashboard-assigned-reading-overview"
-                className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4"
-              >
-                <div>
-                  <div className="discipleos-field-label text-[10px] uppercase tracking-[0.16em]">
-                    Today’s completion
-                  </div>
-                  <div
-                    data-testid="dashboard-assigned-reading-values"
-                    className="mt-1 text-xl font-semibold text-white"
-                  >
-                    {todayAssignedReadingSummary.label}
-                  </div>
-                  {todayAssignedReadingSummary.totalMinutes > 0 ? (
-                    <div
-                      data-testid="dashboard-assigned-reading-estimate"
-                      className="discipleos-secondary-copy mt-1 text-sm"
-                    >
-                      <EstimatedReadingTime
-                        minutes={todayAssignedReadingSummary.totalMinutes}
-                        testId="today-total-estimated-reading-time"
-                        className="ml-1"
-                      />{" "}
-                      estimated reading
-                    </div>
-                  ) : null}
-                </div>
-                {todayAssignedReadingSummary.total > 0 ? (
+              {todaysPlans.length > 0 ? (
+                <div className="mb-3 flex justify-end">
                   <button
                     type="button"
+                    data-testid="today-open-day-view"
                     onClick={() => {
                       setActiveTab("calendar");
                       setSelectedCalendarDate(todayISO());
@@ -5026,8 +4975,8 @@ export default function DiscipleOSApp() {
                   >
                     Open day view
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
 
               {todaysPlans.length === 0 ? (
                 <div className="discipleos-empty-state text-sm">
@@ -5207,10 +5156,9 @@ export default function DiscipleOSApp() {
               title="Progress"
               icon={Bookmark}
               disclosureKey="progress"
-              summary="One active plan at a time"
               collapsible
             >
-              <div data-testid="dashboard-progress-list" className="space-y-4">
+              <div data-testid="dashboard-progress-list" className="space-y-3">
                 {todayProgressPlans.length === 0 ? (
                   <div
                     data-testid="dashboard-progress-empty"
@@ -5220,24 +5168,35 @@ export default function DiscipleOSApp() {
                   </div>
                 ) : (
                   <>
-                    <label className="flex min-w-0 flex-col gap-2 sm:max-w-xl">
-                      <span className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">
-                        Plan progress
-                      </span>
-                      <select
-                        data-testid="dashboard-progress-plan-select"
+                    {todayProgressPlans.length > 1 ? (
+                      <div
+                        data-testid="dashboard-progress-plan-choices"
+                        role="group"
                         aria-label="Choose a plan for progress"
-                        value={effectiveTodayProgressPlanId || ""}
-                        onChange={(event) => setTodayProgressPlanId(event.target.value)}
-                        className="discipleos-control min-h-11 w-full border border-white/15 bg-[#11161D] px-3 py-2 text-sm text-white"
+                        className="flex min-w-0 flex-wrap gap-2"
                       >
-                        {todayProgressPlans.map(({ plan, optionLabel }) => (
-                          <option key={plan.id} value={plan.id}>
-                            {optionLabel}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                        {todayProgressPlans.map(({ plan, optionLabel }) => {
+                          const selected = plan.id === effectiveTodayProgressPlanId;
+                          return (
+                            <button
+                              key={plan.id}
+                              type="button"
+                              data-testid={`dashboard-progress-choice-${plan.id}`}
+                              aria-pressed={selected}
+                              onClick={() => setTodayProgressPlanId(plan.id)}
+                              className={cn(
+                                "discipleos-control--touch min-h-10 max-w-full min-w-0 whitespace-normal break-words border px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60",
+                                selected
+                                  ? "border-[#D4A017]/60 bg-[#D4A017]/15 font-semibold text-[#F4D77A]"
+                                  : "border-white/15 bg-white/[0.03] text-white/75 hover:border-white/30 hover:bg-white/[0.07]",
+                              )}
+                            >
+                              {optionLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                     {selectedTodayProgress ? (() => {
                       const plan = selectedTodayProgress.plan;
                       const stats = getPlanStats(plan);
@@ -5260,22 +5219,16 @@ export default function DiscipleOSApp() {
                         ? Number(selectedTodayRhythmScore?.journeyProgress || 0)
                         : stats.percent;
                       const status = isMountainRhythm
-                        ? !selectedTodayRhythmScore?.todayPlanned
-                          ? "No reading scheduled today"
-                          : selectedTodayRhythmScore.todayPercentage >= 100
-                            ? "Today’s climb complete"
-                            : selectedTodayRhythmScore.todayPercentage > 0
-                              ? "Today’s climb in progress"
-                              : "Ready for today"
+                        ? ""
                         : isPlanCaughtUpThroughToday(plan, todayISO())
                           ? "Up to date"
                           : "Catch-up needed";
                       const dateLabel = nextAssignment
                         ? nextAssignment.date < todayISO()
-                          ? `Catch-up reading · ${nextAssignment.date}`
+                          ? `Catch-up reading · ${formatDate(nextAssignment.date)}`
                           : nextAssignment.date === todayISO()
                             ? "Next reading · Today"
-                            : `Next reading · ${nextAssignment.date}`
+                            : `Next reading · ${formatDate(nextAssignment.date)}`
                         : "All assigned readings complete";
 
                       return (
@@ -5285,24 +5238,25 @@ export default function DiscipleOSApp() {
                           className="discipleos-flat-row space-y-2 py-3"
                         >
                           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                            <div
-                              data-testid="dashboard-progress-selected-plan"
-                              className="discipleos-safe-text min-w-0 font-medium"
-                            >
-                              {selectedTodayProgress.optionLabel}
-                            </div>
+                            {todayProgressPlans.length === 1 ? (
+                              <div
+                                data-testid="dashboard-progress-selected-plan"
+                                className="discipleos-safe-text min-w-0 font-medium"
+                              >
+                                {selectedTodayProgress.optionLabel}
+                              </div>
+                            ) : null}
                             <div
                               data-testid="dashboard-progress-percent"
+                              aria-label={`Overall plan progress: ${progressPercent}% complete`}
                               className="shrink-0 text-lg font-semibold text-emerald-200"
                             >
-                              {progressPercent}% complete
+                              Overall · {progressPercent}% complete
                             </div>
                           </div>
-                          <div className="discipleos-meta-copy text-sm">
-                            {isMountainRhythm
-                              ? `${selectedTodayRhythmScore?.completedDays || 0} of ${selectedTodayRhythmScore?.journeyDays || 0} planned days · ${status}`
-                              : `${stats.remainingChapters} chapters remaining · ${status}`}
-                          </div>
+                          {!isMountainRhythm && status ? (
+                            <div className="discipleos-meta-copy text-sm">{status}</div>
+                          ) : null}
                           <div
                             data-testid="dashboard-progress-next-reading"
                             className="discipleos-safe-text text-sm text-white/80"
