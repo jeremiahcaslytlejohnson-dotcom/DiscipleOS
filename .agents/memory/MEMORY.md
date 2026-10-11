@@ -1,4 +1,5 @@
 - [DiscipleOS stack](discipleos-stack.md) — Next.js → Vite+React port; dark-only theme uses direct hex/opacity classes, not HSL CSS vars; all API routes use Neon→Drizzle+pg via @workspace/db.
+- [DiscipleOS stabilization freeze](discipleos-stabilization-freeze.md) — Until stabilization is verified and explicitly approved, do not surface new suggested tasks or optional improvements.
 - [Push notifications](push-notifications.md) — VAPID worker config, production cron rules, per-endpoint dedupe, and safe operational logging.
 - [Session persistence](session-persistence.md) — Sessions backed by Postgres via connect-pg-simple; sessionEstablished flag drives hydration trust; defensive loadData() in Home.tsx.
 - [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
