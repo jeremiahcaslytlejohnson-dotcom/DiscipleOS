@@ -64,7 +64,6 @@ import {
 } from "../lib/push-subscription";
 import {
   calculateMountainRhythm,
-  findActiveStructuredClimb,
   isStructuredClimbPlan,
   mergeLocalCompletionHistory,
   resolveStructuredClimbPlanId,
@@ -1793,18 +1792,9 @@ export default function DiscipleOSApp() {
   );
 
   const planViewPlans = useMemo(
-    () =>
-      plans
-        .filter((plan) => !isStructuredClimbPlan(plan))
-        .sort((left, right) => getPlanStats(left).percent - getPlanStats(right).percent),
+    () => plans.filter((plan) => !isStructuredClimbPlan(plan)),
     [plans],
   );
-  const activeMountainPlan = useMemo(
-    () => findActiveStructuredClimb(plans),
-    [plans],
-  );
-  const hasActivePlans = Boolean(activeMountainPlan) ||
-    planViewPlans.some((plan) => getPlanStats(plan).percent < 100);
   const planViewSelectedPlan = useMemo(
     () =>
       planViewPlans.find((plan) => plan.id === selectedPlanId) ||
@@ -6123,44 +6113,7 @@ export default function DiscipleOSApp() {
                   ) : null}
 
                   <div className="discipleos-flat-list">
-                  {activeMountainPlan ? (
-                    <section
-                      data-testid="plans-active-mountain-climb"
-                      className="discipleos-flat-row space-y-3 border border-[#D4A017]/30 bg-[#D4A017]/[0.04] p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="discipleos-section-heading">
-                            <Mountain className="discipleos-section-heading__icon" />
-                            Active Mountain Rhythm climb
-                          </div>
-                          <div className="discipleos-safe-text mt-2 text-lg font-semibold text-white">
-                            {getGuidedClimbPlanDisplayName(activeMountainPlan)}
-                          </div>
-                          {mountainRhythmByPlanId.get(activeMountainPlan.id) ? (
-                            <div
-                              data-testid={`plans-mountain-progress-${activeMountainPlan.id}`}
-                              className="discipleos-meta-copy mt-1 text-sm"
-                            >
-                              Journey progress {mountainRhythmByPlanId.get(activeMountainPlan.id).journeyProgress}% ·{" "}
-                              {mountainRhythmByPlanId.get(activeMountainPlan.id).completedDays} of{" "}
-                              {mountainRhythmByPlanId.get(activeMountainPlan.id).journeyDays} days · Consistency{" "}
-                              {mountainRhythmByPlanId.get(activeMountainPlan.id).rhythmProgress}%
-                            </div>
-                          ) : null}
-                        </div>
-                        <Link
-                          href="/mountain-rhythm"
-                          data-testid="plans-continue-mountain-climb"
-                          className="discipleos-action inline-flex min-h-11 shrink-0 items-center gap-2 border border-[#D4A017]/45 bg-[#C8921D] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017]"
-                        >
-                          Continue climb
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
-                      </div>
-                    </section>
-                  ) : null}
-                  {!hasActivePlans ? (
+                  {planViewPlans.length === 0 ? (
                    <div
                      data-testid="dashboard-plans-empty-state"
                       className="discipleos-empty-state min-w-0 text-sm"
@@ -6170,11 +6123,10 @@ export default function DiscipleOSApp() {
                         onStartGuidedClimb={selectGuidedClimb}
                         onStartFreeClimb={beginCreatePlan}
                         activeMountainRhythmLabel={activeMountainRhythmLabel}
-                        layout="default"
                       />
                     </div>
-                  ) : null}
-                  {planViewPlans.map((plan) => {
+                  ) : (
+                    planViewPlans.map((plan) => {
                       const stats = getPlanStats(plan);
                        const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                       const isActive = planViewSelectedPlan?.id === plan.id;
@@ -6196,20 +6148,9 @@ export default function DiscipleOSApp() {
                                <div className="discipleos-safe-text text-lg font-semibold text-white">
                                  {getGuidedClimbPlanDisplayName(plan)}
                                </div>
-                                <div className="discipleos-secondary-copy mt-2 text-sm">
+                               <div className="discipleos-secondary-copy mt-2 text-sm">
                                  {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
                                </div>
-                              <span
-                                data-testid={`plans-plan-state-${plan.id}`}
-                                className={cn(
-                                  "mt-2 inline-flex border px-2 py-0.5 text-xs font-medium",
-                                  stats.percent < 100
-                                    ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
-                                    : "border-white/10 bg-white/[0.03] text-white/55",
-                                )}
-                              >
-                                {stats.percent < 100 ? "Active" : "Completed"}
-                              </span>
                              </div>
 
                              <div className="flex shrink-0 items-center gap-2">
@@ -6263,18 +6204,6 @@ export default function DiscipleOSApp() {
                              >
                               {stats.percent}% complete
                              </span>
-                              <button
-                                type="button"
-                                data-testid={`plans-continue-plan-${plan.id}`}
-                                onClick={() => {
-                                  setSelectedPlanId(plan.id);
-                                  setActiveTab("today");
-                                }}
-                                className="discipleos-action mt-3 inline-flex min-h-10 items-center gap-1 border border-[#D4A017]/30 px-3 text-xs font-semibold text-[#F4D77A] hover:bg-[#D4A017]/10"
-                              >
-                                Continue reading
-                                <ChevronRight className="h-4 w-4" />
-                              </button>
                              {isGuidedClimbSetOnePlan(plan) ? (
                                <button
                                  type="button"
@@ -6291,20 +6220,8 @@ export default function DiscipleOSApp() {
                            </div>
                         </div>
                       );
-                    })}
-                  {hasActivePlans ? (
-                    <div
-                      data-testid="plans-additional-path-options"
-                      className="mt-5 border-t border-white/10 pt-4"
-                    >
-                      <ReadingPathChoices
-                        title="Start another plan"
-                        onStartGuidedClimb={selectGuidedClimb}
-                        onStartFreeClimb={beginCreatePlan}
-                        layout="compact"
-                      />
-                    </div>
-                  ) : null}
+                    })
+                  )}
                 </div>
             </div>
 
