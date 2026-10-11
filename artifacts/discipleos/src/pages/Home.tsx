@@ -1818,23 +1818,6 @@ export default function DiscipleOSApp() {
     [plans, rhythmAccessTier, selectedRhythmPlanId],
   );
 
-  const mountainRhythmByPlanId = useMemo(() => {
-    const today = todayISO();
-    return new Map(
-      plans
-        .filter(isStructuredClimbPlan)
-        .map((plan) => [
-          plan.id,
-          calculateMountainRhythm({
-            today,
-            plans,
-            accessTier: rhythmAccessTier,
-            selectedPlanId: plan.id,
-          }),
-        ]),
-    );
-  }, [plans, rhythmAccessTier]);
-
   const editingPlan = useMemo(
     () => plans.find((p) => p.id === editingPlanId) || null,
     [plans, editingPlanId]
@@ -5058,7 +5041,6 @@ export default function DiscipleOSApp() {
                   plans.map((plan) => {
                     const stats = getPlanStats(plan);
                     const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
-                    const rhythmStats = mountainRhythmByPlanId.get(plan.id);
                     const planKind = isGuidedClimbSetOnePlan(plan)
                       ? "Guided"
                       : isStructuredClimbPlan(plan)
@@ -5111,16 +5093,6 @@ export default function DiscipleOSApp() {
                         >
                           {stats.percent}% complete · {stats.remainingChapters} chapters remaining
                         </div>
-                        {rhythmStats ? (
-                          <div
-                            className="discipleos-meta-copy mt-1 w-full text-left text-xs leading-5"
-                            data-testid={`dashboard-mountain-rhythm-progress-${plan.id}`}
-                          >
-                            Journey progress {rhythmStats.journeyProgress}% ·{" "}
-                            {rhythmStats.completedDays} of {rhythmStats.journeyDays} days ·{" "}
-                            Consistency {rhythmStats.rhythmProgress}% · {rhythmStats.currentTrend}
-                          </div>
-                        ) : null}
                       </div>
                     );
                   })
