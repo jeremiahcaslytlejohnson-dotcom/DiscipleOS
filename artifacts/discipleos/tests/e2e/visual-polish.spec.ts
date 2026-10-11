@@ -2367,6 +2367,83 @@ test("lists Guided, Mountain, and Free plans together in Home Progress", async (
   );
 });
 
+test("puts an active Mountain Rhythm climb first and keeps extra paths compact on mobile", async ({ page }) => {
+  const mountainPlan = makeStructuredClimbPlan("plans-active-mountain", "7-Day Climb");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubHomeApi(page, [mountainPlan]);
+  await seedPlans(page, [mountainPlan]);
+  await page.goto("/");
+
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+
+  const activeClimb = page.getByTestId("plans-active-mountain-climb");
+  await expect(activeClimb).toBeVisible();
+  await expect(activeClimb).toContainText("7-Day Climb");
+  await expect(page.getByTestId(`plans-mountain-progress-${mountainPlan.id}`)).toContainText(
+    /Journey progress \d+%.*Consistency \d+%/,
+  );
+  await expect(page.getByTestId("plans-continue-mountain-climb")).toHaveAttribute(
+    "href",
+    "/mountain-rhythm",
+  );
+  await expect(page.getByTestId("dashboard-plans-empty-state")).toHaveCount(0);
+
+  const pathOptions = page.getByTestId("plans-additional-path-options");
+  await expect(pathOptions).toBeVisible();
+  for (const testId of [
+    "reading-path-guided",
+    "reading-path-mountain-rhythm",
+    "reading-path-free-climb",
+  ]) {
+    await expect(pathOptions.getByTestId(testId)).toBeVisible();
+  }
+  await expect(pathOptions.getByTestId("active-mountain-rhythm-note")).toHaveCount(0);
+  await expect(page.getByTestId("reading-path-free-climb-action")).toHaveClass(/min-h-0/);
+  const bounds = await page.evaluate(() => ({
+    width: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  expect(bounds.width).toBeLessThanOrEqual(bounds.viewport + 1);
+});
+
+test("shows active regular plans with a continue action and compact path choices", async ({ page }) => {
+  const activePlan = makeOrdinaryPlan("plans-active-regular", "Morning Psalms");
+  const secondActivePlan = makeOrdinaryPlan("plans-active-regular-2", "New Testament");
+  await stubHomeApi(page, [activePlan, secondActivePlan]);
+  await seedPlans(page, [activePlan, secondActivePlan]);
+  await page.goto("/");
+
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+
+  await expect(page.getByTestId(`plans-plan-state-${activePlan.id}`)).toHaveText("Active");
+  await expect(page.getByTestId(`plans-plan-state-${secondActivePlan.id}`)).toHaveText("Active");
+  await expect(page.getByTestId(`plans-continue-plan-${activePlan.id}`)).toBeVisible();
+  await expect(page.getByTestId("plans-additional-path-options")).toBeVisible();
+  await expect(page.getByTestId("dashboard-plans-empty-state")).toHaveCount(0);
+
+  await page.getByTestId(`plans-continue-plan-${activePlan.id}`).click();
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+});
+
+test("uses the large path choices when there are no active plans", async ({ page }) => {
+  await stubHomeApi(page, []);
+  await page.addInitScript(() => localStorage.clear());
+  await page.goto("/");
+
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+
+  const emptyState = page.getByTestId("dashboard-plans-empty-state");
+  await expect(emptyState).toBeVisible();
+  await expect(emptyState.getByRole("heading", { name: "Choose a reading path" })).toBeVisible();
+  await expect(page.getByTestId("plans-additional-path-options")).toHaveCount(0);
+  await expect(page.getByTestId("reading-path-free-climb-action")).toHaveClass(
+    /min-h-\[clamp/,
+  );
+});
+
 test("colors original reading-plan progress summaries by schedule status", async ({ page }) => {
   const today = await browserTodayISO(page);
   const yesterday = addDaysToISO(today, -1);

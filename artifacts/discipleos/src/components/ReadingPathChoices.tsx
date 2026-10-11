@@ -7,7 +7,7 @@ type ReadingPathChoicesProps = {
   activeMountainRhythmLabel?: string | null;
   title?: string;
   previewOnly?: boolean;
-  layout?: "default" | "onboarding";
+  layout?: "default" | "onboarding" | "compact";
 };
 
 const paths = [
@@ -52,9 +52,12 @@ export default function ReadingPathChoices({
   layout = "default",
 }: ReadingPathChoicesProps) {
   const onboardingLayout = layout === "onboarding";
+  const compactLayout = layout === "compact";
   const gridClass = onboardingLayout
     ? "grid-cols-1 gap-y-3"
-    : "grid-cols-1 gap-2 md:grid-cols-3 md:gap-3";
+    : compactLayout
+      ? "grid-cols-1 gap-2 sm:grid-cols-3"
+      : "grid-cols-1 gap-2 md:grid-cols-3 md:gap-3";
   return (
     <section
       data-testid="reading-path-choices"
@@ -62,10 +65,15 @@ export default function ReadingPathChoices({
       className={
         onboardingLayout
           ? "flex flex-col space-y-1"
-          : "flex min-h-0 flex-1 flex-col space-y-2"
+          : compactLayout
+            ? "flex flex-col space-y-2"
+            : "flex min-h-0 flex-1 flex-col space-y-2"
       }
     >
-      <h2 className="text-xl font-bold leading-7 tracking-[-0.02em] text-white sm:text-3xl sm:leading-tight">
+      <h2 className={compactLayout
+        ? "text-base font-bold leading-6 tracking-[-0.02em] text-white sm:text-lg"
+        : "text-xl font-bold leading-7 tracking-[-0.02em] text-white sm:text-3xl sm:leading-tight"
+      }>
         {title}
       </h2>
       {onboardingLayout ? (
@@ -92,7 +100,7 @@ export default function ReadingPathChoices({
         </p>
       ) : null}
       <div
-        className={`grid ${onboardingLayout ? "" : "min-h-0 flex-1"} ${gridClass} ${
+        className={`grid ${onboardingLayout || compactLayout ? "" : "min-h-0 flex-1"} ${gridClass} ${
           onboardingLayout
             ? ""
             : "md:grid-rows-1 md:content-start"
@@ -104,9 +112,15 @@ export default function ReadingPathChoices({
             `discipleos-path-card group flex ${
               onboardingLayout
                 ? "px-4 py-2.5"
-                : "min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)] p-1"
+                  : compactLayout
+                    ? "min-h-0 px-3 py-2.5"
+                    : "min-h-[clamp(5.5rem,calc((100dvh-27rem)/3),10rem)] p-1"
             } w-full min-w-0 flex-col items-stretch border border-white/12 bg-white/[0.04] text-left transition hover:border-[#D4A017]/45 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12] ${
-              onboardingLayout ? "md:min-h-0 md:p-4" : "md:min-h-0 md:p-5"
+                onboardingLayout
+                  ? "md:min-h-0 md:p-4"
+                  : compactLayout
+                    ? "md:min-h-0 md:p-3"
+                    : "md:min-h-0 md:p-5"
             }`;
           const MobileContent = (
             <span
@@ -145,7 +159,9 @@ export default function ReadingPathChoices({
                 className={`block ${
                   onboardingLayout
                     ? "mt-2 text-base leading-[1.4] text-[#F1F5F9] md:mt-0 md:min-w-0 md:flex-1 md:leading-[1.4]"
-                    : "mt-1 text-sm leading-5 text-[#E2E8F0] md:mt-2 md:leading-6"
+                    : compactLayout
+                      ? "mt-1 text-xs leading-4 text-[#E2E8F0]"
+                      : "mt-1 text-sm leading-5 text-[#E2E8F0] md:mt-2 md:leading-6"
                 }`}
               >
                 {path.description}
