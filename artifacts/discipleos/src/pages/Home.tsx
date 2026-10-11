@@ -1132,95 +1132,6 @@ function getCalendarActivityMarkers(dayEvents: any[], eventCompletions: Record<s
   }));
 }
 
-function ClimbProgressSummaryBar({ score }: any) {
-  const hasJourney = Number(score?.journeyDays || 0) > 0;
-  const climbName = hasJourney ? score.journeyLabel : "No active climb";
-  const journeyProgress = hasJourney ? `${score.journeyProgress}%` : "Not started";
-  const journeyDetail = hasJourney
-    ? `${score.completedDays} of ${score.journeyDays} planned days`
-    : "Choose a climb to begin";
-  const todayClimbComplete = Boolean(
-    hasJourney && score.todayPlanned && score.todayPercentage >= 100,
-  );
-
-  return (
-    <ResponsiveSection
-      testId="dashboard-mountain-rhythm"
-      title="Mountain Rhythm"
-      icon={Mountain}
-      summary="Long-term climb progress"
-      summaryTestId="dashboard-mountain-rhythm-description"
-      disclosureKey="mountainRhythm"
-      collapsible
-      headerAction={
-        <Link
-          href="/mountain-rhythm"
-          data-testid="dashboard-mountain-rhythm-details"
-          className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
-        >
-          Details
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-      }
-    >
-      <div data-testid="dashboard-mountain-rhythm-summary" className="grid grid-cols-3 gap-1 sm:gap-2">
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center first:border-l-0 sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Active climb
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-climb"
-            className="discipleos-safe-text mt-1 break-words text-sm font-semibold leading-5 sm:text-base"
-          >
-            {climbName}
-          </div>
-        </div>
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Journey progress
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-progress"
-            className="mt-1 text-xl font-semibold leading-none text-emerald-200 sm:text-2xl"
-          >
-            {journeyProgress}
-          </div>
-          <div className="discipleos-meta-copy mt-1 break-words text-[10px] leading-4 sm:text-xs">
-            {journeyDetail}
-          </div>
-        </div>
-        <div className="min-w-0 border-l border-white/10 px-2 py-1 text-center sm:px-3">
-          <div className="discipleos-meta-copy flex min-h-8 items-start justify-center text-[10px] leading-4 sm:text-[11px]">
-            Today’s Climb
-          </div>
-          <div
-            data-testid="dashboard-mountain-rhythm-today-status"
-            className={`discipleos-safe-text mt-1 break-words text-sm font-semibold leading-5 sm:text-base ${
-              todayClimbComplete ? "text-emerald-200" : "text-[#F4D77A]"
-            }`}
-          >
-            {todayClimbComplete ? "Complete" : "Not complete"}
-          </div>
-          {todayClimbComplete ? (
-            <div className="discipleos-meta-copy mt-1 break-words text-[10px] leading-4 sm:text-xs">
-              Today’s reading finished
-            </div>
-          ) : (
-            <Link
-              href="/mountain-rhythm"
-              data-testid="dashboard-mountain-rhythm-today-action"
-              aria-label="Open today’s Mountain Rhythm reading"
-              className="mt-1 inline-flex min-h-8 items-center justify-center break-words text-[10px] font-semibold leading-4 text-[#F4D77A] underline decoration-[#F4D77A]/50 underline-offset-2 hover:text-white sm:text-xs"
-            >
-              Open today’s reading
-            </Link>
-          )}
-        </div>
-      </div>
-    </ResponsiveSection>
-  );
-}
-
 function SectionCard({ className = "", children, ...props }: any) {
   return (
     <div
@@ -5139,16 +5050,21 @@ export default function DiscipleOSApp() {
               title="Progress"
               icon={Bookmark}
               disclosureKey="progress"
-              summary="Ordinary reading plans"
+                summary="All reading plans"
               collapsible
             >
               <div data-testid="dashboard-progress-list" className="discipleos-flat-list">
-                {ordinaryPlans.length === 0 ? (
-                  <div className="discipleos-empty-state text-sm">No ordinary reading plans yet.</div>
+                {plans.length === 0 ? (
+                  <div className="discipleos-empty-state text-sm">No reading plans yet.</div>
                 ) : (
-                  ordinaryPlans.map((plan) => {
+                  plans.map((plan) => {
                     const stats = getPlanStats(plan);
                     const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
+                    const planKind = isGuidedClimbSetOnePlan(plan)
+                      ? "Guided"
+                      : isStructuredClimbPlan(plan)
+                        ? "Mountain"
+                        : "Free";
                     return (
                       <div
                         key={plan.id}
@@ -5156,18 +5072,36 @@ export default function DiscipleOSApp() {
                         className="discipleos-flat-row py-3 first:pt-0 last:pb-0"
                       >
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                          <div className="discipleos-safe-text min-w-0 font-medium">{getGuidedClimbPlanDisplayName(plan)}</div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPlanId(plan.id);
-                              setActiveTab("plans");
-                            }}
-                            className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
-                          >
-                            Open plan
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
+                          <div className="min-w-0">
+                            <div className="discipleos-safe-text font-medium">
+                              {getGuidedClimbPlanDisplayName(plan)}
+                            </div>
+                            <div className="discipleos-meta-copy mt-1 text-xs">{planKind} plan</div>
+                          </div>
+                          {isStructuredClimbPlan(plan) ? (
+                            <Link
+                              href="/mountain-rhythm"
+                              data-testid={`dashboard-open-plan-${plan.id}`}
+                              aria-label={`Open ${getGuidedClimbPlanDisplayName(plan)}`}
+                              className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
+                            >
+                              Open plan
+                              <ChevronRight className="h-4 w-4" />
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`dashboard-open-plan-${plan.id}`}
+                              onClick={() => {
+                                setSelectedPlanId(plan.id);
+                                setActiveTab("plans");
+                              }}
+                              className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-white/70 hover:text-[#F4D77A]"
+                            >
+                              Open plan
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                         <div
                           className="discipleos-meta-copy mt-1 w-full text-left text-sm"
@@ -5184,8 +5118,6 @@ export default function DiscipleOSApp() {
                 )}
               </div>
             </ResponsiveSection>
-
-            <ClimbProgressSummaryBar score={mountainRhythm} />
           </div>
         )}
 
