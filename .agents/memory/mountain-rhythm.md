@@ -82,3 +82,9 @@ A confirmed cancellation is terminal for that owned climb instance but does not 
 **Why:** Users need to stop a climb without erasing progress or affecting unrelated plans and reminders.
 
 **How to apply:** Persist cancellation through the normal plan-save path, show canceled instances with past climbs, and leave ordinary plans and Calendar data untouched.
+
+The same owner-scoped active climb and plan ID must drive Mountain Rhythm, Home/Today, Plans, and Calendar. Screens may present the schedule differently, but must not drop a climb merely because it is not an ordinary reading plan.
+
+**Why:** Filtering structured plans for a screen-specific list must not make their assigned readings, dates, completion state, or progress appear lost elsewhere.
+
+**How to apply:** Hydrate the complete owner-scoped plan collection once per source, retain valid owner-matched local state during sync, and exclude structured plans only from ordinary-plan presentation. Provide the active climb's scheduled readings on Today and its schedule on Plans; Calendar and Mountain Rhythm should continue using the same plan ID and assignments.

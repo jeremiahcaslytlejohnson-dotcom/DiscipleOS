@@ -90,23 +90,34 @@ async function stubHomeApi(
   page: Page,
   planOrPlans: unknown = makeOrdinaryPlan(),
   seededEvents: unknown[] = [],
-  options: { authenticated?: boolean } = {},
+  options: { authenticated?: boolean; authState?: { authenticated: boolean }; userId?: string } = {},
 ) {
   const today = todayISO();
   const plans = Array.isArray(planOrPlans) ? planOrPlans : [planOrPlans];
-  const authenticated = options.authenticated === true;
+  const authState = options.authState || { authenticated: options.authenticated === true };
+  const userId = options.userId || "visual-polish-owner";
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
+
+    if (pathname.endsWith("/auth/logout")) {
+      authState.authenticated = false;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true }),
+      });
+      return;
+    }
 
     if (pathname.endsWith("/auth/me")) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          authenticated,
-          user: authenticated
+          authenticated: authState.authenticated,
+          user: authState.authenticated
             ? {
-                id: "visual-polish-authenticated-user",
+                id: userId,
                 email: "visual-polish@example.test",
                 firstName: "Visual",
                 lastName: "Polish",
@@ -123,19 +134,46 @@ async function stubHomeApi(
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          established: authenticated,
-          authenticated,
-          userId: "visual-polish-owner",
+          established: authState.authenticated,
+          authenticated: authState.authenticated,
+          userId,
         }),
       });
       return;
     }
 
     if (pathname.endsWith("/reading/plans")) {
+      if (route.request().method() === "POST") {
+        const updated = route.request().postDataJSON() as any;
+        const index = plans.findIndex((plan: any) => plan.id === updated.id);
+        if (index >= 0) plans[index] = updated;
+        else plans.push(updated);
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ success: true, plans }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/reading/complete") && route.request().method() === "POST") {
+      const payload = route.request().postDataJSON() as any;
+      const plan = plans.find((item: any) => item.id === payload.planId) as any;
+      if (plan) {
+        plan.completed = { ...(plan.completed || {}), [payload.key]: Boolean(payload.completed) };
+        if (payload.completed && payload.earnedDay) {
+          plan.earnedDayKeys = [...new Set([...(plan.earnedDayKeys || []), payload.earnedDay])];
+          plan.dayCompletionDates = {
+            ...(plan.dayCompletionDates || {}),
+            [payload.earnedDay]: payload.completionDate || today,
+          };
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true }),
       });
       return;
     }
@@ -2559,7 +2597,12 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         await expect(assigned.getByText(name, { exact: true })).toBeVisible();
       }
       if (state.climbReading) {
-        await expect(assigned.getByText("Climb reading 1", { exact: true })).toHaveCount(0);
+        const climbPlanInState = state.plans.find((plan: any) => plan.journeyKey === "7-day-climb");
+        const climbReading = assigned.getByText("Climb reading 1", { exact: true });
+        await expect(climbReading).toBeVisible();
+        await expect(
+          assigned.getByTestId(`today-reading-${climbPlanInState.id}-0`),
+        ).toHaveAttribute("aria-pressed", String(state.climbComplete));
       }
 
       if (state.plans.length === 0) {
@@ -2655,6 +2698,70 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       await expect(mountainToggle).toHaveAttribute("aria-expanded", "false");
     }
   }
+});
+
+test("keeps an active Mountain Rhythm climb available across Today, Plans, Calendar, and refresh", async ({ page }) => {
+  const climb = makeStructuredClimbPlan("active-only-cross-screen-climb");
+  await stubHomeApi(page, [climb]);
+  await seedPlans(page, [climb], [], true, "visual-polish-owner");
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
+
+  const todayReading = page.getByTestId(`today-reading-${climb.id}-0`);
+  await expect(todayReading).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  let navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+  const activeClimb = page.getByTestId("dashboard-active-climb");
+  await expect(activeClimb).toContainText("7-Day Climb");
+  const activeDay = activeClimb.getByTestId(`plan-day-section-${climb.id}-${todayISO()}`);
+  await expect(activeDay).toContainText("0/1 chapters complete");
+  await activeDay.getByTestId(`plan-day-toggle-${climb.id}-${todayISO()}`).click();
+  const plansReading = activeDay.getByTestId(`plan-reading-${climb.id}-0`);
+  await plansReading.click();
+  await expect(plansReading).toHaveAttribute("aria-pressed", "true");
+
+  navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByTestId(`calendar-day-${todayISO()}`).click();
+  const calendarPlan = page.getByTestId(`calendar-plan-item-${climb.id}`);
+  await expect(calendarPlan).toBeVisible();
+  await calendarPlan.getByTestId(`calendar-plan-toggle-${climb.id}`).click();
+  await expect(
+    calendarPlan.getByTestId(`calendar-plan-readings-${climb.id}`).getByRole("button"),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  await page.goto("/mountain-rhythm", { waitUntil: "domcontentloaded" });
+  const routeDay = page.getByTestId("route-day-1");
+  await expect(routeDay).toBeVisible();
+  await expect(routeDay).toContainText("Complete");
+  await expect(
+    routeDay.getByTestId(`button-reading-${climb.id}-0`),
+  ).toHaveClass(/bg-emerald-300\/10/);
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
+  await expect(page.getByTestId(`today-reading-${climb.id}-0`)).toHaveAttribute("aria-pressed", "true");
+});
+
+test("keeps a signed-in active climb private after sign-out", async ({ page }) => {
+  const climb = makeStructuredClimbPlan("signed-in-active-climb");
+  const authState = { authenticated: true };
+  await stubHomeApi(page, [climb], [], { authState, userId: "active-climb-test-owner" });
+  await seedPlans(page, [climb], [], true, "active-climb-test-owner");
+  await page.goto("/");
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
+  await expect(page.getByTestId(`today-reading-${climb.id}-0`)).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("link", { name: "Continue with email" })).toBeVisible();
+  await expect(page.getByTestId(`today-reading-${climb.id}-0`)).toHaveCount(0);
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+  await expect(page.getByTestId("dashboard-active-climb")).toHaveCount(0);
 });
 
 test("uses functional surfaces where contrast is needed and keeps compact ordinary radii", async ({ page }) => {

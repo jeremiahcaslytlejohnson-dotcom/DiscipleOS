@@ -64,6 +64,7 @@ import {
 } from "../lib/push-subscription";
 import {
   calculateMountainRhythm,
+  findActiveStructuredClimb,
   isStructuredClimbPlan,
   mergeLocalCompletionHistory,
   resolveStructuredClimbPlanId,
@@ -1931,6 +1932,10 @@ export default function DiscipleOSApp() {
     fetchVerseOfTheDay().then(setVerseOfTheDay);
   }, []);
   const ordinaryPlans = useMemo(() => plans.filter(isOrdinaryPlan), [plans]);
+  const activeClimbPlan = useMemo(
+    () => findActiveStructuredClimb(plans, todayISO()),
+    [plans],
+  );
   const selectedGuidedClimbIsComplete = isGuidedClimbSetOneComplete(
     selectedPlan,
     getCompletedMap(selectedPlan),
@@ -1938,13 +1943,16 @@ export default function DiscipleOSApp() {
 
   const todaysPlans = useMemo(() => {
     const today = todayISO();
-    return ordinaryPlans
+    const plansForToday = activeClimbPlan
+      ? [...ordinaryPlans, activeClimbPlan]
+      : ordinaryPlans;
+    return plansForToday
       .map((plan) => ({
         plan,
         todayReading: getTodaysReading(plan, today),
       }))
       .filter((entry) => entry.todayReading && entry.todayReading.readings.length > 0);
-  }, [ordinaryPlans]);
+  }, [ordinaryPlans, activeClimbPlan]);
 
   const todayAssignedReadingSummary = useMemo(() => {
     const books = new Set<string>();
@@ -1977,7 +1985,7 @@ export default function DiscipleOSApp() {
       total,
       totalMinutes,
       percent: total === 0 ? 0 : Math.round((completed / total) * 100),
-      label: total === 0 ? "No ordinary reading scheduled today" : `${completed} of ${total} chapters complete`,
+      label: total === 0 ? "No reading scheduled today" : `${completed} of ${total} chapters complete`,
     };
   }, [todaysPlans]);
 
@@ -4963,7 +4971,7 @@ export default function DiscipleOSApp() {
 
               {todaysPlans.length === 0 ? (
                 <div className="discipleos-empty-state text-sm">
-                  <div>No ordinary reading is scheduled today.</div>
+                  <div>No reading is scheduled today.</div>
                   <button
                     type="button"
                     data-testid="today-empty-create-plan"
@@ -6086,9 +6094,68 @@ export default function DiscipleOSApp() {
           )}
           {activeTab === "plans" && !isGuidedClimbPreviewOpen && (
              <div className={cn(
-             "discipleos-section-stack grid min-w-0",
+              "discipleos-section-stack grid min-w-0",
              planViewPlans.length > 0 && "lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]",
            )}>
+              {activeClimbPlan ? (
+                <section
+                  data-testid="dashboard-active-climb"
+                  className={cn(
+                    "discipleos-functional-surface min-w-0 space-y-4 p-4 sm:p-5",
+                    planViewPlans.length > 0 && "lg:col-span-2",
+                  )}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="discipleos-section-heading">
+                        <Mountain className="discipleos-section-heading__icon" />
+                        Active Mountain Rhythm
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-white">
+                        {getGuidedClimbPlanDisplayName(activeClimbPlan)}
+                      </div>
+                      <div className="discipleos-meta-copy mt-1 text-sm">
+                        {formatDate(activeClimbPlan.startDate)} – {formatDate(activeClimbPlan.endDate)}
+                        {" · "}
+                        {getPlanStats(activeClimbPlan).percent}% complete
+                      </div>
+                    </div>
+                    <Link
+                      href="/mountain-rhythm"
+                      className="discipleos-control--compact inline-flex min-h-11 items-center border border-[#D4A017]/30 px-3 py-2 text-sm text-[#F4D77A] hover:bg-[#D4A017]/10"
+                    >
+                      Open Mountain Rhythm
+                    </Link>
+                  </div>
+                  <div className="space-y-3" data-testid="active-climb-schedule">
+                    {activeClimbPlan.assignments.map((day, dayIndex) => {
+                      const today = todayISO();
+                      const category = day.date < today ? "past" : day.date === today ? "current" : "upcoming";
+                      const dayKey = `${activeClimbPlan.id}:${day.date}`;
+                      const expanded = Boolean(planDayExpansionOverrides.get(dayKey) ?? false);
+                      return (
+                        <PlanDayRow
+                          key={`${activeClimbPlan.id}:${day.date}`}
+                          plan={activeClimbPlan}
+                          day={day}
+                          dayIndex={dayIndex}
+                          category={category}
+                          expanded={expanded}
+                          onToggleExpanded={() =>
+                            setPlanDayExpansionOverrides((current) => {
+                              const next = new Map(current);
+                              next.set(dayKey, !expanded);
+                              return next;
+                            })
+                          }
+                          onToggleChapter={toggleChapterComplete}
+                          onToggleDay={markDayPlanComplete}
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
              <div
                data-testid="dashboard-plans-list"
                 className={cn(
