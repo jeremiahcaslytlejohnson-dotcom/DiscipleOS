@@ -3028,12 +3028,15 @@ test("keeps every desktop and tablet navigation control visible without overflow
 
     const navigation = page.getByTestId("dashboard-navigation-row");
     await expect(navigation).toBeVisible();
+    await expect(navigation.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
     await expect(navigation.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+    await expect(navigation.getByRole("button", { name: "Calendar", exact: true })).toBeVisible();
+    await expect(navigation.getByRole("button", { name: "Plans", exact: true })).toBeVisible();
     const layout = await navigation.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const controls = Array.from(
         element.querySelectorAll<HTMLElement>(
-          'button[aria-pressed], a[data-testid="link-mountain-rhythm-entry"], button:not([aria-pressed])',
+          'button[aria-pressed], button:not([aria-pressed])',
         ),
       ).filter((control) => {
         const rect = control.getBoundingClientRect();
@@ -3074,7 +3077,7 @@ test("keeps every desktop and tablet navigation control visible without overflow
     expect(layout.rowRight).toBeLessThanOrEqual(width);
     expect(layout.rowScrollWidth).toBeLessThanOrEqual(layout.rowClientWidth + 1);
     expect(layout.overflowX).not.toMatch(/auto|scroll/);
-    expect(layout.controls).toHaveLength(6);
+    expect(layout.controls).toHaveLength(5);
     const inactiveControlStyle = layout.controls[1];
     for (const control of layout.controls.slice(2)) {
       expect(control.borderRadius).toBe(inactiveControlStyle.borderRadius);
@@ -3086,6 +3089,28 @@ test("keeps every desktop and tablet navigation control visible without overflow
       expect(control.right).toBeLessThanOrEqual(layout.rowRight + 1);
       expect(control.height).toBeGreaterThanOrEqual(44);
       expect(control.textRight).toBeLessThanOrEqual(control.controlRight + 1);
+    }
+  }
+});
+
+test("removes Mountain Rhythm only from the desktop and mobile dashboard navigation", async ({ page }) => {
+  const plan = makeOrdinaryPlan();
+  await stubHomeApi(page, plan);
+  await seedPlans(page, [plan]);
+
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const navigation = await openDashboardNavigation(page);
+
+    await expect(navigation.getByTestId("link-mountain-rhythm-entry")).toHaveCount(0);
+    for (const label of ["Today", "Calendar", "Plans"]) {
+      await expect(navigation.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
+
+    if (width < 768) {
+      await expect(page.getByTestId("install-app-menu-button")).toBeVisible();
+      await expect(page.getByTestId("dashboard-navigation-secondary-actions")).toBeVisible();
     }
   }
 });
