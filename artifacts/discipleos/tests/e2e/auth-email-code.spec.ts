@@ -253,6 +253,23 @@ test("claims an anonymous Mountain Rhythm climb with its dates and progress when
   const claimResponse = await claimResponsePromise;
   expect(claimResponse.ok()).toBeTruthy();
   expect((await claimResponse.json()).claimed.plans).toBe(1);
+  const persistedPlansResponse = await page.request.get("/api/reading/plans");
+  expect(persistedPlansResponse.ok()).toBeTruthy();
+  const persistedPlans = await persistedPlansResponse.json();
+  const persistedClimb = persistedPlans.plans.find(
+    (plan: { id?: string }) => plan.id === expectedClimb!.id,
+  );
+  expect(persistedClimb).toBeTruthy();
+  expect(persistedClimb.assignments.map((day: { date: string }) => day.date))
+    .toEqual(expectedClimb!.assignmentDates);
+  expect(
+    Object.keys(persistedClimb.completed)
+      .filter((key) => persistedClimb.completed[key])
+      .sort(),
+  ).toEqual([...expectedClimb!.completedKeys].sort());
+  expect(persistedClimb.earnedDayKeys).toEqual(expectedClimb!.earnedDayKeys);
+  expect(persistedClimb.dayCompletionDates[expectedClimb!.earnedDayKeys[0]])
+    .toBeTruthy();
   await expect(page).toHaveURL(/\/$/);
   await expect.poll(() => getActiveClimbSnapshot(page)).toEqual(expectedClimb);
 

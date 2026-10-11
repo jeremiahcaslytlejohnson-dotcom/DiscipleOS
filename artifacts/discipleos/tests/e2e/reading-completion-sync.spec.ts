@@ -8,6 +8,177 @@ const COMPLETION_KEYS = ["today-psalm-1", "today-psalm-2"];
 
 test.use({ timezoneId: "UTC" });
 
+test("Home and Mountain Rhythm reject plan hydration when auth and server owners differ", async ({
+  page,
+}) => {
+  const cachedPlan = makeActiveClimbPlan();
+  const foreignPlan = {
+    ...makeActiveClimbPlan(),
+    id: "foreign-session-climb",
+    name: "Foreign Session Climb",
+  };
+  const requests = { claims: 0, planReads: 0 };
+
+  await page.addInitScript(({ cachedPlan }) => {
+    localStorage.setItem(
+      "discipleos-data",
+      JSON.stringify({
+        ownerId: "auth-owner",
+        plans: [cachedPlan],
+        events: [],
+        eventCompletions: {},
+        selectedPlanId: cachedPlan.id,
+      }),
+    );
+  }, { cachedPlan });
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          user: { id: "auth-owner", email: "fixture@example.test" },
+        }),
+      });
+      return;
+    }
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          userId: "different-session-owner",
+          authenticated: true,
+          established: true,
+        }),
+      });
+      return;
+    }
+    if (pathname.endsWith("/account/claim")) {
+      requests.claims += 1;
+      await route.fulfill({ status: 200, json: { success: true } });
+      return;
+    }
+    if (pathname.endsWith("/reading/plans") && request.method() === "GET") {
+      requests.planReads += 1;
+      await route.fulfill({
+        status: 200,
+        json: { success: true, plans: [foreignPlan] },
+      });
+      return;
+    }
+    if (pathname.endsWith("/events") && request.method() === "GET") {
+      await route.fulfill({ status: 200, json: { success: true, events: [] } });
+      return;
+    }
+    if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        json: { success: true, commitments: [], eventCompletions: [] },
+      });
+      return;
+    }
+    if (pathname.endsWith("/settings")) {
+      await route.fulfill({ status: 200, json: { success: true, settings: {} } });
+      return;
+    }
+    await route.fulfill({ status: 200, json: { success: true } });
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("Climb reading 1")).toBeVisible();
+  await expect(page.getByText("Foreign Session Climb")).toHaveCount(0);
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByText("Climb reading 1")).toBeVisible();
+  await expect(page.getByText("Foreign Session Climb")).toHaveCount(0);
+  expect(requests).toEqual({ claims: 0, planReads: 0 });
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return { ownerId: data.ownerId, planId: data.plans?.[0]?.id };
+    }),
+  ).toEqual({ ownerId: "auth-owner", planId: cachedPlan.id });
+});
+
+test("Mountain Rhythm keeps its owner-scoped cache when account claim fails", async ({
+  page,
+}) => {
+  const cachedPlan = makeActiveClimbPlan();
+  const requests = { claims: 0, planReads: 0 };
+  await page.addInitScript(({ cachedPlan }) => {
+    localStorage.setItem(
+      "discipleos-data",
+      JSON.stringify({
+        ownerId: "previous-anonymous-owner",
+        plans: [cachedPlan],
+        events: [],
+        eventCompletions: {},
+        selectedPlanId: cachedPlan.id,
+      }),
+    );
+  }, { cachedPlan });
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          authenticated: true,
+          user: { id: "account-owner", email: "fixture@example.test" },
+        },
+      });
+      return;
+    }
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        json: { userId: "account-owner", authenticated: true, established: true },
+      });
+      return;
+    }
+    if (pathname.endsWith("/account/claim")) {
+      requests.claims += 1;
+      await route.fulfill({ status: 409, json: { success: false } });
+      return;
+    }
+    if (pathname.endsWith("/reading/plans") && request.method() === "GET") {
+      requests.planReads += 1;
+      await route.fulfill({ status: 200, json: { success: true, plans: [] } });
+      return;
+    }
+    if (pathname.endsWith("/events") && request.method() === "GET") {
+      await route.fulfill({ status: 200, json: { success: true, events: [] } });
+      return;
+    }
+    if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        json: { success: true, commitments: [], eventCompletions: [] },
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, json: { success: true, settings: {} } });
+  });
+
+  await page.goto("/mountain-rhythm");
+  await expect(
+    page.getByText("Account data could not be claimed. Your saved reading data remains on this device."),
+  ).toBeVisible();
+  await expect(page.getByText("Climb reading 1")).toHaveCount(0);
+  expect(requests).toEqual({ claims: 1, planReads: 0 });
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return { ownerId: data.ownerId, planId: data.plans?.[0]?.id };
+    }),
+  ).toEqual({ ownerId: "previous-anonymous-owner", planId: cachedPlan.id });
+});
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }

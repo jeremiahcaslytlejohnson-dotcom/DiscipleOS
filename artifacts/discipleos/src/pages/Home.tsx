@@ -37,6 +37,7 @@ import {
   type PendingOp,
   addPendingOp,
   flushPendingOps,
+  getVerifiedSessionOwner,
   loadLocalOnlyAfterSignOut,
   loadPendingOpsState,
   loadDashboardDisclosureState,
@@ -1664,6 +1665,7 @@ export default function DiscipleOSApp() {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [hasInitialSyncCompleted, setHasInitialSyncCompleted] = useState(false);
   const [serverOwnerId, setServerOwnerId] = useState<string | null>(null);
+  const [hydratedPlanOwnerId, setHydratedPlanOwnerId] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [activeTab, setActiveTab] = useState("today");
@@ -2455,8 +2457,21 @@ export default function DiscipleOSApp() {
     if (typeof window === "undefined") return;
     if (!hasHydrated) return;
 
+    const localOwnerId = localDataRef.current.ownerId;
+    const persistedOwnerId =
+      isSignedIn && serverOwnerId !== userId
+        ? localOwnerId
+        : serverOwnerId ?? localOwnerId;
+    if (
+      isSignedIn &&
+      localOwnerId !== userId &&
+      hydratedPlanOwnerId !== userId
+    ) {
+      return;
+    }
+
     localDataRef.current = {
-      ownerId: serverOwnerId,
+      ownerId: persistedOwnerId,
       events,
       plans,
       eventCompletions,
@@ -2465,7 +2480,7 @@ export default function DiscipleOSApp() {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        ownerId: serverOwnerId,
+        ownerId: persistedOwnerId,
         events,
         plans,
         eventCompletions,
@@ -2473,7 +2488,17 @@ export default function DiscipleOSApp() {
       })
     );
 
-  }, [events, plans, eventCompletions, hasHydrated, selectedPlanId, serverOwnerId]);
+  }, [
+    events,
+    plans,
+    eventCompletions,
+    hasHydrated,
+    selectedPlanId,
+    serverOwnerId,
+    hydratedPlanOwnerId,
+    isSignedIn,
+    userId,
+  ]);
 
   useEffect(() => {
     setSelectedPlanId((current) => resolveSelectedPlanId(plans, current));
@@ -2526,15 +2551,12 @@ export default function DiscipleOSApp() {
       if (typeof sessionData.capabilities?.namedJourneys === "boolean") {
         setNamedJourneysAccess(sessionData.capabilities.namedJourneys);
       }
-      const currentOwnerId =
-        typeof sessionData.userId === "string" ? sessionData.userId : null;
+      const currentOwnerId = getVerifiedSessionOwner(sessionData, {
+        isLoaded: true,
+        isSignedIn: syncIsSignedIn,
+        userId: syncUserId,
+      });
       if (!currentOwnerId) {
-        throw new Error("Server session did not provide an owner");
-      }
-      if (
-        syncIsSignedIn &&
-        (sessionData.authenticated !== true || currentOwnerId !== syncUserId)
-      ) {
         await refreshAuth();
         return;
       }
@@ -2566,9 +2588,15 @@ export default function DiscipleOSApp() {
         currentOwnerId,
       );
 
+      const localSnapshotAlreadyOwned =
+        localDataRef.current.ownerId === currentOwnerId;
+      if (localSnapshotAlreadyOwned) {
+        setHydratedPlanOwnerId(currentOwnerId);
+      } else {
+        setHydratedPlanOwnerId(null);
+      }
       serverOwnerRef.current = currentOwnerId;
       setServerOwnerId(currentOwnerId);
-      localDataRef.current.ownerId = currentOwnerId;
 
       if (reconciled.localDataWasCleared) {
         localDataRef.current.events = [];
@@ -2669,7 +2697,9 @@ export default function DiscipleOSApp() {
             ),
           );
           localDataRef.current.plans = normalizedPlans;
+          localDataRef.current.ownerId = currentOwnerId;
           setPlans(normalizedPlans);
+          setHydratedPlanOwnerId(currentOwnerId);
           if (oversizedServerPlanIds.size > 0) {
             void Promise.all(
               normalizedPlans
@@ -2727,6 +2757,7 @@ export default function DiscipleOSApp() {
     async function loadData() {
       if (typeof window === "undefined" || !isAuthLoaded) return;
       setHasInitialSyncCompleted(false);
+      setHydratedPlanOwnerId(null);
       const localData = loadLocalDiscipleData();
       localDataRef.current = localData;
       const hideLocalDataAfterSignOut =
@@ -4490,8 +4521,16 @@ export default function DiscipleOSApp() {
     plans.length === 0 &&
     !hasExistingActivity &&
     (isSignedIn || !localOnlyAfterSignOutRef.current);
+  const planOwnerVerified =
+    isSignedIn &&
+    userId !== null &&
+    (localDataRef.current.ownerId === userId ||
+      (serverOwnerId === userId && hydratedPlanOwnerId === userId));
   const showHomeBootstrapState =
-    !isAuthLoaded || !hasHydrated || showFirstPlanSyncState;
+    !isAuthLoaded ||
+    !hasHydrated ||
+    showFirstPlanSyncState ||
+    (isSignedIn && !planOwnerVerified);
 
   const setOnboardingPreset = (preset: "newTestament" | "gospels") => {
     togglePreset(preset);

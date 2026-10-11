@@ -128,6 +128,34 @@ export type PendingOpsState = {
   ops: PendingOp[];
 };
 
+/**
+ * A plan snapshot can only be hydrated for the identity represented by the
+ * server session. In particular, a signed-in browser must not accept an
+ * anonymous session, and a signed-out browser must not accept an account
+ * session left over from an auth transition.
+ */
+export function getVerifiedSessionOwner(
+  session: unknown,
+  auth: {
+    isLoaded: boolean;
+    isSignedIn: boolean;
+    userId: string | null;
+  },
+): string | null {
+  if (!auth.isLoaded || !session || typeof session !== "object") return null;
+  const sessionData = session as { userId?: unknown; authenticated?: unknown };
+  if (typeof sessionData.userId !== "string" || !sessionData.userId) return null;
+
+  if (sessionData.authenticated === true) {
+    return auth.isSignedIn && auth.userId === sessionData.userId
+      ? sessionData.userId
+      : null;
+  }
+
+  if (sessionData.authenticated !== false || auth.isSignedIn) return null;
+  return sessionData.userId;
+}
+
 export function loadLocalOnlyAfterSignOut(): boolean {
   try {
     return localStorage.getItem(LOCAL_ONLY_AFTER_SIGNOUT_KEY) === "true";

@@ -44,6 +44,8 @@ import {
 import {
   addPendingOp,
   flushPendingOps,
+  getVerifiedSessionOwner,
+  loadLocalOnlyAfterSignOut,
   loadPendingOpsState,
   reconcileSessionBoundary,
   savePendingOps,
@@ -176,13 +178,19 @@ function StatusMark({ status }: { status: string }) {
 
 export default function MountainRhythm() {
   const [, setLocation] = useLocation();
-  const { isSignedIn } = useAuth();
+  const {
+    isLoaded: isAuthLoaded,
+    isSignedIn,
+    userId,
+    refresh: refreshAuth,
+  } = useAuth();
   const initial = useMemo(() => loadLocalData(), []);
   const [plans, setPlans] = useState(initial.plans);
   const [events, setEvents] = useState(initial.events);
   const [eventCompletions, setEventCompletions] = useState(initial.eventCompletions);
   const [selectedPlanId, setSelectedPlanId] = useState(initial.selectedPlanId);
   const [ownerId, setOwnerId] = useState(initial.ownerId);
+  const [verifiedPlanOwnerId, setVerifiedPlanOwnerId] = useState<string | null>(null);
   const [readingDefaults, setReadingDefaults] = useState(() => loadReadingDefaults());
   const [isLoading, setIsLoading] = useState(true);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -231,31 +239,53 @@ export default function MountainRhythm() {
     [score.trail],
   );
   const today = todayISO();
+  const cachedPlanOwnerIsTrusted =
+    isAuthLoaded &&
+    (isSignedIn
+      ? initial.ownerId === userId
+      : !loadLocalOnlyAfterSignOut());
+  const canShowPlanState =
+    cachedPlanOwnerIsTrusted ||
+    (verifiedPlanOwnerId !== null &&
+      (isSignedIn ? verifiedPlanOwnerId === userId : verifiedPlanOwnerId === ownerId));
 
   useEffect(() => {
     let cancelled = false;
     async function hydrate() {
+      if (!isAuthLoaded) return;
+      setVerifiedPlanOwnerId(null);
       let unresolvedPendingOps = loadPendingOpsState().ops;
       try {
         const sessionResponse = await fetch("/api/session/info", { cache: "no-store" });
         const sessionData = sessionResponse.ok ? await sessionResponse.json() : null;
+        const currentOwnerId = getVerifiedSessionOwner(sessionData, {
+          isLoaded: isAuthLoaded,
+          isSignedIn,
+          userId,
+        });
+        if (!currentOwnerId) {
+          if (isSignedIn || sessionData?.authenticated === true) void refreshAuth();
+          return;
+        }
         if (!cancelled) {
           setHasAuthenticatedSession(sessionData?.authenticated === true);
         }
-        if (!cancelled && typeof sessionData?.userId === "string") {
-          setOwnerId(sessionData.userId);
-          setReadingDefaults(loadReadingDefaults(sessionData.userId));
-        } else if (!cancelled) {
-          setReadingDefaults(loadReadingDefaults());
-        }
-        if (isSignedIn && sessionData?.userId) {
+        if (!cancelled && isSignedIn) {
           const claimResponse = await fetch("/api/account/claim", {
             method: "POST",
             cache: "no-store",
           });
           if (!claimResponse.ok) throw new Error("Could not claim account data");
         }
-        if (!cancelled && typeof sessionData?.userId === "string") {
+        if (cancelled) return;
+        setReadingDefaults(
+          loadReadingDefaults(isSignedIn ? currentOwnerId : undefined),
+        );
+        if (initial.ownerId === currentOwnerId) {
+          setVerifiedPlanOwnerId(currentOwnerId);
+          setOwnerId(currentOwnerId);
+        }
+        if (!cancelled) {
           const pendingState = loadPendingOpsState();
           const boundary = reconcileSessionBoundary(
             {
@@ -265,7 +295,7 @@ export default function MountainRhythm() {
               pendingOps: pendingState.ops,
               pendingOpsOwnerId: pendingState.ownerId,
             },
-            sessionData.userId,
+            currentOwnerId,
           );
           unresolvedPendingOps = boundary.pendingOps;
           if (boundary.localDataWasCleared) {
@@ -275,11 +305,15 @@ export default function MountainRhythm() {
             setSelectedPlanId(null);
           }
           if (boundary.pendingOpsWereCleared) {
-            savePendingOps([], sessionData.userId);
+            savePendingOps([], currentOwnerId);
             unresolvedPendingOps = [];
           } else if (boundary.pendingOps.length > 0) {
-            const remaining = await flushPendingOps(boundary.pendingOps);
-            savePendingOps(remaining, sessionData.userId);
+            const remaining = await flushPendingOps(
+              boundary.pendingOps,
+              () => !cancelled,
+            );
+            if (cancelled) return;
+            savePendingOps(remaining, currentOwnerId);
             unresolvedPendingOps = remaining;
           }
         }
@@ -294,18 +328,20 @@ export default function MountainRhythm() {
           fetch(`/api/rhythm/score?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`, {
             cache: "no-store",
           }),
-          sessionData?.userId
+          isSignedIn
             ? fetch("/api/settings", { cache: "no-store" })
             : Promise.resolve(null),
         ]);
-        if (!cancelled && settingsResponse?.ok) {
+        if (cancelled) return;
+        if (settingsResponse?.ok) {
           const settingsData = await settingsResponse.json();
           const normalized = normalizeReadingDefaults(settingsData?.settings);
-          setReadingDefaults(saveReadingDefaults(normalized, sessionData.userId));
+          setReadingDefaults(saveReadingDefaults(normalized, currentOwnerId));
         }
         const sessionEstablished = sessionData?.established === true;
-        if (!cancelled && plansResponse.ok) {
+        if (plansResponse.ok) {
           const data = await plansResponse.json();
+          if (cancelled) return;
           if (
             data.success &&
             Array.isArray(data.plans) &&
@@ -319,6 +355,8 @@ export default function MountainRhythm() {
               mergeLocalCompletionHistory(plan, localPlansById.get(plan.id)),
             );
             setPlans(hydratedPlans);
+            setOwnerId(currentOwnerId);
+            setVerifiedPlanOwnerId(currentOwnerId);
             setSelectedPlanId((current) =>
               resolveStructuredClimbPlanId(hydratedPlans, current),
             );
@@ -343,7 +381,7 @@ export default function MountainRhythm() {
             }
           }
         }
-        if (!cancelled && eventsResponse.ok) {
+        if (eventsResponse.ok) {
           const data = await eventsResponse.json();
           if (
             data.success &&
@@ -353,7 +391,7 @@ export default function MountainRhythm() {
             setEvents(data.events);
           }
         }
-        if (!cancelled && rhythmResponse.ok) {
+        if (rhythmResponse.ok) {
           const data = await rhythmResponse.json();
           const completions = Array.isArray(data.eventCompletions)
             ? data.eventCompletions
@@ -369,8 +407,14 @@ export default function MountainRhythm() {
             setEventCompletions((current) => ({ ...current, ...persistedCompletions }));
           }
         }
-      } catch {
-        if (!cancelled) setFeedback("Working from this device while connection is restored.");
+      } catch (error) {
+        if (!cancelled) {
+          setFeedback(
+            error instanceof Error && error.message === "Could not claim account data"
+              ? "Account data could not be claimed. Your saved reading data remains on this device."
+              : "Working from this device while connection is restored.",
+          );
+        }
       } finally {
         if (!cancelled) {
           setSessionChecked(true);
@@ -380,10 +424,11 @@ export default function MountainRhythm() {
     }
     hydrate();
     return () => { cancelled = true; };
-  }, [isSignedIn]);
+  }, [isAuthLoaded, isSignedIn, userId, refreshAuth]);
 
   useEffect(() => {
     if (isLoading) return;
+    if (!canShowPlanState) return;
     const local = loadLocalData();
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...local,
@@ -393,7 +438,15 @@ export default function MountainRhythm() {
       eventCompletions,
       selectedPlanId,
     }));
-  }, [isLoading, ownerId, plans, events, eventCompletions, selectedPlanId]);
+  }, [
+    isLoading,
+    canShowPlanState,
+    ownerId,
+    plans,
+    events,
+    eventCompletions,
+    selectedPlanId,
+  ]);
 
   const queuePending = useCallback(
     (op: any) => {
@@ -531,6 +584,7 @@ export default function MountainRhythm() {
     if (
       isLoading ||
       !sessionChecked ||
+      !canShowPlanState ||
       autoStartedEntryRef.current ||
       structuredPlans.length > 0 ||
       isSignedIn ||
@@ -541,6 +595,7 @@ export default function MountainRhythm() {
   }, [
     hasAuthenticatedSession,
     isLoading,
+    canShowPlanState,
     isSignedIn,
     sessionChecked,
     startClimb,
@@ -698,6 +753,20 @@ export default function MountainRhythm() {
           (route) => route.kind !== selectedKind && !route.comingLater && !route.locked,
         )
       : null;
+
+  if (!canShowPlanState) {
+    return (
+      <div
+        className="discipleos-shell flex min-h-[100dvh] items-center justify-center px-5 text-center text-sm text-white/70"
+        role="status"
+        aria-live="polite"
+      >
+        {isLoading
+          ? "Verifying your saved reading data…"
+          : feedback || "This session could not verify the saved reading data. It remains on this device."}
+      </div>
+    );
+  }
 
   return (
     <div className="discipleos-shell min-h-[100dvh] text-white">
