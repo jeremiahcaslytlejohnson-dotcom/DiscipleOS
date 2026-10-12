@@ -199,6 +199,7 @@ export default function MountainRhythm() {
   const [hasAuthenticatedSession, setHasAuthenticatedSession] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [isPastClimbsExpanded, setIsPastClimbsExpanded] = useState(false);
   const [pendingStartKind, setPendingStartKind] = useState<string | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<any>(null);
   const [isReplacingClimb, setIsReplacingClimb] = useState(false);
@@ -571,7 +572,9 @@ export default function MountainRhythm() {
     setFeedback(`Starting ${plan.name}.`);
     try {
       await savePlan(plan);
+      setFeedback("");
     } catch (error: any) {
+      setFeedback("");
       if (error?.status === 403) {
         setPlans((current) => current.filter((item) => item.id !== plan.id));
         setSelectedPlanId(null);
@@ -596,12 +599,6 @@ export default function MountainRhythm() {
       }
     }
   }, [activeClimb, queuePending, readingDefaults, savePlan]);
-
-  const beginReplacement = useCallback((kind: string, expectedActivePlanId: string) => {
-    setSaveError("");
-    setReplacementError("");
-    setPendingReplacement({ kind, expectedActivePlanId });
-  }, []);
 
   const replaceActiveClimb = useCallback(async () => {
     if (!pendingReplacement || isReplacingClimb) return;
@@ -988,15 +985,6 @@ export default function MountainRhythm() {
                   <Button
                     type="button"
                     variant="outline"
-                    data-testid="button-start-over-active-climb"
-                    onClick={() => beginReplacement("7-day-climb", activeClimb.id)}
-                    className="min-h-11 border-[#D4A017]/45 bg-[#D4A017]/10 text-[#F4D77A] hover:bg-[#D4A017]/20"
-                  >
-                    Start a new 7-Day Climb
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
                     data-testid="button-request-cancel-active-climb"
                     onClick={() => setPendingCancelClimbPlanId(activeClimb.id)}
                     className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
@@ -1005,6 +993,8 @@ export default function MountainRhythm() {
                   </Button>
                 </div>
               ) : null}
+              {feedback ? <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-100" data-testid="status-mountain-feedback" role="status">{feedback}</div> : null}
+              {!isSignedIn ? <div className="discipleos-secondary-copy mt-3 text-xs leading-5">Your ascent is saved on this device. Sign in from the home page when you are ready to sync it.</div> : null}
               {pendingReplacement ? (
                 <div
                   role="dialog"
@@ -1165,68 +1155,21 @@ export default function MountainRhythm() {
                   </div>
                 </div>
               ) : null}
-              {completedClimbs.length > 0 ? (
-                <section
-                  className="mt-4 border-t border-emerald-300/20 pt-4"
-                  data-testid="mountain-rhythm-completed-climbs"
-                >
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/80">
-                    Earned ascent retained
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {completedClimbs.map((climb) => (
-                      <div
-                        key={climb.planId}
-                        className="flex flex-col gap-1 border-b border-emerald-300/15 bg-black/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-                        data-testid={`completed-climb-${climb.type}`}
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-white">{climb.label} · Complete</div>
-                          <div className="discipleos-secondary-copy text-xs">
-                            {climb.completedDays} of {climb.journeyDays} days earned · {climb.journeyProgress}% journey progress
-                          </div>
-                        </div>
-                        <div className="text-sm font-semibold text-emerald-200">
-                          {climb.earnedAscent} ascent
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              {pastClimbs.length > 0 ? (
-                <section
-                  className="mt-4 border-t border-white/10 pt-4"
-                  data-testid="mountain-rhythm-past-climbs"
-                >
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
-                    Past climbs
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {pastClimbs.map((plan) => (
-                      <div
-                        key={plan.id}
-                        className="border-b border-white/10 bg-black/10 px-3 py-3"
-                        data-testid={`past-climb-${plan.id}`}
-                      >
-                        <div className="text-sm font-semibold text-white">
-                          {plan.name || "Structured climb"} · {getStructuredPlanLifecycle(plan) === "cancelled" ? "Canceled" : "Expired"}
-                        </div>
-                        <div className="discipleos-secondary-copy text-xs">
-                          {plan.startDate && plan.endDate
-                            ? `${plan.startDate} – ${plan.endDate} · Progress remains in your history`
-                            : "Progress remains in your history"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              {feedback ? <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-100" data-testid="status-mountain-feedback">{feedback}</div> : null}
               {saveError ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100" data-testid="status-mountain-save">{saveError}</div> : null}
-              {!isSignedIn ? <div className="discipleos-secondary-copy mt-4 text-xs leading-5">Your ascent is saved on this device. Sign in from the home page when you are ready to sync it.</div> : null}
             </section>
           </section>
+
+          {activeClimb && selectedPlan?.id === activeClimb.id ? (
+            <MountainRhythmDisciplines
+              plan={selectedPlan}
+              events={events}
+              completions={eventCompletions}
+              today={today}
+              onSavePlan={saveDisciplinePlan}
+              onSaveEvent={saveDisciplineEvent}
+              onToggleCompletion={toggleDisciplineCompletion}
+            />
+          ) : null}
 
           {selectedPlan ? (
             <>
@@ -1365,17 +1308,6 @@ export default function MountainRhythm() {
                         <div className="flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
                         <div className="discipleos-secondary-copy mt-1 text-sm leading-6">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
                       </div>
-                      {activeClimb?.id === selectedPlan.id ? (
-                        <MountainRhythmDisciplines
-                          plan={selectedPlan}
-                          events={events}
-                          completions={eventCompletions}
-                          today={today}
-                          onSavePlan={saveDisciplinePlan}
-                          onSaveEvent={saveDisciplineEvent}
-                          onToggleCompletion={toggleDisciplineCompletion}
-                        />
-                      ) : null}
                   </section>
 
                     <section data-testid="mountain-rhythm-milestones" className="min-w-0 border-t border-white/10 pt-5">
@@ -1402,6 +1334,93 @@ export default function MountainRhythm() {
               Choose a route above to see the full ascent, daily readings, milestones, and today's next step.
             </section>
           )}
+
+          {completedClimbs.length > 0 || pastClimbs.length > 0 ? (
+            <details
+              className="mt-6 border-t border-white/10 pt-4"
+              data-testid="mountain-rhythm-past-climbs"
+              onToggle={(event) => setIsPastClimbsExpanded(event.currentTarget.open)}
+            >
+              <summary className="cursor-pointer text-sm font-semibold text-white/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60">
+                Past climbs <span className="font-normal text-white/40">({completedClimbs.length + pastClimbs.length})</span>
+              </summary>
+              {isPastClimbsExpanded ? (
+                <>
+              {completedClimbs.length > 0 ? (
+                <section
+                  className="mt-3 border-t border-emerald-300/20 pt-3"
+                  data-testid="mountain-rhythm-completed-climbs"
+                >
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200/80">
+                    Earned ascent retained
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {completedClimbs.map((climb) => (
+                      <div
+                        key={climb.planId}
+                        className="flex flex-col gap-1 border-b border-emerald-300/15 bg-black/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        data-testid={`completed-climb-${climb.type}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">{climb.label} · Complete</div>
+                          <div className="discipleos-secondary-copy text-xs">
+                            {climb.completedDays} of {climb.journeyDays} days earned · {climb.journeyProgress}% journey progress
+                          </div>
+                          <div className="mt-1 break-all text-[11px] text-white/35">Plan ID: {climb.planId}</div>
+                        </div>
+                        <div className="text-sm font-semibold text-emerald-200">
+                          {climb.earnedAscent} ascent
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {pastClimbs.length > 0 ? (
+                <section className="mt-3 border-t border-white/10 pt-3">
+                  <div className="space-y-2">
+                    {pastClimbs.map((plan) => {
+                      const assignments = Array.isArray(plan.assignments) ? plan.assignments : [];
+                      const completion = plan.completed && typeof plan.completed === "object" ? plan.completed : {};
+                      const totalReadings = assignments.reduce(
+                        (count: number, day: any) => count + (Array.isArray(day.readings) ? day.readings.length : 0),
+                        0,
+                      );
+                      const completedReadings = assignments.reduce(
+                        (count: number, day: any) =>
+                          count + (Array.isArray(day.readings)
+                            ? day.readings.filter((reading: any) => Boolean(completion[reading.key])).length
+                            : 0),
+                        0,
+                      );
+                      const earnedDays = Array.isArray(plan.earnedDayKeys) ? plan.earnedDayKeys.length : 0;
+                      return (
+                        <div
+                          key={plan.id}
+                          className="border-b border-white/10 bg-black/10 px-3 py-3"
+                          data-testid={`past-climb-${plan.id}`}
+                        >
+                          <div className="text-sm font-semibold text-white">
+                            {plan.name || "Structured climb"} · {getStructuredPlanLifecycle(plan) === "cancelled" ? "Canceled" : "Expired"}
+                          </div>
+                          <div className="discipleos-secondary-copy text-xs">
+                            {plan.startDate && plan.endDate
+                              ? `${plan.startDate} – ${plan.endDate}`
+                              : "Dates unavailable"}
+                            {" · "}{earnedDays} of {plan.journeyDays || plan.durationDays || assignments.length} days earned
+                            {" · "}{completedReadings} of {totalReadings} readings complete
+                          </div>
+                          <div className="mt-1 break-all text-[11px] text-white/35">Plan ID: {plan.id}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+                </>
+              ) : null}
+            </details>
+          ) : null}
         </main>
       </div>
     </div>

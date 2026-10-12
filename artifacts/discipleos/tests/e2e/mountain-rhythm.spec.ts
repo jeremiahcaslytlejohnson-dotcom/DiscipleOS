@@ -279,6 +279,15 @@ async function openMountainRhythm(page: Page) {
   await expect(page.getByTestId("button-choose-7-day-climb")).toBeVisible();
 }
 
+async function expandPastClimbs(page: Page) {
+  const history = page.getByTestId("mountain-rhythm-past-climbs");
+  await expect(history).toBeVisible();
+  if (!(await history.getAttribute("open"))) {
+    await history.locator("summary").click();
+  }
+  return history;
+}
+
 async function expectDistinctMountainMetrics(page: Page, journeyLabel: string) {
   const mountainPanel = page.getByTestId("mountain-rhythm-panel");
   await expect(
@@ -376,6 +385,7 @@ test("automatically starts a 7-Day Climb for an anonymous session with a user ID
 
   await expect(page.getByText("7-Day Climb · active reading climb", { exact: true })).toBeVisible();
   await expect(page.getByTestId("button-choose-7-day-climb")).toContainText("7-Day Climb · In Progress");
+  await expect(page.getByTestId("status-mountain-feedback")).toHaveCount(0);
 
   const savedPlan = (await saveRequest).postDataJSON();
     expect(savedPlan.selectedBooks).toEqual(["Genesis"]);
@@ -602,8 +612,14 @@ test("starts a fresh 7-Day Climb after an expired one and keeps it selected afte
     assignments: [],
     completed: {},
   };
-  await stubAuthenticatedApi(page, ordinaryPlan, [expiredPlan]);
-  await seedLocalData(page, [expiredPlan], expiredPlan.id);
+  const ownerId = "anonymous-history-session";
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [expiredPlan], expiredPlan.id, { ownerId });
 
   const plansLoaded = page.waitForResponse(
     (response) =>
@@ -627,9 +643,24 @@ test("starts a fresh 7-Day Climb after an expired one and keeps it selected afte
   await expect(
     page.getByText("7-Day Climb · active reading climb", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByTestId(`past-climb-${expiredPlan.id}`),
-  ).toContainText("Expired");
+  const history = page.getByTestId("mountain-rhythm-past-climbs");
+  await expect(history.locator("summary")).toContainText("Past climbs");
+  await expect(history).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).toHaveCount(0);
+  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  await expect(tracker).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePositions = await page.evaluate(() => ({
+    trackerY: document.querySelector('[data-testid="mountain-rhythm-disciplines"]')?.getBoundingClientRect().top,
+    historyY: document.querySelector('[data-testid="mountain-rhythm-past-climbs"]')?.getBoundingClientRect().top,
+    viewportWidth: document.documentElement.clientWidth,
+    contentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(mobilePositions.trackerY!).toBeLessThan(mobilePositions.historyY!);
+  expect(mobilePositions.contentWidth).toBeLessThanOrEqual(mobilePositions.viewportWidth);
+  await expandPastClimbs(page);
+  await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).toContainText("Expired");
+  await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).toContainText(expiredPlan.id);
   await expect.poll(async () =>
     page.evaluate(() => {
       const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
@@ -684,11 +715,20 @@ test("cancels a device-only climb after confirmation without deleting history or
     repeat: "none",
   };
 
-  await stubApi(page, { success: true, established: false }, { failPlanPosts: true });
+  const ownerId = "anonymous-cancellation-session";
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  }, { failPlanPosts: true });
   await seedLocalData(page, [activePlan, ordinaryPlan], activePlan.id, {
+    ownerId,
     events: [calendarReminder],
   });
   await openMountainRhythm(page);
+  await expect(page.getByTestId("button-start-over-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(1);
 
   await page.getByTestId("button-request-cancel-active-climb").click();
   const dialog = page.getByTestId("dialog-cancel-active-climb");
@@ -699,6 +739,14 @@ test("cancels a device-only climb after confirmation without deleting history or
   await page.getByTestId("button-request-cancel-active-climb").click();
   await page.getByTestId("button-confirm-cancel-active-climb").click();
   await expect(page.getByTestId("mountain-rhythm-route")).toHaveCount(0);
+  await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(0);
+  const startChoice = page.getByTestId("button-choose-7-day-climb");
+  await expect(startChoice).toBeVisible();
+  await expect(startChoice).toBeEnabled();
+  await expect(page.getByTestId("button-start-over-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-past-climbs").locator("summary")).toContainText("Past climbs");
+  await expect(page.getByTestId("past-climb-device-cancelled-climb")).toHaveCount(0);
+  await expandPastClimbs(page);
   await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
     "7-Day Climb · Canceled",
   );
@@ -731,6 +779,8 @@ test("cancels a device-only climb after confirmation without deleting history or
   await page.reload();
   await openMountainRhythm(page);
   await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("past-climb-device-cancelled-climb")).toHaveCount(0);
+  await expandPastClimbs(page);
   await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
     "7-Day Climb · Canceled",
   );
@@ -741,14 +791,39 @@ test("cancels a device-only climb after confirmation without deleting history or
     .toBe("cancelled");
   expect(reloadedState.events).toEqual([calendarReminder]);
 
-  await page.getByTestId("button-choose-7-day-climb").click();
+  let replaceActiveCalls = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/reading/plans/replace-active")) replaceActiveCalls += 1;
+  });
+  const freshPlanRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/reading/plans") &&
+      request.method() === "POST",
+  );
+  await startChoice.click();
   await expect(page.getByTestId("mountain-rhythm-route")).toBeVisible();
+  const freshPlan = (await freshPlanRequest).postDataJSON();
+  expect(freshPlan.id).not.toBe(activePlan.id);
+  expect(replaceActiveCalls).toBe(0);
+  await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(1);
+  await expect(page.getByTestId("button-start-over-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId(`button-reading-${activePlan.id}-0-a`)).toHaveCount(0);
   const restartedState = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
   );
   expect(restartedState.plans).toHaveLength(3);
-  expect(restartedState.plans.find((plan: any) => plan.id === activePlan.id).structuredLifecycle)
-    .toBe("cancelled");
+  expect(restartedState.plans.find((plan: any) => plan.id === activePlan.id)).toMatchObject({
+    structuredLifecycle: "cancelled",
+    completed: activePlan.completed,
+    earnedDayKeys: activePlan.earnedDayKeys,
+  });
+  expect(restartedState.plans.find((plan: any) => plan.id === freshPlan.id)).toBeTruthy();
+  expect(
+    restartedState.plans.filter(
+      (plan: any) =>
+        plan.journeyKey === "7-day-climb" && plan.structuredLifecycle !== "cancelled",
+    ),
+  ).toHaveLength(1);
   expect(restartedState.events).toEqual([calendarReminder]);
 });
 
@@ -782,6 +857,8 @@ test("persists a signed-in climb cancellation without deleting plans or reading 
   await openMountainRhythm(page);
   await page.getByTestId("button-request-cancel-active-climb").click();
   await page.getByTestId("button-confirm-cancel-active-climb").click();
+  await expect(page.getByTestId("past-climb-account-cancelled-climb")).toHaveCount(0);
+  await expandPastClimbs(page);
   await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
     "7-Day Climb · Canceled",
   );
@@ -789,6 +866,8 @@ test("persists a signed-in climb cancellation without deleting plans or reading 
   await page.reload();
   await openMountainRhythm(page);
   await expect(page.getByTestId("button-request-cancel-active-climb")).toHaveCount(0);
+  await expect(page.getByTestId("past-climb-account-cancelled-climb")).toHaveCount(0);
+  await expandPastClimbs(page);
   await expect(page.getByTestId("mountain-rhythm-past-climbs")).toContainText(
     "7-Day Climb · Canceled",
   );
@@ -821,8 +900,14 @@ test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async (
     name: "7-Day Climb",
     today,
   });
-  await stubApi(page);
-  await seedLocalData(page, [activePlan], activePlan.id);
+  const ownerId = "anonymous-layout-session";
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [activePlan], activePlan.id, { ownerId });
   await openMountainRhythm(page);
 
   for (const width of [390, 1280]) {
@@ -1071,11 +1156,20 @@ test("does not offer a locked 20-Day Reset after the 7-Day Climb", async ({ page
       completedIndexes: Array.from({ length: 7 }, (_, index) => index),
     });
 
-    await stubApi(page);
-    await seedLocalData(page, [completed], completed.id);
+    await stubApi(page, {
+      success: true,
+      userId: "anonymous-completed-session",
+      authenticated: false,
+      established: false,
+    });
+    await seedLocalData(page, [completed], completed.id, {
+      ownerId: "anonymous-completed-session",
+    });
     await openMountainRhythm(page);
 
     await expect(page.getByTestId("mountain-rhythm-complete")).toContainText("7-Day Climb complete");
+    await expect(page.getByTestId("completed-climb-7-day-climb")).toHaveCount(0);
+    await expandPastClimbs(page);
     await expect(page.getByTestId("completed-climb-7-day-climb")).toContainText("100% journey progress");
   await expect(page.getByTestId("mountain-rhythm-mountain")).toHaveCount(0);
     await expect(page.getByTestId("button-start-next-20-day-reset")).toHaveCount(0);
@@ -1094,7 +1188,12 @@ test("keeps the unreleased 40-Day Climb unavailable", async ({ page }) => {
 });
 
 test("keeps Mountain Rhythm sections inside shared responsive gutters", async ({ page }) => {
-  await stubApi(page);
+  await stubApi(page, {
+    success: true,
+    userId: "anonymous-gutter-session",
+    authenticated: false,
+    established: false,
+  });
   await seedLocalData(page, [], null);
 
   for (const width of [360, 768, 1280]) {
@@ -1251,6 +1350,8 @@ for (const route of [
 
     await expect(page.getByTestId("mountain-rhythm-complete")).toContainText(`${route.label} complete`);
     await expect(page.getByTestId(`button-choose-${route.kind}`)).toContainText(`${route.label} · Complete`);
+    await expect(page.getByTestId(`completed-climb-${route.kind}`)).toHaveCount(0);
+    await expandPastClimbs(page);
     await expect(page.getByTestId(`completed-climb-${route.kind}`)).toContainText("100% journey progress");
     await expect(page.getByText("Ordinary reading plan", { exact: true })).toHaveCount(0);
   });
