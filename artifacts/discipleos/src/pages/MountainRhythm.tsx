@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import MountainRhythmCard from "../components/MountainRhythmCard";
+import MountainRhythmDisciplines from "../components/MountainRhythmDisciplines";
 import EstimatedReadingTime from "../components/EstimatedReadingTime";
 import {
   VERSE_COUNTS,
@@ -497,6 +498,50 @@ export default function MountainRhythm() {
       throw error;
     }
   }, []);
+
+  const saveDisciplinePlan = useCallback((nextPlan: any) => {
+    setPlans((current) => current.map((item) => item.id === nextPlan.id ? nextPlan : item));
+    savePlan(nextPlan).catch(() => {
+      queuePending({ type: "upsert-plan", payload: nextPlan, ts: Date.now() });
+      setSaveError("Your tracker settings are saved on this device and will sync when you reconnect.");
+    });
+  }, [queuePending, savePlan]);
+
+  const saveDisciplineEvent = useCallback(async (event: any) => {
+    const payload = { ...event, id: event.id || makeId("event") };
+    setEvents((current) => [payload, ...current.filter((item) => item.id !== payload.id)]);
+    try {
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Could not save event");
+      const body = await response.json();
+      const saved = body.event || payload;
+      setEvents((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      return saved;
+    } catch {
+      queuePending({ type: "upsert-event", payload, ts: Date.now() });
+      setSaveError("The schedule is saved on this device and will sync when you reconnect.");
+      return payload;
+    }
+  }, [queuePending]);
+
+  const toggleDisciplineCompletion = useCallback((eventId: string, occurrenceDate: string, completed: boolean) => {
+    const key = `${eventId}:${occurrenceDate}`;
+    setEventCompletions((current) => ({ ...current, [key]: completed }));
+    fetch("/api/events/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, occurrenceDate, completed }),
+    }).then((response) => {
+      if (!response.ok) throw new Error("Could not save completion");
+    }).catch(() => {
+      queuePending({ type: "event-complete", eventId, occurrenceDate, completed, ts: Date.now() });
+      setSaveError("Your completion is saved on this device and will sync when you reconnect.");
+    });
+  }, [queuePending]);
 
   const startClimb = useCallback(async (kind: string) => {
     setSaveError("");
@@ -1320,6 +1365,17 @@ export default function MountainRhythm() {
                         <div className="flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
                         <div className="discipleos-secondary-copy mt-1 text-sm leading-6">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
                       </div>
+                      {activeClimb?.id === selectedPlan.id ? (
+                        <MountainRhythmDisciplines
+                          plan={selectedPlan}
+                          events={events}
+                          completions={eventCompletions}
+                          today={today}
+                          onSavePlan={saveDisciplinePlan}
+                          onSaveEvent={saveDisciplineEvent}
+                          onToggleCompletion={toggleDisciplineCompletion}
+                        />
+                      ) : null}
                   </section>
 
                     <section data-testid="mountain-rhythm-milestones" className="min-w-0 border-t border-white/10 pt-5">

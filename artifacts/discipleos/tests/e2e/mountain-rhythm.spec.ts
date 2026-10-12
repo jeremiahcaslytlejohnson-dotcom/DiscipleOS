@@ -390,6 +390,55 @@ test("automatically starts a 7-Day Climb for an anonymous session with a user ID
   );
 });
 
+test("keeps optional prayer tracking separate from Scripture progress and saves its schedule", async ({ page }) => {
+  await stubApi(page, {
+    success: true,
+    userId: "anonymous-mountain-session",
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [], null, { ownerId: "anonymous-mountain-session" });
+  await openMountainRhythm(page);
+  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  await expect(tracker.getByText("Would you also like to track prayer or fasting?")).toBeVisible();
+  const choices = tracker.getByRole("checkbox");
+  await expect(choices.nth(0)).not.toBeChecked();
+  await expect(choices.nth(1)).not.toBeChecked();
+  await choices.nth(0).check();
+  await tracker.getByRole("button", { name: "Save choices" }).click();
+  await tracker.getByRole("button", { name: "Set schedule" }).click();
+  await tracker.getByLabel("Commitment recurrence").selectOption("weekly");
+
+  const eventRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events") && request.method() === "POST",
+  );
+  await tracker.getByRole("button", { name: "Save schedule" }).click();
+  const savedEvent = (await eventRequest).postDataJSON();
+  expect(savedEvent.type).toBe("prayer");
+  expect(savedEvent.repeat).toBe("weekly");
+  expect(savedEvent.repeatWeekdays).toHaveLength(7);
+  await expect(tracker.getByText("fasting", { exact: true })).toBeVisible();
+
+  const completionRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
+  );
+  await tracker.getByText("Mark complete", { exact: true }).click();
+  expect((await completionRequest).postDataJSON()).toMatchObject({
+    eventId: savedEvent.id,
+    completed: true,
+  });
+  await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
+
+  await page.reload();
+  const restoredTracker = page.getByTestId("mountain-rhythm-disciplines");
+  await expect(restoredTracker.getByRole("checkbox").nth(0)).toBeChecked();
+  await expect(restoredTracker.getByRole("checkbox").nth(1)).not.toBeChecked();
+  await expect(restoredTracker.getByText("Would you also like to track prayer or fasting?")).toHaveCount(0);
+  await restoredTracker.getByRole("checkbox").nth(1).check();
+  await expect(restoredTracker.getByRole("checkbox").nth(1)).toBeChecked();
+  await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
+});
+
 test("requires confirmation to replace a hidden active climb and keeps unrelated local plans", async ({ page }) => {
   const ownerId = "anonymous-replacement-owner";
   const existingPlan = makePlan({
