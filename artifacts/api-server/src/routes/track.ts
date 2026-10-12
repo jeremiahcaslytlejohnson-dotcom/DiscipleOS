@@ -1,29 +1,70 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { pool } from "@workspace/db";
 
 const router = Router();
-const WINDOW_MS = 60_000;
 const MAX_EVENTS_PER_WINDOW = 30;
 const MAX_PROPERTY_COUNT = 20;
 const MAX_PROPERTY_STRING_LENGTH = 256;
-const requestsByIp = new Map<string, { start: number; count: number }>();
+const CLEANUP_INTERVAL_MS = 15 * 60_000;
+let rateLimitTableSetup: Promise<void> | undefined;
+let lastCleanupAt = 0;
 
-function rateLimitTrack(req: Request, res: Response, next: NextFunction) {
-  const now = Date.now();
+async function ensureRateLimitTable(): Promise<void> {
+  if (!rateLimitTableSetup) {
+    rateLimitTableSetup = pool
+      .query(`
+        CREATE TABLE IF NOT EXISTS analytics_rate_limits (
+          client_ip text PRIMARY KEY,
+          window_started_at timestamptz NOT NULL,
+          request_count integer NOT NULL
+        )
+      `)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        rateLimitTableSetup = undefined;
+        throw error;
+      });
+  }
+  await rateLimitTableSetup;
+}
+
+async function rateLimitTrack(req: Request, res: Response, next: NextFunction) {
   const key = req.ip || "unknown";
-  let entry = requestsByIp.get(key);
-  if (!entry || now - entry.start >= WINDOW_MS) {
-    entry = { start: now, count: 0 };
-    requestsByIp.set(key, entry);
-  }
-  entry.count++;
+  await ensureRateLimitTable();
 
-  if (requestsByIp.size > 10_000) {
-    for (const [ip, value] of requestsByIp) {
-      if (now - value.start >= WINDOW_MS) requestsByIp.delete(ip);
-    }
+  const result = await pool.query<{ request_count: number }>(
+    `
+      INSERT INTO analytics_rate_limits (client_ip, window_started_at, request_count)
+      VALUES ($1, NOW(), 1)
+      ON CONFLICT (client_ip) DO UPDATE SET
+        window_started_at = CASE
+          WHEN analytics_rate_limits.window_started_at <= NOW() - INTERVAL '1 minute'
+          THEN NOW()
+          ELSE analytics_rate_limits.window_started_at
+        END,
+        request_count = CASE
+          WHEN analytics_rate_limits.window_started_at <= NOW() - INTERVAL '1 minute'
+          THEN 1
+          ELSE analytics_rate_limits.request_count + 1
+        END
+      RETURNING request_count
+    `,
+    [key],
+  );
+
+  const now = Date.now();
+  if (now - lastCleanupAt >= CLEANUP_INTERVAL_MS) {
+    lastCleanupAt = now;
+    void pool
+      .query(
+        "DELETE FROM analytics_rate_limits WHERE window_started_at < NOW() - INTERVAL '1 hour'",
+      )
+      .catch(() => {
+        // Cleanup is best-effort; it must not affect analytics request handling.
+      });
   }
 
-  if (entry.count > MAX_EVENTS_PER_WINDOW) {
+  if (result.rows[0].request_count > MAX_EVENTS_PER_WINDOW) {
     res.setHeader("Retry-After", "60");
     res.status(429).json({ success: false, error: "Too many analytics events" });
     return;

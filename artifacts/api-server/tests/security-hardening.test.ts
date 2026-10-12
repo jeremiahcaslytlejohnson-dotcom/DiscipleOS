@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createApp, createPgSessionStore } from "../src/app";
 
 const app = createApp(createPgSessionStore());
+const secondApiInstance = createApp(createPgSessionStore());
 const clientIp = () => `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
 
 describe("state-changing request and analytics protections", () => {
@@ -46,16 +47,28 @@ describe("state-changing request and analytics protections", () => {
       .expect(413);
   });
 
-  it("limits analytics events per client IP", async () => {
+  it("limits analytics events per client IP across API instances", async () => {
     const clientIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
-    let lastStatus = 0;
-    for (let i = 0; i < 31; i++) {
-      const response = await request(app)
+    for (let i = 0; i < 20; i++) {
+      await request(app)
         .post("/api/track")
         .set("X-Forwarded-For", clientIp)
-        .send({ event: "test_event" });
-      lastStatus = response.status;
+        .send({ event: "test_event" })
+        .expect(200);
     }
-    expect(lastStatus).toBe(429);
+
+    for (let i = 0; i < 10; i++) {
+      await request(secondApiInstance)
+        .post("/api/track")
+        .set("X-Forwarded-For", clientIp)
+        .send({ event: "test_event" })
+        .expect(200);
+    }
+
+    await request(secondApiInstance)
+      .post("/api/track")
+      .set("X-Forwarded-For", clientIp)
+      .send({ event: "test_event" })
+      .expect(429);
   });
 });
