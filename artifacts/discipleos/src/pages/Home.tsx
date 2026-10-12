@@ -1884,7 +1884,7 @@ export default function DiscipleOSApp() {
       .map((plan: any) => ({
         plan,
         kind: "mountain",
-        optionLabel: `Rhythm · ${plan.name || "Reading climb"}`,
+        optionLabel: `Mountain Rhythm · ${plan.name || "Reading climb"}`,
       }));
     return [...ordinary, ...structured];
   }, [ordinaryPlans, plans]);
@@ -1947,6 +1947,16 @@ export default function DiscipleOSApp() {
   const planStats = selectedPlan ? getPlanStats(selectedPlan) : null;
   const planViewStats = planViewSelectedPlan ? getPlanStats(planViewSelectedPlan) : null;
   const planViewToday = todayISO();
+  const activeClimbScheduleDays = useMemo(() => {
+    if (!activeClimbPlan || !Array.isArray(activeClimbPlan.assignments)) return [];
+    return activeClimbPlan.assignments
+      .map((day: any, dayIndex: number) => ({ day, dayIndex }))
+      .filter(({ day }: any) => typeof day?.date === "string" && day.date <= planViewToday)
+      .sort((left: any, right: any) =>
+        String(right.day.date).localeCompare(String(left.day.date)) ||
+        left.dayIndex - right.dayIndex,
+      );
+  }, [activeClimbPlan, planViewToday]);
   const planViewDayGroups = getPlanDayGroups(planViewSelectedPlan, planViewToday);
   const planViewPastCompleteCount = planViewSelectedPlan
     ? planViewDayGroups.past.filter(({ day }) =>
@@ -6189,11 +6199,13 @@ export default function DiscipleOSApp() {
                     </Link>
                   </div>
                   <div className="space-y-3" data-testid="active-climb-schedule">
-                    {activeClimbPlan.assignments.map((day, dayIndex) => {
-                      const today = todayISO();
-                      const category = day.date < today ? "past" : day.date === today ? "current" : "upcoming";
+                    {activeClimbScheduleDays.map(({ day, dayIndex }) => {
+                      const today = planViewToday;
+                      const category = day.date === today ? "current" : "past";
                       const dayKey = `${activeClimbPlan.id}:${day.date}`;
-                      const expanded = Boolean(planDayExpansionOverrides.get(dayKey) ?? false);
+                      const expanded = planDayExpansionOverrides.has(dayKey)
+                        ? Boolean(planDayExpansionOverrides.get(dayKey))
+                        : category === "current";
                       return (
                         <PlanDayRow
                           key={`${activeClimbPlan.id}:${day.date}`}

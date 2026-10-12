@@ -209,7 +209,7 @@ async function expectClimbOnHome(page: Page, planId: string) {
   await expect(page.getByTestId("dashboard-progress-detail"))
     .toHaveAttribute("data-plan-id", planId);
   await expect(page.getByTestId("dashboard-progress-selected-plan"))
-    .toContainText("Rhythm · 7-Day Climb");
+    .toContainText("Mountain Rhythm · 7-Day Climb");
   await expect(page.getByTestId(`today-complete-day-${planId}`))
     .toContainText("Day complete");
   await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
@@ -382,7 +382,7 @@ test("Today progress selects one saved plan without changing readings, Calendar,
   await expect(freeOneChoice).toContainText("Free · Morning Psalms");
   await expect(freeTwoChoice)
     .toContainText("Free · Evening Wisdom and Psalms for Busy Weeks");
-  await expect(mountainChoice).toContainText("Rhythm · 7-Day Climb");
+  await expect(mountainChoice).toContainText("Mountain Rhythm · 7-Day Climb");
   await expect(choices.getByRole("button", { name: "Free · Morning Psalms" })).toBeVisible();
   await expect(choices.getByRole("button", { name: /^Free · Evening Wisdom/ })).toBeVisible();
   await expect(guidedChoice).toHaveAttribute("aria-pressed", "true");

@@ -283,7 +283,7 @@ test("claims an anonymous Mountain Rhythm climb with its dates and progress when
     .getByRole("button", { name: /^Progress/ }).click();
   await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-progress-selected-plan"))
-    .toHaveText("Rhythm · 7-Day Climb");
+    .toHaveText("Mountain Rhythm · 7-Day Climb");
   await expect(page.getByTestId("dashboard-progress-percent"))
     .toContainText(`${expectedClimb.progressPercent}% complete`);
   await expect(page.getByTestId("dashboard-progress-detail"))

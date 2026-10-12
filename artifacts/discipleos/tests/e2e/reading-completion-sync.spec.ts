@@ -927,7 +927,7 @@ test("same-owner plan snapshot keeps Mountain Rhythm, Home, and the selected Cal
     .getByRole("button", { name: /^Progress/ }).click();
   await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-progress-selected-plan"))
-    .toHaveText("Rhythm · 7-Day Climb");
+    .toHaveText("Mountain Rhythm · Synthetic 7-Day Climb");
   await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
   await expect(page.getByTestId("dashboard-progress-detail"))
     .not.toContainText("Today’s climb complete");

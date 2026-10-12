@@ -2605,13 +2605,14 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         const structuredChoice = progress.getByTestId(
           `dashboard-progress-choice-${structuredPlan.id}`,
         );
+        await expect(structuredChoice).toContainText("Mountain Rhythm · 7-Day Climb");
         if (await structuredChoice.count()) {
           await structuredChoice.click();
           await expect(structuredChoice).toHaveAttribute("aria-pressed", "true");
         } else {
           await expect(progress.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
           await expect(progress.getByTestId("dashboard-progress-selected-plan"))
-            .toHaveText("Rhythm · 7-Day Climb");
+            .toHaveText("Mountain Rhythm · 7-Day Climb");
         }
         await expect(progressDetail).toHaveAttribute("data-plan-id", structuredPlan.id);
         await expect(progressDetail).toContainText(state.climbComplete ? "14.3%" : "0%");
@@ -2702,8 +2703,15 @@ test("keeps an active Mountain Rhythm climb available across Today, Plans, Calen
   const activeClimb = page.getByTestId("dashboard-active-climb");
   await expect(activeClimb).toContainText("7-Day Climb");
   const activeDay = activeClimb.getByTestId(`plan-day-section-${climb.id}-${todayISO()}`);
+  await expect(activeClimb.getByTestId("active-climb-schedule").locator(
+    '[data-testid^="plan-day-section-"]',
+  )).toHaveCount(1);
+  await expect(activeClimb.getByTestId(`plan-day-section-${climb.id}-${tomorrowISO()}`))
+    .toHaveCount(0);
+  await expect(
+    activeDay.getByTestId(`plan-day-toggle-${climb.id}-${todayISO()}`),
+  ).toHaveAttribute("aria-expanded", "true");
   await expect(activeDay).toContainText("0/1 chapters complete");
-  await activeDay.getByTestId(`plan-day-toggle-${climb.id}-${todayISO()}`).click();
   const plansReading = activeDay.getByTestId(`plan-reading-${climb.id}-0`);
   await plansReading.click();
   await expect(plansReading).toHaveAttribute("aria-pressed", "true");
@@ -2713,6 +2721,16 @@ test("keeps an active Mountain Rhythm climb available across Today, Plans, Calen
   await page.getByTestId(`calendar-day-${todayISO()}`).click();
   const calendarPlan = page.getByTestId(`calendar-plan-item-${climb.id}`);
   await expect(calendarPlan).toBeVisible();
+  await page.getByTestId(`calendar-day-${tomorrowISO()}`).click();
+  await expect(page.getByTestId(`calendar-plan-item-${climb.id}`)).toBeVisible();
+  expect(
+    await page.evaluate((key) => {
+      const stored = JSON.parse(localStorage.getItem(key) || "{}");
+      return stored.plans.find((plan: any) => plan.id === "active-only-cross-screen-climb")
+        .assignments.length;
+    }, STORAGE_KEY),
+  ).toBe(7);
+  await page.getByTestId(`calendar-day-${todayISO()}`).click();
   await calendarPlan.getByTestId(`calendar-plan-toggle-${climb.id}`).click();
   await expect(
     calendarPlan.getByTestId(`calendar-plan-readings-${climb.id}`).getByRole("button"),
@@ -2729,6 +2747,58 @@ test("keeps an active Mountain Rhythm climb available across Today, Plans, Calen
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator(".launch-splash").waitFor({ state: "detached" });
   await expect(page.getByTestId(`today-reading-${climb.id}-0`)).toHaveAttribute("aria-pressed", "true");
+});
+
+test("shows only current and past active-climb days newest first and keeps catch-up actions", async ({ page }) => {
+  const today = await browserTodayISO(page);
+  const startDate = addDaysToISO(today, -2);
+  const climb = makeStructuredClimbPlan("active-climb-day-window");
+  climb.startDate = startDate;
+  climb.endDate = addDaysToISO(startDate, 6);
+  climb.assignments = climb.assignments.map((day: any, index: number) => ({
+    ...day,
+    date: addDaysToISO(startDate, index),
+  }));
+  await stubHomeApi(page, [climb]);
+  await seedPlans(page, [climb], [], true, "visual-polish-owner");
+  await page.goto("/");
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Plans", exact: true }).click();
+
+  const schedule = page.getByTestId("active-climb-schedule");
+  expect(
+    await schedule.locator('[data-testid^="plan-day-section-"]').evaluateAll((days) =>
+      days.map((day) => day.getAttribute("data-testid")),
+    ),
+  ).toEqual([
+    `plan-day-section-${climb.id}-${today}`,
+    `plan-day-section-${climb.id}-${addDaysToISO(today, -1)}`,
+    `plan-day-section-${climb.id}-${addDaysToISO(today, -2)}`,
+  ]);
+  const currentDay = schedule.getByTestId(`plan-day-section-${climb.id}-${today}`);
+  const pastDay = schedule.getByTestId(
+    `plan-day-section-${climb.id}-${addDaysToISO(today, -1)}`,
+  );
+  await expect(
+    currentDay.getByTestId(`plan-day-toggle-${climb.id}-${today}`),
+  ).toHaveAttribute("aria-expanded", "true");
+  const pastToggle = pastDay.getByTestId(
+    `plan-day-toggle-${climb.id}-${addDaysToISO(today, -1)}`,
+  );
+  await expect(pastToggle).toHaveAttribute("aria-expanded", "false");
+  await pastToggle.click();
+  await expect(pastToggle).toHaveAttribute("aria-expanded", "true");
+  await pastDay.getByTestId("button-complete-plan-day-2").click();
+  await expect(pastDay.getByTestId(`plan-day-status-${climb.id}-${addDaysToISO(today, -1)}`))
+    .toHaveText("Complete");
+  expect(
+    await page.evaluate((key) => {
+      const stored = JSON.parse(localStorage.getItem(key) || "{}");
+      return stored.plans.find((plan: any) => plan.id === "active-climb-day-window")
+        .assignments.length;
+    }, STORAGE_KEY),
+  ).toBe(7);
 });
 
 test("keeps a signed-in active climb private after sign-out", async ({ page }) => {
