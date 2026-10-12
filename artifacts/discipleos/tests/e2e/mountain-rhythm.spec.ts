@@ -390,6 +390,147 @@ test("automatically starts a 7-Day Climb for an anonymous session with a user ID
   );
 });
 
+test("requires confirmation to replace a hidden active climb and keeps unrelated local plans", async ({ page }) => {
+  const ownerId = "anonymous-replacement-owner";
+  const existingPlan = makePlan({
+    id: "ordinary-kept-during-replacement",
+    days: 7,
+    name: "Ordinary reading plan",
+    today: "2026-10-12",
+  });
+  existingPlan.journeyKey = "custom";
+  existingPlan.journeyType = "custom";
+  const hiddenClimb = makePlan({
+    id: "hidden-server-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today: "2026-10-12",
+    completedIndexes: [0],
+  });
+  let serverPlans: any[] = [];
+  let replacementCalls = 0;
+  let replacementRequest: any = null;
+  let sessionEstablished = false;
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          userId: ownerId,
+          authenticated: false,
+          established: sessionEstablished,
+        }),
+      });
+    } else if (pathname.endsWith("/reading/plans") && request.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, plans: serverPlans }),
+      });
+    } else if (pathname.endsWith("/reading/plans") && request.method() === "POST") {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: false,
+          error: "A structured climb is already active",
+          activePlanId: hiddenClimb.id,
+        }),
+      });
+    } else if (pathname.endsWith("/reading/plans/replace-active")) {
+      replacementCalls += 1;
+      replacementRequest = request.postDataJSON();
+      const newPlan = replacementRequest.plan;
+      const oldPlan = {
+        ...hiddenClimb,
+        structuredLifecycle: "cancelled",
+        cancelledAt: new Date().toISOString(),
+        supersededByPlanId: newPlan.id,
+      };
+      serverPlans = [newPlan, oldPlan];
+      sessionEstablished = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, replacedPlan: oldPlan, plan: newPlan }),
+      });
+    } else if (pathname.endsWith("/events")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, events: [] }),
+      });
+    } else if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, eventCompletions: [] }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true }),
+      });
+    }
+  });
+  await seedLocalData(page, [existingPlan], existingPlan.id, {
+    ownerId,
+    events: [{ id: "kept-event", title: "Keep this activity", type: "prayer", date: "2026-10-12", time: "06:00" }],
+  });
+
+  await openMountainRhythm(page);
+  const dialog = page.getByTestId("dialog-replace-active-climb");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Its progress will not transfer");
+  await expect(dialog).toContainText("Ordinary reading plans, activities, and pending changes");
+  const pendingWrites = JSON.stringify({
+    ownerId,
+    ops: [{ type: "upsert-plan", payload: { id: "unrelated-pending-plan" }, ts: 1 }],
+  });
+  await page.evaluate(
+    (value) => localStorage.setItem("discipleos:pendingOps", value),
+    pendingWrites,
+  );
+  await dialog.getByTestId("button-decline-climb-replacement").click();
+  await expect(dialog).toHaveCount(0);
+  expect(replacementCalls).toBe(0);
+
+  await page.getByTestId("button-choose-7-day-climb").click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("button-confirm-climb-replacement").click();
+  await expect(dialog).toHaveCount(0);
+  expect(replacementCalls).toBe(1);
+  expect(replacementRequest.expectedActivePlanId).toBe(hiddenClimb.id);
+  expect(replacementRequest.plan.id).not.toBe(hiddenClimb.id);
+  expect(replacementRequest.plan.completed).toEqual({});
+
+  const saved = await page.evaluate(() => ({
+    data: JSON.parse(localStorage.getItem("discipleos-data") || "{}"),
+    pending: localStorage.getItem("discipleos:pendingOps"),
+  }));
+  expect(saved.data.plans.find((plan: any) => plan.id === existingPlan.id)).toBeTruthy();
+  expect(saved.data.plans.find((plan: any) => plan.id === hiddenClimb.id)).toMatchObject({
+    structuredLifecycle: "cancelled",
+    completed: hiddenClimb.completed,
+  });
+  expect(
+    saved.data.plans.find((plan: any) => plan.id === replacementRequest.plan.id),
+  ).toMatchObject({ completed: {}, journeyKey: "7-day-climb" });
+  expect(saved.data.events).toEqual([{ id: "kept-event", title: "Keep this activity", type: "prayer", date: "2026-10-12", time: "06:00" }]);
+  expect(saved.pending).toBe(pendingWrites);
+
+  await page.reload();
+  await expect(page.getByTestId("mountain-rhythm-metric-journey"))
+    .toContainText("0 of 7 planned days");
+  expect(replacementCalls).toBe(1);
+});
+
 test("starts a fresh 7-Day Climb after an expired one and keeps it selected after rehydration", async ({
   page,
 }) => {

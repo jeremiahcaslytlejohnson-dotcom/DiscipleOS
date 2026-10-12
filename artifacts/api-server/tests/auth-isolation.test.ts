@@ -250,3 +250,130 @@ describe("Cross-user isolation", () => {
     });
   });
 });
+
+describe("Explicit structured-climb replacement", () => {
+  it("replaces one same-session climb atomically and leaves other owners and plans alone", async () => {
+    const owner = request.agent(app);
+    const otherOwner = request.agent(app);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const oldId = `replace-old-${suffix}`;
+    const attemptedId = `replace-attempt-${suffix}`;
+    const failedInsertId = `replace-failed-insert-${suffix}`;
+    const newId = `replace-new-${suffix}`;
+    const otherId = `replace-other-${suffix}`;
+    const ordinaryId = `replace-ordinary-${suffix}`;
+    const today = getPlanDateInTimeZone("America/New_York");
+    const makeClimb = (id: string, progressed = false) => {
+      const assignments = Array.from({ length: 7 }, (_, index) => ({
+        date: addDays(today, index),
+        readings: [{ key: `${id}-reading-${index}` }],
+      }));
+      return {
+        id,
+        name: "7-Day Climb",
+        journeyKey: "7-day-climb",
+        journeyType: "7-day-climb",
+        journeyDays: 7,
+        durationDays: 7,
+        totalDays: 7,
+        startDate: today,
+        endDate: addDays(today, 6),
+        timeZone: "America/New_York",
+        assignments,
+        completed: progressed ? { [`${id}-reading-0`]: true } : {},
+        earnedDayKeys: progressed ? [today] : [],
+      };
+    };
+
+    try {
+      await owner.get("/api/healthz");
+      await otherOwner.get("/api/healthz");
+      await owner
+        .post("/api/reading/plans")
+        .send({
+          id: ordinaryId,
+          name: "Unrelated ordinary plan",
+          assignments: [],
+          completed: {},
+        })
+        .expect(200);
+      await owner
+        .post("/api/reading/plans")
+        .send(makeClimb(oldId, true))
+        .expect(200);
+      await otherOwner
+        .post("/api/reading/plans")
+        .send(makeClimb(otherId))
+        .expect(200);
+
+      const blockedStart = await owner
+        .post("/api/reading/plans")
+        .send(makeClimb(attemptedId));
+      expect(blockedStart.status).toBe(409);
+      expect(blockedStart.body.activePlanId).toBe(oldId);
+
+      const invalidJsonbPlan = makeClimb(failedInsertId);
+      invalidJsonbPlan.name = "Invalid\u0000plan name";
+      const insertFailure = await owner
+        .post("/api/reading/plans/replace-active")
+        .send({
+          expectedActivePlanId: oldId,
+          plan: invalidJsonbPlan,
+        });
+      expect(insertFailure.status).toBe(500);
+      const afterInsertFailure = await owner.get("/api/reading/plans").expect(200);
+      expect(
+        afterInsertFailure.body.plans.find((plan: any) => plan.id === oldId)
+          .structuredLifecycle,
+      ).not.toBe("cancelled");
+      expect(afterInsertFailure.body.plans.map((plan: any) => plan.id))
+        .not.toContain(failedInsertId);
+
+      const crossOwnerAttempt = await owner
+        .post("/api/reading/plans/replace-active")
+        .send({
+          expectedActivePlanId: otherId,
+          plan: makeClimb(newId),
+        });
+      expect(crossOwnerAttempt.status).toBe(409);
+      const unchangedAfterMismatch = await owner.get("/api/reading/plans").expect(200);
+      expect(unchangedAfterMismatch.body.plans.find((plan: any) => plan.id === oldId))
+        .toMatchObject({ completed: { [`${oldId}-reading-0`]: true } });
+      expect(unchangedAfterMismatch.body.plans.map((plan: any) => plan.id))
+        .not.toContain(newId);
+
+      const replacement = await owner
+        .post("/api/reading/plans/replace-active")
+        .send({
+          expectedActivePlanId: oldId,
+          plan: makeClimb(newId),
+        })
+        .expect(200);
+      expect(replacement.body.replacedPlan).toMatchObject({
+        id: oldId,
+        structuredLifecycle: "cancelled",
+        completed: { [`${oldId}-reading-0`]: true },
+        supersededByPlanId: newId,
+      });
+      expect(replacement.body.plan).toMatchObject({
+        id: newId,
+        completed: {},
+      });
+      expect(replacement.body.plan.earnedDayKeys).toBeUndefined();
+
+      const ownerPlans = await owner.get("/api/reading/plans").expect(200);
+      expect(ownerPlans.body.plans.map((plan: any) => plan.id))
+        .toEqual(expect.arrayContaining([oldId, newId, ordinaryId]));
+      expect(ownerPlans.body.plans.find((plan: any) => plan.id === oldId).structuredLifecycle)
+        .toBe("cancelled");
+      const otherPlans = await otherOwner.get("/api/reading/plans").expect(200);
+      expect(otherPlans.body.plans.map((plan: any) => plan.id)).toContain(otherId);
+      expect(otherPlans.body.plans.map((plan: any) => plan.id)).not.toContain(newId);
+    } finally {
+      for (const id of [oldId, attemptedId, failedInsertId, newId, ordinaryId]) {
+        await owner.delete("/api/reading/plans").send({ id });
+      }
+      await otherOwner.delete("/api/reading/plans").send({ id: otherId });
+    }
+  });
+});

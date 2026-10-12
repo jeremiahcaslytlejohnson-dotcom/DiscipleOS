@@ -199,6 +199,9 @@ export default function MountainRhythm() {
   const [feedback, setFeedback] = useState("");
   const [saveError, setSaveError] = useState("");
   const [pendingStartKind, setPendingStartKind] = useState<string | null>(null);
+  const [pendingReplacement, setPendingReplacement] = useState<any>(null);
+  const [isReplacingClimb, setIsReplacingClimb] = useState(false);
+  const [replacementError, setReplacementError] = useState("");
   const [pendingCancelClimbPlanId, setPendingCancelClimbPlanId] = useState<
     string | null
   >(null);
@@ -487,8 +490,10 @@ export default function MountainRhythm() {
       body: JSON.stringify(plan),
     });
     if (!response.ok) {
-      const error: any = new Error("Could not save this climb");
+      const body = await response.json().catch(() => ({}));
+      const error: any = new Error(body?.error || "Could not save this climb");
       error.status = response.status;
+      error.activePlanId = body?.activePlanId;
       throw error;
     }
   }, []);
@@ -529,13 +534,78 @@ export default function MountainRhythm() {
       } else if (error?.status === 409) {
         setPlans((current) => current.filter((item) => item.id !== plan.id));
         setSelectedPlanId(null);
-        setSaveError("Another structured climb is already active. Refresh to continue that climb.");
+        if (typeof error.activePlanId === "string" && error.activePlanId) {
+          setPendingReplacement({
+            kind,
+            expectedActivePlanId: error.activePlanId,
+            plan,
+          });
+          setReplacementError("");
+          setSaveError("");
+        } else {
+          setSaveError("An active climb exists, but it could not be identified safely. Refresh and try again.");
+        }
       } else {
         setSaveError("Saved on this device. We will sync this climb when the connection returns.");
         queuePending({ type: "upsert-plan", payload: plan, ts: Date.now() });
       }
     }
   }, [activeClimb, queuePending, readingDefaults, savePlan]);
+
+  const beginReplacement = useCallback((kind: string, expectedActivePlanId: string) => {
+    setSaveError("");
+    setReplacementError("");
+    setPendingReplacement({ kind, expectedActivePlanId });
+  }, []);
+
+  const replaceActiveClimb = useCallback(async () => {
+    if (!pendingReplacement || isReplacingClimb) return;
+    const route = MOUNTAIN_RHYTHM_ROUTES.find(
+      (choice) => choice.kind === pendingReplacement.kind,
+    );
+    if (!route || route.comingLater || route.locked) return;
+    const plan =
+      pendingReplacement.plan ||
+      makeJourneyPlan(pendingReplacement.kind, readingDefaults);
+    setIsReplacingClimb(true);
+    setReplacementError("");
+    try {
+      const response = await fetch("/api/reading/plans/replace-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedActivePlanId: pendingReplacement.expectedActivePlanId,
+          plan,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body?.success || !body?.plan || !body?.replacedPlan) {
+        const error: any = new Error(body?.error || "Could not replace the active climb");
+        error.status = response.status;
+        throw error;
+      }
+
+      setPlans((current) => {
+        const withoutDuplicate = current.filter(
+          (item) =>
+            item.id !== body.replacedPlan.id &&
+            item.id !== body.plan.id,
+        );
+        return [body.plan, body.replacedPlan, ...withoutDuplicate];
+      });
+      setSelectedPlanId(body.plan.id);
+      setFeedback(`${route.label} started from the beginning. Previous progress remains in Past climbs.`);
+      setPendingReplacement(null);
+    } catch (error: any) {
+      setReplacementError(
+        error?.status === 409
+          ? "The active climb changed before it could be replaced. Close this message and try again."
+          : "The replacement could not be confirmed. Refresh Mountain Rhythm before trying again.",
+      );
+    } finally {
+      setIsReplacingClimb(false);
+    }
+  }, [isReplacingClimb, pendingReplacement, readingDefaults]);
 
   const requestStartClimb = useCallback((kind: string) => {
     setSaveError("");
@@ -869,7 +939,16 @@ export default function MountainRhythm() {
                 })}
               </div>
               {activeClimb ? (
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="button-start-over-active-climb"
+                    onClick={() => beginReplacement("7-day-climb", activeClimb.id)}
+                    className="min-h-11 border-[#D4A017]/45 bg-[#D4A017]/10 text-[#F4D77A] hover:bg-[#D4A017]/20"
+                  >
+                    Start a new 7-Day Climb
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -879,6 +958,54 @@ export default function MountainRhythm() {
                   >
                     Cancel active climb
                   </Button>
+                </div>
+              ) : null}
+              {pendingReplacement ? (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="replace-active-climb-title"
+                  data-testid="dialog-replace-active-climb"
+                  className="mt-4 rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/[0.06] p-4"
+                >
+                  <div
+                    id="replace-active-climb-title"
+                    className="text-sm font-semibold text-white"
+                  >
+                    Start over with a new {MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === pendingReplacement.kind)?.label || "climb"}?
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/70">
+                    The current climb will be canceled and kept in Past climbs. Its progress will not transfer. Ordinary reading plans, activities, and pending changes will stay as they are.
+                  </p>
+                  {replacementError ? (
+                    <p className="mt-3 text-sm text-amber-100" role="alert" data-testid="status-replacement-error">
+                      {replacementError}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-testid="button-decline-climb-replacement"
+                      disabled={isReplacingClimb}
+                      onClick={() => {
+                        setPendingReplacement(null);
+                        setReplacementError("");
+                      }}
+                      className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                    >
+                      Keep current climb
+                    </Button>
+                    <Button
+                      type="button"
+                      data-testid="button-confirm-climb-replacement"
+                      disabled={isReplacingClimb}
+                      onClick={() => void replaceActiveClimb()}
+                      className="min-h-11 bg-[#D4A017] text-[#16130C] hover:bg-[#E6B92A]"
+                    >
+                      {isReplacingClimb ? "Starting new climb…" : "Cancel old climb and start over"}
+                    </Button>
+                  </div>
                 </div>
               ) : null}
               {pendingCancelClimbPlanId === activeClimb?.id ? (

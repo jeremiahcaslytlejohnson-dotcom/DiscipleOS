@@ -275,7 +275,10 @@ router.post("/reading/plans", async (req, res) => {
               otherJourneyKey === "20-day-reset"
                 ? "A 20-Day Reset is already active"
                 : "A structured climb is already active";
-            throw Object.assign(new Error(message), { status: 409 });
+            throw Object.assign(new Error(message), {
+              status: 409,
+              activePlanId: anotherActiveClimb.id,
+            });
           }
         }
       }
@@ -307,7 +310,148 @@ router.post("/reading/plans", async (req, res) => {
     res.json({ success: true, plan: planToStore });
   } catch (err: any) {
     req.log.error({ err }, "POST /reading/plans failed");
-    res.status(err?.status === 409 ? 409 : 500).json({ success: false, error: err?.message || "Failed to save plan" });
+    res.status(err?.status === 409 ? 409 : 500).json({
+      success: false,
+      error: err?.message || "Failed to save plan",
+      ...(err?.status === 409 && typeof err?.activePlanId === "string"
+        ? { activePlanId: err.activePlanId }
+        : {}),
+    });
+  }
+});
+
+// POST /api/reading/plans/replace-active — explicitly replace one active climb
+// owned by the current session. Both row changes commit or roll back together.
+router.post("/reading/plans/replace-active", async (req, res): Promise<void> => {
+  try {
+    const userId = req.session.userId!;
+    const expectedActivePlanId =
+      typeof req.body?.expectedActivePlanId === "string"
+        ? req.body.expectedActivePlanId.trim()
+        : "";
+    const incoming = normalizePlan(req.body?.plan);
+    if (!expectedActivePlanId || typeof incoming?.id !== "string" || !incoming.id.trim()) {
+      res.status(400).json({ success: false, error: "Missing replacement plan or active plan reference" });
+      return;
+    }
+    if (incoming.id === expectedActivePlanId) {
+      res.status(400).json({ success: false, error: "A replacement must use a new plan id" });
+      return;
+    }
+
+    const journeyKey = getStructuredJourneyKey(incoming);
+    const journeyDuration = getNamedJourneyDuration(journeyKey);
+    if (!journeyKey || !journeyDuration || !canStartNamedJourney(req, journeyKey)) {
+      res.status(403).json({ success: false, error: "This structured climb is not available to this session" });
+      return;
+    }
+    if (
+      incoming.journeyKey !== journeyKey ||
+      incoming.journeyType !== journeyKey ||
+      incoming.journeyDays !== journeyDuration ||
+      incoming.durationDays !== journeyDuration ||
+      incoming.totalDays !== journeyDuration ||
+      !Array.isArray(incoming.assignments) ||
+      incoming.assignments.length !== journeyDuration ||
+      isRetiredResetPlan(incoming)
+    ) {
+      res.status(400).json({ success: false, error: "Replacement climb metadata is invalid" });
+      return;
+    }
+    if (getStructuredPlanLifecycle(incoming) !== "active") {
+      res.status(400).json({ success: false, error: "Replacement climb must be a fresh active plan" });
+      return;
+    }
+
+    const newPlan: Record<string, any> = {
+      ...incoming,
+      completed: {},
+    };
+    delete newPlan.earnedDayKeys;
+    delete newPlan.dayCompletionDates;
+    delete newPlan.completedAt;
+    delete newPlan.structuredLifecycle;
+    delete newPlan.cancelledAt;
+    delete newPlan.supersededAt;
+    delete newPlan.supersededByPlanId;
+
+    let replacedPlan: Record<string, any> | null = null;
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${"structured-climb:" + userId}, 0))`,
+      );
+
+      const [idCollision] = await tx
+        .select({ id: readingPlansTable.id })
+        .from(readingPlansTable)
+        .where(eq(readingPlansTable.id, newPlan.id))
+        .limit(1);
+      if (idCollision) {
+        throw Object.assign(new Error("The new plan id is already in use"), { status: 409 });
+      }
+
+      const ownerRows = await tx
+        .select({
+          id: readingPlansTable.id,
+          data: readingPlansTable.data,
+          templateKey: readingPlansTable.templateKey,
+        })
+        .from(readingPlansTable)
+        .where(eq(readingPlansTable.userId, userId));
+      const activePlans = ownerRows
+        .map((row) => ({
+          row,
+          plan: normalizePlan({
+            ...(row.data as Record<string, unknown>),
+            id: row.id,
+            templateKey: row.templateKey,
+          }),
+        }))
+        .filter(({ plan }) => isActiveStructuredPlan(plan));
+
+      if (
+        activePlans.length !== 1 ||
+        activePlans[0].row.id !== expectedActivePlanId
+      ) {
+        throw Object.assign(
+          new Error("The active climb changed or could not be identified safely"),
+          { status: 409 },
+        );
+      }
+
+      const current = activePlans[0];
+      replacedPlan = {
+        ...current.plan,
+        structuredLifecycle: "cancelled",
+        cancelledAt: new Date().toISOString(),
+        supersededAt: new Date().toISOString(),
+        supersededByPlanId: newPlan.id,
+      };
+
+      await tx
+        .update(readingPlansTable)
+        .set({ data: replacedPlan, updatedAt: new Date() })
+        .where(
+          and(
+            eq(readingPlansTable.id, expectedActivePlanId),
+            eq(readingPlansTable.userId, userId),
+          ),
+        );
+      await tx.insert(readingPlansTable).values({
+        id: newPlan.id,
+        userId,
+        templateKey: newPlan.templateKey || null,
+        data: newPlan,
+        updatedAt: new Date(),
+      });
+    });
+
+    req.session.sessionEstablished = true;
+    res.json({ success: true, replacedPlan, plan: newPlan });
+  } catch (err: any) {
+    req.log.error({ err }, "POST /reading/plans/replace-active failed");
+    res.status(err?.status === 409 ? 409 : err?.status === 400 ? 400 : err?.status === 403 ? 403 : 500)
+      .json({ success: false, error: err?.message || "Could not replace the active climb" });
   }
 });
 

@@ -350,6 +350,46 @@ describe("Account claim", () => {
     await browser.post("/api/reading/plans").send(reset).expect(403);
   });
 
+  it("replaces a signed-in owner's active climb without transferring progress", async () => {
+    const app = createApp(createPgSessionStore());
+    const browser = request.agent(app);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const userId = `user_replace_climb_${suffix}`;
+    const oldId = `signed-in-old-climb-${suffix}`;
+    const newId = `signed-in-new-climb-${suffix}`;
+    const today = getPlanDateInTimeZone("America/New_York");
+    const oldPlan = makeClimb(oldId, today);
+    oldPlan.completed = { [`${oldId}-reading-0`]: true };
+    const newPlan = makeClimb(newId, today);
+
+    authUser.id = userId;
+    try {
+      await browser.post("/api/reading/plans").send(oldPlan).expect(200);
+      const response = await browser
+        .post("/api/reading/plans/replace-active")
+        .send({ expectedActivePlanId: oldId, plan: newPlan })
+        .expect(200);
+
+      expect(response.body.replacedPlan).toMatchObject({
+        id: oldId,
+        structuredLifecycle: "cancelled",
+        completed: { [`${oldId}-reading-0`]: true },
+      });
+      expect(response.body.plan).toMatchObject({ id: newId, completed: {} });
+      expect(response.body.plan.earnedDayKeys).toBeUndefined();
+
+      const plans = await browser.get("/api/reading/plans").expect(200);
+      expect(plans.body.plans.map((plan: { id: string }) => plan.id))
+        .toEqual(expect.arrayContaining([oldId, newId]));
+      expect(plans.body.plans.find((plan: { id: string }) => plan.id === oldId)
+        .structuredLifecycle).toBe("cancelled");
+    } finally {
+      await browser.delete("/api/reading/plans").send({ id: oldId });
+      await browser.delete("/api/reading/plans").send({ id: newId });
+      authUser.id = null;
+    }
+  });
+
   it("allows an owned locked reset to be canceled but not a new canceled reset to be inserted", async () => {
     const app = createApp(createPgSessionStore());
     const browser = request.agent(app);
