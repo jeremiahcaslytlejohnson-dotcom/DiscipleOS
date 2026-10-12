@@ -6255,7 +6255,7 @@ export default function DiscipleOSApp() {
                            onClick={selectGuidedClimb}
                            className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
                          >
-                           Guided Climb
+                            Start Guided Climb
                          </button>
                          <button
                            type="button"
@@ -6329,6 +6329,11 @@ export default function DiscipleOSApp() {
                       const stats = getPlanStats(plan);
                        const isUpToDate = isPlanCaughtUpThroughToday(plan, todayISO());
                       const isActive = planViewSelectedPlan?.id === plan.id;
+                      const planPathLabel = isGuidedClimbSetOnePlan(plan)
+                        ? "Guided Climb"
+                        : !isResetPlan(plan) && !isNamedJourneyPlan(plan)
+                          ? "Free Climb"
+                          : null;
 
                       return (
                         <div
@@ -6344,8 +6349,18 @@ export default function DiscipleOSApp() {
                         >
                            <div className="flex min-w-0 items-start justify-between gap-3">
                              <div className="min-w-0 flex-1">
-                               <div className="discipleos-safe-text text-lg font-semibold text-white">
-                                 {getGuidedClimbPlanDisplayName(plan)}
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <div className="discipleos-safe-text min-w-0 text-lg font-semibold text-white">
+                                    {getGuidedClimbPlanDisplayName(plan)}
+                                  </div>
+                                  {planPathLabel ? (
+                                    <span
+                                      data-testid={`plan-path-label-${plan.id}`}
+                                      className="inline-flex max-w-full items-center border border-white/15 bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-white/75"
+                                    >
+                                      {planPathLabel}
+                                    </span>
+                                  ) : null}
                                </div>
                                <div className="discipleos-secondary-copy mt-2 text-sm">
                                  {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
@@ -6388,7 +6403,7 @@ export default function DiscipleOSApp() {
                                : isNamedJourneyPlan(plan)
                                  ? `${plan.journeyDays}-day journey`
                                   : isGuidedClimbSetOnePlan(plan)
-                                    ? "Guided Climb · Set 1"
+                                     ? "Discover Scripture · Set 1"
                                  : `${plan.selectedBooks.length} ${plan.selectedBooks.length === 1 ? "book" : "books"}`}
                              {" · "}
                              {stats.totalChapters} chapters · {stats.totalDays} days · {formatMinutes(stats.totalMinutes)} total

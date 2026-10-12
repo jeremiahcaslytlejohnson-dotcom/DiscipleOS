@@ -431,7 +431,9 @@ test("returning readers can add Guided Climb without replacing an existing plan"
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
   await expect(page.getByTestId("planned-reading-card-existing-reading-plan")).toBeVisible();
-  await page.getByTestId("plans-guided-climb-button").click();
+  const guidedClimbAction = page.getByTestId("plans-guided-climb-button");
+  await expect(guidedClimbAction).toHaveText("Start Guided Climb");
+  await guidedClimbAction.click();
   await expect(page.getByTestId("guided-climb-preview")).toBeVisible();
   await page.getByTestId("guided-climb-start").click();
 

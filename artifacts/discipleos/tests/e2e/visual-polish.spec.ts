@@ -1309,6 +1309,85 @@ test("keeps Mountain Rhythm plans out of the Plans view", async ({ page }) => {
   await expect(page.getByTestId("dashboard-plan-details")).not.toContainText("7-Day Climb");
 });
 
+test("labels Free Climb plans and keeps the Guided Climb action distinct", async ({ page }) => {
+  await stubHomeApi(page, []);
+  await page.addInitScript(() => localStorage.clear());
+  await page.goto("/");
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+
+  await page.getByTestId("reading-path-free-climb-action").click();
+  await page.getByTestId("plan-create-preset-psalmsProverbs").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-name").fill("Psalms + Proverbs");
+  await page.getByTestId("plan-create-next").click();
+
+  const saveRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/reading/plans") && request.method() === "POST",
+  );
+  await page.getByTestId("plan-create-submit").click();
+  const savedPlan = (await saveRequest).postDataJSON();
+  expect(savedPlan.name).toBe("Psalms + Proverbs");
+  expect(savedPlan.selectedBooks).toEqual(["Psalms", "Proverbs"]);
+  expect(savedPlan.guidedClimb).toBeUndefined();
+
+  const freeCard = page.getByTestId(`planned-reading-card-${savedPlan.id}`);
+  await expect(freeCard).toBeVisible();
+  await expect(page.getByTestId(`plan-path-label-${savedPlan.id}`))
+    .toHaveText("Free Climb");
+  await expect(freeCard).not.toContainText("Guided Climb");
+  const guidedAction = page.getByRole("button", {
+    name: "Start Guided Climb",
+    exact: true,
+  });
+  await expect(guidedAction).toBeVisible();
+  await guidedAction.click();
+  await expect(page.getByTestId("guided-climb-preview")).toBeVisible();
+});
+
+test("labels each ordinary plan independently, preserves the Guided label, and fits mobile", async ({
+  page,
+}) => {
+  const freeOne = makeOrdinaryPlan("plans-free-one", "Psalms + Proverbs");
+  const freeTwo = makeOrdinaryPlan("plans-free-two", "Matthew and Mark");
+  const guidedPlan = {
+    ...makeOrdinaryPlan("plans-guided-set-one", "Discover Scripture"),
+    guidedClimb: {
+      series: "Guided Climb",
+      set: 1,
+      slug: "find-your-footing",
+    },
+  };
+  await stubHomeApi(page, [freeOne, freeTwo, guidedPlan]);
+  await seedPlans(page, [freeOne, freeTwo, guidedPlan]);
+  await page.goto("/");
+  await (await openDashboardNavigation(page))
+    .getByRole("button", { name: "Plans", exact: true })
+    .click();
+
+  await expect(page.getByTestId(`plan-path-label-${freeOne.id}`)).toHaveText("Free Climb");
+  await expect(page.getByTestId(`plan-path-label-${freeTwo.id}`)).toHaveText("Free Climb");
+  await expect(page.getByTestId(`plan-path-label-${guidedPlan.id}`)).toHaveText("Guided Climb");
+  await expect(page.getByTestId(`plan-card-progress-details-${guidedPlan.id}`))
+    .toContainText("Discover Scripture · Set 1");
+
+  for (const width of [320, 360, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+    }));
+    expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
+    for (const plan of [freeOne, freeTwo, guidedPlan]) {
+      await expect(page.getByTestId(`plan-path-label-${plan.id}`)).toBeVisible();
+    }
+  }
+});
+
 test("guides existing users through the five-step Create Plan flow", async ({ page }) => {
   for (const width of [320, 360, 390, 430, 1280]) {
     await page.setViewportSize({ width, height: 900 });
