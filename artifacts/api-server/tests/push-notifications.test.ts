@@ -133,11 +133,11 @@ describe("1 — CRON_SECRET guard", () => {
     expect(res.body.success).toBe(true);
   });
 
-  it("1d: correct secret via query param → 200", async () => {
+  it("rejects correct secret via query param", async () => {
     vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
     const res = await request(app)
       .post(`/api/reminders/send?secret=${CRON_SECRET}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   it("1e: push/test missing secret → 401", async () => {
@@ -149,6 +149,12 @@ describe("1 — CRON_SECRET guard", () => {
     const res = await request(app)
       .post("/api/push/test")
       .set("x-cron-secret", "wrong");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects push test secrets in the query string", async () => {
+    const res = await request(app)
+      .post(`/api/push/test?secret=${CRON_SECRET}`);
     expect(res.status).toBe(401);
   });
 });
@@ -243,18 +249,13 @@ describe("2 — Missing VAPID configuration", () => {
     expect(res.body.error).not.toContain("Missing VAPID env vars");
   });
 
-  it("2b: /api/push/test returns 500 when VAPID setup fails", async () => {
-    vi.mocked(webpush.setVapidDetails).mockImplementationOnce(() => {
-      throw new Error("Missing VAPID env vars (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT)");
-    });
-
+  it("does not broadcast to arbitrary subscriptions", async () => {
     const res = await request(app)
       .post("/api/push/test")
-      .set("x-cron-secret", CRON_SECRET);
-
-    expect(res.status).toBe(500);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error).toMatch(/VAPID/i);
+      .set("x-cron-secret", CRON_SECRET)
+      .send({ email: "someone-else@example.com" });
+    expect(res.status).toBe(400);
+    expect(vi.mocked(webpush.sendNotification)).not.toHaveBeenCalled();
   });
 });
 

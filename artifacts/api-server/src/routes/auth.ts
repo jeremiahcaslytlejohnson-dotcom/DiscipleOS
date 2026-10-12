@@ -54,6 +54,14 @@ function destroySession(req: any) {
   });
 }
 
+function regenerateSession(req: any) {
+  return new Promise<void>((resolve, reject) => {
+    req.session.regenerate((error: unknown) =>
+      error ? reject(error) : resolve(),
+    );
+  });
+}
+
 function parsePurpose(value: unknown): AuthPurpose | null {
   return value === "email" || value === "sign-in" || value === "sign-up" ? value : null;
 }
@@ -450,6 +458,11 @@ router.post("/auth/verify-code", async (req, res) => {
       throw new Error("Could not resolve authenticated account");
     }
 
+    // Rotate the anonymous session identifier at the authentication boundary
+    // while preserving its browser-owned identity for /account/claim.
+    const anonymousUserId = req.session.anonymousUserId;
+    await regenerateSession(req);
+    if (anonymousUserId) req.session.anonymousUserId = anonymousUserId;
     req.session.authUserId = user.id;
     req.session.userId = user.id;
     req.session.sessionEstablished = true;

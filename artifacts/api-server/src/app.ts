@@ -1,5 +1,4 @@
 import express, { type Express } from "express";
-import cors from "cors";
 import pinoHttp from "pino-http";
 import session, { type Store } from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -26,6 +25,54 @@ export function createPgSessionStore(): Store {
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
   throw new Error("SESSION_SECRET environment variable is required");
+}
+
+function protectStateChangingRequests(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    next();
+    return;
+  }
+
+  const origin = req.get("origin");
+  const fetchSite = req.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite === "cross-site") {
+    res.status(403).json({ success: false, error: "Cross-site request rejected" });
+    return;
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    req.headers.cookie &&
+    !origin &&
+    fetchSite !== "same-origin"
+  ) {
+    res.status(403).json({ success: false, error: "Request origin required" });
+    return;
+  }
+
+  if (origin) {
+    try {
+      const parsedOrigin = new URL(origin);
+      const expectedProtocol = `${req.protocol}:`;
+      if (
+        parsedOrigin.origin !== origin ||
+        parsedOrigin.host.toLowerCase() !== req.get("host")?.toLowerCase() ||
+        parsedOrigin.protocol !== expectedProtocol
+      ) {
+        res.status(403).json({ success: false, error: "Cross-origin request rejected" });
+        return;
+      }
+    } catch {
+      res.status(403).json({ success: false, error: "Invalid request origin" });
+      return;
+    }
+  }
+
+  next();
 }
 
 /** Factory that builds a fully configured Express app.
@@ -56,8 +103,13 @@ export function createApp(sessionStore?: Store): Express {
       },
     }),
   );
-  app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json());
+  app.use(protectStateChangingRequests);
+  // The browser uses the same origin for the UI and /api. No cross-origin
+  // credentialed access is required; unsafe requests are separately checked
+  // against Origin and Fetch Metadata below.
+  app.use("/api/track", express.json({ limit: "8kb" }));
+  app.use("/api/track", express.urlencoded({ extended: false, limit: "8kb" }));
+  app.use(express.json({ limit: "256kb" }));
   app.use(express.urlencoded({ extended: true }));
 
   // Deployment health probes must run before session/auth middleware, which

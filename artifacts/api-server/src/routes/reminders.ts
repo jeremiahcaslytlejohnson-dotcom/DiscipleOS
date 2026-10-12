@@ -32,7 +32,7 @@ function isVapidConfigurationError(error: unknown): boolean {
 
 // POST /api/reminders/send — fire due reminders per user (CRON_SECRET required)
 router.post("/reminders/send", async (req, res): Promise<void> => {
-  const secret = req.headers["x-cron-secret"] || req.query["secret"];
+  const secret = req.get("x-cron-secret");
   if (!secret || secret !== process.env.CRON_SECRET) {
     res.status(401).json({ success: false, error: "Unauthorized" });
     return;

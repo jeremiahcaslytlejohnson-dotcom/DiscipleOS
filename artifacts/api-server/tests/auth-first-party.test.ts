@@ -424,7 +424,11 @@ describe("first-party passwordless authentication", () => {
     createdPlanIds.push(planId);
 
     const browser = request.agent(app);
-    await browser.get("/api/session/info").expect(200);
+    const anonymousSession = await browser.get("/api/session/info").expect(200);
+    const cookieValue = (header: string | string[] | undefined) =>
+      (Array.isArray(header) ? header[0] : header)?.split(";")[0];
+    const originalCookie = cookieValue(anonymousSession.headers["set-cookie"]);
+    expect(originalCookie).toBeTruthy();
     await browser
       .post("/api/reading/plans")
       .send({
@@ -441,6 +445,7 @@ describe("first-party passwordless authentication", () => {
       .post("/api/auth/verify-code")
       .send({ email, purpose: "email", code: "246810" })
       .expect(200);
+    expect(cookieValue(verified.headers["set-cookie"])).not.toBe(originalCookie);
     createdUserIds.push(verified.body.user.id as string);
 
     const claim = await browser.post("/api/account/claim").expect(200);
