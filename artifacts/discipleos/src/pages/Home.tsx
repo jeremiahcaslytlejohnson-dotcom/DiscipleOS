@@ -6257,27 +6257,31 @@ export default function DiscipleOSApp() {
                       Planned reading
                     </div>
                      {planViewPlans.length > 0 ? (
-                       <>
-                         <button
-                           type="button"
-                           data-testid="plans-guided-climb-button"
-                           onClick={selectGuidedClimb}
-                           className="discipleos-action inline-flex min-h-11 items-center justify-center whitespace-nowrap border border-[#D4A017]/40 bg-[#211A0D] px-3 py-2 text-sm font-semibold text-[#F4D77A] transition hover:bg-[#33280E]"
-                         >
-                            Start Guided Climb
-                         </button>
-                         <button
-                           type="button"
-                           data-testid="plans-create-button"
-                           onClick={beginCreatePlan}
-                           className="discipleos-action ml-auto inline-flex items-center justify-center gap-2 whitespace-nowrap border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
-                         >
-                           <Plus className="h-4 w-4" />
-                           Add plan
-                         </button>
-                       </>
+                        <button
+                          type="button"
+                          data-testid="plans-create-button"
+                          onClick={beginCreatePlan}
+                          className="discipleos-action inline-flex items-center justify-center gap-2 whitespace-nowrap border border-[#D4A017]/45 bg-[#C8921D] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add plan
+                        </button>
                      ) : null}
                   </div>
+                   {planViewPlans.length > 0 ? (
+                     <div className="-mt-3 flex min-h-11 items-center gap-2 text-xs text-white/50">
+                       <span>Optional:</span>
+                       <button
+                         type="button"
+                         data-testid="plans-guided-climb-button"
+                         aria-label="Explore Guided Climb (optional)"
+                         onClick={selectGuidedClimb}
+                         className="inline-flex min-h-11 items-center text-left text-white/65 underline decoration-white/30 underline-offset-4 transition hover:text-[#F4D77A] hover:decoration-[#F4D77A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090d12]"
+                       >
+                         Explore Guided Climb
+                       </button>
+                     </div>
+                   ) : null}
                   {planCreatedFeedback ? (
                     <div
                       data-testid="plan-created-feedback"

@@ -430,11 +430,39 @@ test("returning readers can add Guided Climb without replacing an existing plan"
   await expect(page.getByTestId("first-plan-onboarding")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
-  await expect(page.getByTestId("planned-reading-card-existing-reading-plan")).toBeVisible();
+  const planCard = page.getByTestId("planned-reading-card-existing-reading-plan");
+  await expect(planCard).toBeVisible();
   const guidedClimbAction = page.getByTestId("plans-guided-climb-button");
-  await expect(guidedClimbAction).toHaveText("Start Guided Climb");
-  await guidedClimbAction.click();
+  const addPlanAction = page.getByTestId("plans-create-button");
+  await expect(guidedClimbAction).toHaveText("Explore Guided Climb");
+  await expect(guidedClimbAction).toHaveAccessibleName("Explore Guided Climb (optional)");
+  await expect(addPlanAction).toHaveText("Add plan");
+  await expect(addPlanAction).toHaveClass(/bg-\[#C8921D\]/);
+  await expect.poll(() => savedPlans.length).toBe(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const responsiveLayout = await page.evaluate(() => {
+    const action = document.querySelector('[data-testid="plans-guided-climb-button"]');
+    const card = document.querySelector('[data-testid="planned-reading-card-existing-reading-plan"]');
+    const actionRect = action?.getBoundingClientRect();
+    const cardRect = card?.getBoundingClientRect();
+    return {
+      actionLeft: actionRect?.left,
+      actionRight: actionRect?.right,
+      actionBottom: actionRect?.bottom,
+      cardTop: cardRect?.top,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  expect(responsiveLayout.actionLeft).toBeGreaterThanOrEqual(0);
+  expect(responsiveLayout.actionRight).toBeLessThanOrEqual(responsiveLayout.viewportWidth);
+  expect(responsiveLayout.actionBottom).toBeLessThan(responsiveLayout.cardTop);
+
+  await guidedClimbAction.focus();
+  await expect(guidedClimbAction).toBeFocused();
+  await guidedClimbAction.press("Enter");
   await expect(page.getByTestId("guided-climb-preview")).toBeVisible();
+  await expect.poll(() => savedPlans.length).toBe(0);
   await page.getByTestId("guided-climb-start").click();
 
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
@@ -442,6 +470,7 @@ test("returning readers can add Guided Climb without replacing an existing plan"
   expect(savedPlans[0].name).toBe("Discover Scripture");
   expect(savedPlans[0].id).not.toBe(existingPlan.id);
 
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByTestId("dashboard-navigation-row").getByText("Plans", { exact: true }).click();
   await expect(page.getByTestId("planned-reading-card-existing-reading-plan")).toBeVisible();
   await expect(page.getByTestId("planned-reading-card-existing-reading-plan")).toContainText(
