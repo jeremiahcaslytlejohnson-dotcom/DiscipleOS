@@ -86,6 +86,20 @@ function makeStructuredClimbPlan(
   };
 }
 
+function makeCancelledStructuredClimbPlan(id: string) {
+  const plan = makeStructuredClimbPlan(id);
+  const firstDay = plan.assignments[0];
+  const firstReadingKey = firstDay.readings[0].key;
+  return {
+    ...plan,
+    structuredLifecycle: "cancelled",
+    cancelledAt: new Date().toISOString(),
+    completed: { [firstReadingKey]: true },
+    earnedDayKeys: [firstDay.date],
+    dayCompletionDates: { [firstDay.date]: firstDay.date },
+  };
+}
+
 async function stubHomeApi(
   page: Page,
   planOrPlans: unknown = makeOrdinaryPlan(),
@@ -757,6 +771,160 @@ test("collapses Calendar reading plans independently while keeping the summary a
     );
     await expect(secondReadings).toBeHidden();
   }
+});
+
+test("Calendar hides canceled Mountain Rhythm history while retaining local Free Climb and prayer/fasting", async ({ page }) => {
+  const today = todayISO();
+  const canceledPlans = [
+    "calendar-canceled-climb-one",
+    "calendar-canceled-climb-two",
+    "calendar-canceled-climb-three",
+  ].map(makeCancelledStructuredClimbPlan);
+  const freePlan = {
+    ...makeOrdinaryPlan("calendar-free-psalms-proverbs", "Psalms + Proverbs"),
+    assignments: [
+      {
+        date: today,
+        readings: [
+          { key: "calendar-free-psalms-proverbs-psalm", label: "Psalm 1" },
+          { key: "calendar-free-psalms-proverbs-proverb", label: "Proverbs 1" },
+        ],
+      },
+    ],
+  };
+  const events = [
+    {
+      id: "calendar-filter-prayer",
+      title: "Prayer",
+      type: "prayer",
+      date: today,
+      time: "08:00",
+      repeat: "none",
+    },
+    {
+      id: "calendar-filter-fast",
+      title: "Fasting",
+      type: "fast",
+      date: today,
+      time: "09:00",
+      repeat: "none",
+    },
+  ];
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubHomeApi(page, [], events, { userId: "calendar-filter-local-owner" });
+  await seedPlans(
+    page,
+    [...canceledPlans, freePlan],
+    events,
+    false,
+    "calendar-filter-local-owner",
+  );
+  await page.goto("/");
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+
+  const activities = page.getByTestId("dashboard-calendar-activities");
+  await expect(activities.locator('[data-testid^="calendar-plan-item-"]')).toHaveCount(1);
+  await expect(
+    activities.getByTestId(`calendar-plan-item-${freePlan.id}`),
+  ).toContainText("Psalms + Proverbs");
+  for (const plan of canceledPlans) {
+    await expect(activities.getByTestId(`calendar-plan-item-${plan.id}`)).toHaveCount(0);
+  }
+  await expect(page.getByTestId(`calendar-marker-${today}-mountain`)).toHaveCount(0);
+  await expect(page.getByTestId(`calendar-marker-${today}-bible`)).toHaveCount(1);
+  await expect(page.getByTestId(`calendar-marker-${today}-P`)).toHaveCount(1);
+  await expect(page.getByTestId(`calendar-marker-${today}-F`)).toHaveCount(1);
+  await expect(activities.getByRole("button", { name: "Complete day", exact: true })).toHaveCount(1);
+  const widths = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+  expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
+});
+
+test("Calendar exposes only the active structured climb and completion edits leave climb history intact", async ({ page }) => {
+  const today = todayISO();
+  const canceledPlans = [
+    "calendar-auth-canceled-climb-one",
+    "calendar-auth-canceled-climb-two",
+    "calendar-auth-canceled-climb-three",
+  ].map(makeCancelledStructuredClimbPlan);
+  const activePlan = makeStructuredClimbPlan("calendar-auth-active-climb");
+  const activeDay = activePlan.assignments[0];
+  const activeReadingKey = activeDay.readings[0].key;
+  Object.assign(activePlan, {
+    structuredLifecycle: "active",
+    completed: { [activeReadingKey]: true },
+    earnedDayKeys: [activeDay.date],
+    dayCompletionDates: { [activeDay.date]: activeDay.date },
+  });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stubHomeApi(
+    page,
+    [...canceledPlans, activePlan],
+    [],
+    { authenticated: true, userId: "calendar-filter-auth-owner" },
+  );
+  await seedPlans(
+    page,
+    [...canceledPlans, activePlan],
+    [],
+    false,
+    "calendar-filter-auth-owner",
+  );
+  await page.goto("/");
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+
+  const activities = page.getByTestId("dashboard-calendar-activities");
+  await expect(activities.locator('[data-testid^="calendar-plan-item-"]')).toHaveCount(1);
+  const activeRow = activities.getByTestId(`calendar-plan-item-${activePlan.id}`);
+  await expect(activeRow).toContainText("7-Day Climb");
+  await expect(activeRow.getByRole("button", { name: "Undo day", exact: true })).toHaveCount(1);
+  for (const plan of canceledPlans) {
+    await expect(activities.getByTestId(`calendar-plan-item-${plan.id}`)).toHaveCount(0);
+  }
+  await expect(page.getByTestId(`calendar-marker-${today}-mountain`)).toHaveCount(1);
+  const tomorrow = addDaysToISO(today, 1);
+  await expect(page.getByTestId(`calendar-marker-${tomorrow}-mountain`)).toHaveCount(1);
+
+  const beforeUndo = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}").plans,
+  );
+  const historyBefore = beforeUndo
+    .filter((plan: any) => plan.structuredLifecycle === "cancelled")
+    .map((plan: any) => ({
+      id: plan.id,
+      assignments: plan.assignments,
+      completed: plan.completed,
+      earnedDayKeys: plan.earnedDayKeys,
+      dayCompletionDates: plan.dayCompletionDates,
+      cancelledAt: plan.cancelledAt,
+    }));
+  await activeRow.getByRole("button", { name: "Undo day", exact: true }).click();
+  await expect(activeRow.getByRole("button", { name: "Complete day", exact: true })).toHaveCount(1);
+
+  const afterUndo = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("discipleos-data") || "{}").plans,
+  );
+  const historyAfter = afterUndo
+    .filter((plan: any) => plan.structuredLifecycle === "cancelled")
+    .map((plan: any) => ({
+      id: plan.id,
+      assignments: plan.assignments,
+      completed: plan.completed,
+      earnedDayKeys: plan.earnedDayKeys,
+      dayCompletionDates: plan.dayCompletionDates,
+      cancelledAt: plan.cancelledAt,
+    }));
+  expect(historyAfter).toEqual(historyBefore);
+  const activeAfterUndo = afterUndo.find((plan: any) => plan.id === activePlan.id);
+  expect(activeAfterUndo.completed[activeReadingKey]).toBe(false);
+  expect(activeAfterUndo.earnedDayKeys).toContain(today);
+  expect(activeAfterUndo.dayCompletionDates[today]).toBe(today);
 });
 
 test("collapses Plan details day readings independently while preserving completion and progress", async ({ page }) => {

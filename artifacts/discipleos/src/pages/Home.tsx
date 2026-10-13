@@ -2016,6 +2016,15 @@ export default function DiscipleOSApp() {
     return { manual };
   }, [events, eventCompletions]);
 
+  const calendarVisiblePlans = useMemo(() => {
+    const today = todayISO();
+    return plans.filter(
+      (plan) =>
+        !isStructuredClimbPlan(plan) ||
+        getStructuredPlanLifecycle(plan, today) === "active",
+    );
+  }, [plans]);
+
   const monthEventMap = useMemo(() => {
     const map = {};
 
@@ -2027,7 +2036,7 @@ export default function DiscipleOSApp() {
       }
     });
 
-    plans.forEach((plan) => {
+    calendarVisiblePlans.forEach((plan) => {
       const completedMap = getCompletedMap(plan);
       plan.assignments.forEach((day) => {
         if (!day.readings || day.readings.length === 0) return;
@@ -2050,7 +2059,7 @@ export default function DiscipleOSApp() {
     });
 
     return map;
-  }, [events, monthDays, plans]);
+  }, [calendarVisiblePlans, events, monthDays]);
 
   const dayViewItems = useMemo(() => {
     const manualItems = getEventInstancesForDate(events, selectedCalendarDate).map((event) => ({
@@ -2058,7 +2067,7 @@ export default function DiscipleOSApp() {
       kind: "event",
     }));
 
-    const readingItems = plans.flatMap((plan) => {
+    const readingItems = calendarVisiblePlans.flatMap((plan) => {
       const completedMap = getCompletedMap(plan);
       const assignment = plan.assignments.find((day) => day.date === selectedCalendarDate);
       if (!assignment || assignment.readings.length === 0) return [];
@@ -2086,7 +2095,7 @@ export default function DiscipleOSApp() {
     return [...manualItems, ...readingItems].sort((a, b) =>
       `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`)
     );
-  }, [events, plans, selectedCalendarDate]);
+  }, [calendarVisiblePlans, events, selectedCalendarDate]);
   const dayViewPlanItems = useMemo(
     () => dayViewItems.filter((item) => item.kind === "plan"),
     [dayViewItems],
