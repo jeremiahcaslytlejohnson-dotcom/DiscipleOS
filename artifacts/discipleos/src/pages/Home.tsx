@@ -5249,7 +5249,12 @@ export default function DiscipleOSApp() {
                             <div
                               data-testid="dashboard-progress-percent"
                               aria-label={`Overall plan progress: ${progressPercent}% complete`}
-                              className="shrink-0 text-lg font-semibold text-emerald-200"
+                              className={cn(
+                                "shrink-0 text-lg font-semibold",
+                                status === "Up to date"
+                                  ? "text-emerald-200"
+                                  : "text-[#F4D77A]",
+                              )}
                             >
                               Overall · {progressPercent}% complete
                             </div>

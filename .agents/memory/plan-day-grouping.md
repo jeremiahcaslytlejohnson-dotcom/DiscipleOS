@@ -9,8 +9,8 @@ In Plan & Progress, classify each assignment by its scheduled date relative to t
 
 **How to apply:** Recompute section membership from assignment dates and the current local date after hydration, refresh, or sync. Keep current readings visible by default and collapse past/upcoming groups by default; preserve reading completion independently from disclosure state.
 
-Reading-plan summary rows and cards retain their original progress wording and layout when schedule status is color-coded. Use green when the plan is complete through the current scheduled day and yellow otherwise.
+Reading-plan summary rows, cards, and Today Progress completion text retain their original progress wording and layout when schedule status is color-coded. Use green only when status explicitly shows the plan is up to date through the current scheduled day; use yellow for catch-up or unavailable status.
 
 **Why:** The user corrected a previous change that replaced percentage and remaining-chapter text; only the color was intended to change.
 
-**How to apply:** Use due-day completion through the local current date only to choose the color. Preserve percentage text, remaining counts, wording, layout, and completion logic.
+**How to apply:** Use due-day completion through the local current date only to choose the color. If status cannot be determined, do not assume green. Preserve percentage text, remaining counts, wording, layout, and completion logic.

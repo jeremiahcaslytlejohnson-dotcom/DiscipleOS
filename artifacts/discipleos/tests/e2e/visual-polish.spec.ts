@@ -2621,7 +2621,7 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
   }
 });
 
-test("colors original reading-plan progress summaries by schedule status", async ({ page }) => {
+test("colors Today progress summaries by schedule status and keeps unknown status cautious", async ({ page }) => {
   const today = await browserTodayISO(page);
   const yesterday = addDaysToISO(today, -1);
   const tomorrow = addDaysToISO(today, 1);
@@ -2654,9 +2654,10 @@ test("colors original reading-plan progress summaries by schedule status", async
     ],
     completed: { "behind-yesterday": true },
   };
+  const mountainPlan = makeStructuredClimbPlan("unknown-status-progress-plan");
 
-  await stubHomeApi(page, [upToDatePlan, behindPlan]);
-  await seedPlans(page, [upToDatePlan, behindPlan]);
+  await stubHomeApi(page, [upToDatePlan, behindPlan, mountainPlan]);
+  await seedPlans(page, [upToDatePlan, behindPlan, mountainPlan]);
   await page.goto("/");
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
 
@@ -2664,7 +2665,9 @@ test("colors original reading-plan progress summaries by schedule status", async
   await progress.getByRole("button", { name: /^Progress/ }).click();
   const upToDateChoice = progress.getByTestId(`dashboard-progress-choice-${upToDatePlan.id}`);
   const behindChoice = progress.getByTestId(`dashboard-progress-choice-${behindPlan.id}`);
+  const mountainChoice = progress.getByTestId(`dashboard-progress-choice-${mountainPlan.id}`);
   const progressDetail = progress.getByTestId("dashboard-progress-detail");
+  const progressPercent = progress.getByTestId("dashboard-progress-percent");
   await expect(progress.getByTestId("dashboard-progress-plan-choices"))
     .toHaveAttribute("role", "group");
   await upToDateChoice.click();
@@ -2672,13 +2675,18 @@ test("colors original reading-plan progress summaries by schedule status", async
   await expect(progressDetail).toHaveAttribute("data-plan-id", upToDatePlan.id);
   await expect(progressDetail).toContainText("67% complete");
   await expect(progressDetail).toContainText("Up to date");
+  await expect(progressPercent).toHaveCSS("color", "oklch(0.905 0.093 164.15)");
   await behindChoice.click();
   await expect(upToDateChoice).toHaveAttribute("aria-pressed", "false");
   await expect(behindChoice).toHaveAttribute("aria-pressed", "true");
   await expect(progressDetail).toHaveAttribute("data-plan-id", behindPlan.id);
   await expect(progressDetail).toContainText("33% complete");
   await expect(progressDetail).toContainText("Catch-up needed");
+  await expect(progressPercent).toHaveCSS("color", "rgb(244, 197, 66)");
   await expect(progressDetail).toHaveCount(1);
+  await mountainChoice.click();
+  await expect(progressDetail).toHaveAttribute("data-plan-id", mountainPlan.id);
+  await expect(progressPercent).toHaveCSS("color", "rgb(244, 197, 66)");
   const assertAlignmentUniformWidths = async (
     elements: any[],
     expectedAlignment: "left" | "center",
