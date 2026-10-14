@@ -408,12 +408,45 @@ test("keeps optional prayer tracking separate from Scripture progress and saves 
     established: false,
   });
   await seedLocalData(page, [], null, { ownerId: "anonymous-mountain-session" });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await openMountainRhythm(page);
   const tracker = page.getByTestId("mountain-rhythm-disciplines");
-  await expect(tracker.getByText("Would you also like to track prayer or fasting?")).toBeVisible();
+  await expect(tracker.getByRole("heading", { name: "Add Prayer or Fasting to Your Rhythm" })).toBeVisible();
+  await expect(tracker.getByTestId("mountain-rhythm-commitment-invitation")).toContainText(
+    "optional personal tracking commitments",
+  );
   const choices = tracker.getByRole("checkbox");
   await expect(choices.nth(0)).not.toBeChecked();
   await expect(choices.nth(1)).not.toBeChecked();
+  const prayerCard = tracker.getByTestId("discipline-choice-card-prayer");
+  const fastingCard = tracker.getByTestId("discipline-choice-card-fasting");
+  const desktopCards = await Promise.all([prayerCard, fastingCard].map((card) =>
+    card.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }),
+  ));
+  expect(desktopCards[1].x).toBeGreaterThan(desktopCards[0].x);
+  expect(Math.abs(desktopCards[1].y - desktopCards[0].y)).toBeLessThan(2);
+  await prayerCard.getByText("Set aside time to pray").click();
+  await expect(choices.nth(0)).toBeChecked();
+  await choices.nth(1).focus();
+  await choices.nth(1).press("Space");
+  await expect(choices.nth(1)).toBeChecked();
+  await choices.nth(1).press("Space");
+  await expect(choices.nth(1)).not.toBeChecked();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileCards = await Promise.all([prayerCard, fastingCard].map((card) =>
+    card.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }),
+  ));
+  expect(Math.abs(mobileCards[1].x - mobileCards[0].x)).toBeLessThan(2);
+  expect(mobileCards[1].y).toBeGreaterThan(mobileCards[0].y);
+  expect(mobileCards[1].x + mobileCards[1].width).toBeLessThanOrEqual(390);
+
   await choices.nth(0).check();
   await tracker.getByRole("button", { name: "Save choices" }).click();
   await tracker.getByRole("button", { name: "Set schedule" }).click();
@@ -443,7 +476,8 @@ test("keeps optional prayer tracking separate from Scripture progress and saves 
   const restoredTracker = page.getByTestId("mountain-rhythm-disciplines");
   await expect(restoredTracker.getByRole("checkbox").nth(0)).toBeChecked();
   await expect(restoredTracker.getByRole("checkbox").nth(1)).not.toBeChecked();
-  await expect(restoredTracker.getByText("Would you also like to track prayer or fasting?")).toHaveCount(0);
+  await expect(restoredTracker.getByTestId("mountain-rhythm-commitment-invitation")).toHaveCount(0);
+  await expect(restoredTracker).toContainText(`${savedEvent.title} · ${savedEvent.time} · Weekly`);
   await restoredTracker.getByRole("checkbox").nth(1).check();
   await expect(restoredTracker.getByRole("checkbox").nth(1)).toBeChecked();
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
@@ -651,11 +685,17 @@ test("starts a fresh 7-Day Climb after an expired one and keeps it selected afte
   await expect(tracker).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   const mobilePositions = await page.evaluate(() => ({
+    panelBottom: document.querySelector('[data-testid="mountain-rhythm-panel"]')?.getBoundingClientRect().bottom,
+    invitationTop: document.querySelector('[data-testid="mountain-rhythm-commitment-invitation"]')?.getBoundingClientRect().top,
+    invitationBottom: document.querySelector('[data-testid="mountain-rhythm-commitment-invitation"]')?.getBoundingClientRect().bottom,
+    detailsTop: document.querySelector('[data-testid="mountain-rhythm-details-grid"]')?.getBoundingClientRect().top,
     trackerY: document.querySelector('[data-testid="mountain-rhythm-disciplines"]')?.getBoundingClientRect().top,
     historyY: document.querySelector('[data-testid="mountain-rhythm-past-climbs"]')?.getBoundingClientRect().top,
     viewportWidth: document.documentElement.clientWidth,
     contentWidth: document.documentElement.scrollWidth,
   }));
+  expect(mobilePositions.invitationTop!).toBeGreaterThan(mobilePositions.panelBottom!);
+  expect(mobilePositions.invitationBottom!).toBeLessThan(mobilePositions.detailsTop!);
   expect(mobilePositions.trackerY!).toBeLessThan(mobilePositions.historyY!);
   expect(mobilePositions.contentWidth).toBeLessThanOrEqual(mobilePositions.viewportWidth);
   await expandPastClimbs(page);

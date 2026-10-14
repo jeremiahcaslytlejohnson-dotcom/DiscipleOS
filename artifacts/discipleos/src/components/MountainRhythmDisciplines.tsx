@@ -1,8 +1,24 @@
 import { useMemo, useState } from "react";
+import { Check, HeartHandshake, Sparkles } from "lucide-react";
 import { eventOccursOnDate } from "../lib/mountain-rhythm";
 
 const week = [
   ["S", 0], ["M", 1], ["T", 2], ["W", 3], ["T", 4], ["F", 5], ["S", 6],
+] as const;
+
+const disciplineChoices = [
+  {
+    key: "prayer",
+    label: "Prayer",
+    description: "Set aside time to pray",
+    icon: HeartHandshake,
+  },
+  {
+    key: "fasting",
+    label: "Fasting",
+    description: "Set your own fasting schedule",
+    icon: Sparkles,
+  },
 ] as const;
 
 function defaultTracking(plan: any) {
@@ -117,34 +133,88 @@ export default function MountainRhythmDisciplines({
   }), [enabledDisciplines.join(","), events, completions, persisted.prayer.eventId, persisted.fasting.eventId, today]);
 
   return (
-    <section className="mt-5 border-t border-white/10 pt-5" data-testid="mountain-rhythm-disciplines">
-      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-white/65">Optional commitments</div>
-      <p className="mt-1 text-sm leading-5 text-white/55">
-        Prayer and fasting are personal choices. They never affect Scripture completion or Mountain Rhythm progress.
-      </p>
-      {persisted.setupAnswered ? (
-        <p className="mt-1 text-xs leading-5 text-white/45">
-          Turning tracking off keeps the Calendar activity and its reminders unchanged.
-        </p>
-      ) : null}
+    <section className="mt-5 min-w-0" data-testid="mountain-rhythm-disciplines">
       {!persisted.setupAnswered ? (
-        <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-sm font-medium text-white">Would you also like to track prayer or fasting?</div>
-          <label className="mt-3 flex items-start gap-3 text-sm text-white/85">
-            <input type="checkbox" checked={choices.prayer} onChange={(event) => setChoices((current) => ({ ...current, prayer: event.target.checked }))} className="mt-1 accent-[#D4A017]" />
-            <span><strong>Prayer</strong><span className="block text-xs leading-5 text-white/55">Choose a time and a daily or weekly schedule.</span></span>
-          </label>
-          <label className="mt-3 flex items-start gap-3 text-sm text-white/85">
-            <input type="checkbox" checked={choices.fasting} onChange={(event) => setChoices((current) => ({ ...current, fasting: event.target.checked }))} className="mt-1 accent-[#D4A017]" />
-            <span><strong>Fasting</strong><span className="block text-xs leading-5 text-white/55">Choose your own fasting schedule and reminders.</span></span>
-          </label>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void setChoicesAndPersist(choices)} className="min-h-10 rounded-md bg-[#D4A017] px-3 text-sm font-semibold text-black">Save choices</button>
-            <button type="button" onClick={() => void setChoicesAndPersist({ prayer: false, fasting: false })} className="min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/70">Not now</button>
+        <div
+          data-testid="mountain-rhythm-commitment-invitation"
+          className="rounded-xl border border-[#D4A017]/35 bg-[#111820] p-4 sm:p-5"
+        >
+          <h2 className="text-lg font-semibold leading-6 text-white sm:text-xl">
+            Add Prayer or Fasting to Your Rhythm
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-white/75">
+            These are optional personal tracking commitments. They stay separate from Scripture completion and climb progress.
+          </p>
+          <div
+            className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2"
+            role="group"
+            aria-label="Optional prayer and fasting commitments"
+          >
+            {disciplineChoices.map(({ key, label, description, icon: Icon }) => (
+              <label
+                key={key}
+                data-testid={`discipline-choice-card-${key}`}
+                className="block min-w-0 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={choices[key]}
+                  onChange={(event) =>
+                    setChoices((current) => ({
+                      ...current,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                  className="peer sr-only"
+                />
+                <span className="flex min-h-24 items-center gap-3 rounded-lg border border-white/15 bg-[#090D12] p-4 transition-colors hover:border-[#D4A017]/50 peer-checked:border-[#D4A017] peer-checked:bg-[#D4A017]/[0.08] peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-[#F4D77A] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[#111820]">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#D4A017]/30 bg-[#D4A017]/10 text-[#F4D77A]">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold leading-5 text-white">{label}</span>
+                    <span className="mt-1 block text-sm leading-5 text-white/70">{description}</span>
+                  </span>
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded border ${
+                      choices[key]
+                        ? "border-[#D4A017] bg-[#D4A017] text-[#111820]"
+                        : "border-white/25"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {choices[key] ? <Check className="h-4 w-4" /> : null}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void setChoicesAndPersist(choices)}
+              className="min-h-11 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-[#11100B] hover:bg-[#E6B92A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111820]"
+            >
+              Save choices
+            </button>
+            <button
+              type="button"
+              onClick={() => void setChoicesAndPersist({ prayer: false, fasting: false })}
+              className="min-h-11 rounded-md px-3 text-sm text-white/70 underline decoration-white/30 underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111820]"
+            >
+              Not now
+            </button>
           </div>
         </div>
       ) : (
         <>
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-white/65">Optional commitments</div>
+          <p className="mt-1 text-sm leading-5 text-white/55">
+            Prayer and fasting are personal choices. They never affect Scripture completion or Mountain Rhythm progress.
+          </p>
+          <p className="mt-1 text-xs leading-5 text-white/45">
+            Turning tracking off keeps the Calendar activity and its reminders unchanged.
+          </p>
           <div className="mt-3 space-y-2">
             {(["prayer", "fasting"] as const).map((discipline) => {
               const event = linkedEvent(discipline);
