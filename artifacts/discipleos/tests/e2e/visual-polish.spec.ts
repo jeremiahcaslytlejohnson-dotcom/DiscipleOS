@@ -2541,6 +2541,37 @@ test("keeps Calendar creation short, guided, and fully configurable", async ({ p
   }
 });
 
+test("requires explicit confirmation to delete a prayer schedule and its completion history", async ({ page }) => {
+  const event = {
+    id: "stage2-delete-prayer",
+    title: "Prayer commitment",
+    type: "prayer",
+    date: todayISO(),
+    time: "06:30",
+    repeat: "daily",
+    repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+  };
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stubHomeApi(page, [], [event]);
+  await seedPlans(page, [], [event], false, "stage2-delete-owner");
+  await page.goto("/");
+  const navigation = await openDashboardNavigation(page);
+  await navigation.getByRole("button", { name: "Calendar", exact: true }).click();
+
+  let confirmationText = "";
+  page.on("dialog", async (dialog) => {
+    confirmationText = dialog.message();
+    await dialog.accept();
+  });
+  const deletion = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events") && request.method() === "DELETE",
+  );
+  await page.getByRole("button", { name: "Delete Prayer commitment" }).click();
+  expect(confirmationText.toLowerCase()).toContain("saved completion history");
+  expect((await deletion).postDataJSON()).toEqual({ id: event.id });
+  await expect(page.getByText(event.title, { exact: true })).toHaveCount(0);
+});
+
 test("keeps the Calendar activity form open when changing the selected day", async ({ page }) => {
   const plan = makeOrdinaryPlan("calendar-date-change-plan", "Calendar reading");
   await stubHomeApi(page, plan);

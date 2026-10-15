@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, HeartHandshake, Sparkles } from "lucide-react";
-import { eventOccursOnDate } from "../lib/mountain-rhythm";
 import { climbDatesInRange, fastingDatesForClimb, isFastingDateAllowed } from "../lib/discipline-schedule";
+import { recentDisciplineOccurrences } from "../lib/discipline-tracking";
 
 const weekdays = [
   ["Sunday", "Su", 0], ["Monday", "M", 1], ["Tuesday", "Tu", 2],
@@ -42,6 +42,18 @@ const fastSelection = (date: string, eventId?: string): FastDateSelection => ({
   date,
   ...(eventId ? { eventId } : {}),
 });
+function activeFastSelections(events: any[], today: string): FastDateSelection[] {
+  const seenDates = new Set<string>();
+  return events
+    .filter((event) => event.date >= today && !(event.repeatUntil && event.repeatUntil < event.date))
+    .filter((event) => {
+      if (seenDates.has(event.date)) return false;
+      seenDates.add(event.date);
+      return true;
+    })
+    .map((event) => fastSelection(event.date, event.id))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
 function trackingFor(plan: any, events: any[] = [], ownerId?: string | null) {
   const saved = plan?.disciplineTracking || {};
   const localOwner = String(ownerId || "device").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -97,6 +109,7 @@ export default function MountainRhythmDisciplines({
   const [fastDates, setFastDates] = useState<FastDateSelection[]>([]);
   const [fastReminder, setFastReminder] = useState(true);
   const [fastReminderMinutes, setFastReminderMinutes] = useState(720);
+  const [editingDiscipline, setEditingDiscipline] = useState<Discipline | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -129,12 +142,27 @@ export default function MountainRhythmDisciplines({
   const beginFlow = () => {
     setStartDate(shiftDate(today, 1));
     setStartConfirmed(false);
-    setFastDates([]);
+    setEditingDiscipline(null);
+    setSelected({ prayer: persisted.prayer.enabled, fasting: persisted.fasting.enabled });
+    setFastDates(activeFastSelections(fastingEvents, today));
+    if (prayerEvents[0]) {
+      const event = prayerEvents[0];
+      setPrayerTime(event.time || "06:30");
+      setPrayerDays(event.repeatWeekdays?.length ? event.repeatWeekdays : [0, 1, 2, 3, 4, 5, 6]);
+      setPrayerFrequency(event.repeat === "daily" ? "daily" : "weekly");
+      setPrayerReminder(Boolean(event.remind));
+      setPrayerReminderMinutes(Number(event.reminderMinutes ?? 10));
+    }
+    if (fastingEvents[0]) {
+      setFastReminder(Boolean(fastingEvents[0].remind));
+      setFastReminderMinutes(Number(fastingEvents[0].reminderMinutes ?? 720));
+    }
     setError("");
     setStep("choose");
   };
 
   const beginEdit = (discipline: Discipline) => {
+    setEditingDiscipline(discipline);
     const savedEvents = eventsFor(discipline);
     if (discipline === "prayer" && savedEvents[0]) {
       const event = savedEvents[0];
@@ -146,7 +174,7 @@ export default function MountainRhythmDisciplines({
       setPrayerReminderMinutes(Number(event.reminderMinutes ?? 10));
     }
     if (discipline === "fasting" && savedEvents.length) {
-      setFastDates(savedEvents.map((event) => fastSelection(event.date, event.id)).sort((a, b) => a.date.localeCompare(b.date)));
+      setFastDates(activeFastSelections(savedEvents, today));
       setFastReminder(savedEvents.some((event) => Boolean(event.remind)));
       setFastReminderMinutes(Number(savedEvents[0].reminderMinutes ?? 720));
     }
@@ -166,6 +194,36 @@ export default function MountainRhythmDisciplines({
     };
     if (plan) onSavePlan({ ...plan, disciplineTracking: updated });
     else window.localStorage.setItem(current.localKey, JSON.stringify(updated));
+  };
+
+  const endCommitmentEarly = async (discipline: Discipline) => {
+    const savedEvents = eventsFor(discipline);
+    if (!savedEvents.length) {
+      persistChoices({
+        prayer: discipline === "prayer" ? false : persisted.prayer.enabled,
+        fasting: discipline === "fasting" ? false : persisted.fasting.enabled,
+      });
+      return;
+    }
+    if (!window.confirm(`End the ${discipline} schedule after today? Past completed occurrences will be kept.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      for (const event of savedEvents) {
+        await onSaveEvent({ ...event, repeatUntil: today });
+      }
+      const next = {
+        prayer: persisted.prayer.enabled,
+        fasting: persisted.fasting.enabled,
+        [discipline]: false,
+      } as typeof selected;
+      setSelected(next);
+      persistChoices(next);
+    } catch {
+      setError("The schedule could not be ended. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveSchedule = async () => {
@@ -194,13 +252,20 @@ export default function MountainRhythmDisciplines({
     const current = trackingFor(plan, events, ownerId);
     const noPlanPrefix = `discipline-noplan-${current.localOwner}-`;
     try {
+      const nextPrayerEnabled = editingDiscipline === "prayer" ? selected.prayer : editingDiscipline ? persisted.prayer.enabled : selected.prayer;
+      const nextFastingEnabled = editingDiscipline === "fasting" ? selected.fasting : editingDiscipline ? persisted.fasting.enabled : selected.fasting;
       const nextTracking: any = {
         setupAnswered: true,
-        prayer: { enabled: selected.prayer, eventIds: current.prayer.eventIds },
-        fasting: { enabled: selected.fasting, eventIds: current.fasting.eventIds },
+        prayer: { enabled: nextPrayerEnabled, eventIds: current.prayer.eventIds },
+        fasting: { enabled: nextFastingEnabled, eventIds: current.fasting.eventIds },
       };
       if (selected.prayer) {
         const oldId = current.prayer.eventIds[0];
+        for (const oldEvent of prayerEvents) {
+          if (oldEvent.id !== oldId) {
+            await onSaveEvent({ ...oldEvent, repeatUntil: today });
+          }
+        }
         const prayer = await onSaveEvent({
         id: oldId || (plan ? `discipline-${plan.id}-prayer` : `${noPlanPrefix}prayer`),
           title: "Prayer time",
@@ -216,10 +281,20 @@ export default function MountainRhythmDisciplines({
           notes: "",
           countsTowardRhythm: true,
         });
-        nextTracking.prayer.eventIds = [prayer.id];
+        nextTracking.prayer.eventIds = [...new Set([...current.prayer.eventIds, prayer.id])];
       }
       if (selected.fasting) {
         const ids: string[] = [];
+        const selectedIds = new Set(fastDates.map((choice) => choice.eventId).filter(Boolean));
+        for (const oldEvent of fastingEvents) {
+          if (
+            oldEvent.date >= today &&
+            !selectedIds.has(oldEvent.id) &&
+            completions[`${oldEvent.id}:${oldEvent.date}`] !== true
+          ) {
+            await onSaveEvent({ ...oldEvent, repeatUntil: shiftDate(oldEvent.date, -1) });
+          }
+        }
         for (let index = 0; index < fastDates.length; index++) {
           const choice = fastDates[index];
           const oldId = choice.eventId;
@@ -240,10 +315,11 @@ export default function MountainRhythmDisciplines({
           });
           ids.push(event.id);
         }
-        nextTracking.fasting.eventIds = ids;
+        nextTracking.fasting.eventIds = [...new Set([...current.fasting.eventIds, ...ids])];
       }
       if (plan) onSavePlan({ ...plan, disciplineTracking: nextTracking });
       else window.localStorage.setItem(current.localKey, JSON.stringify(nextTracking));
+      setEditingDiscipline(null);
       setStep("choose");
     } catch {
       setError("The schedule could not be saved. Please try again.");
@@ -262,6 +338,13 @@ export default function MountainRhythmDisciplines({
     );
     if (next) setFastDates((dates) => [...dates, fastSelection(next)]);
   };
+
+  const recentOccurrences = useMemo(() => {
+    return {
+      prayer: recentDisciplineOccurrences(prayerEvents, completions, today),
+      fasting: recentDisciplineOccurrences(fastingEvents, completions, today),
+    };
+  }, [prayerEvents, fastingEvents, today, completions]);
 
   return (
     <section className="mt-5 min-w-0" data-testid="mountain-rhythm-disciplines">
@@ -299,30 +382,37 @@ export default function MountainRhythmDisciplines({
               return <div key={discipline} className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <label className="flex items-center gap-2 text-sm font-medium capitalize text-white">
-                    <input type="checkbox" checked={enabled} onChange={(event) => persistChoices({ prayer: persisted.prayer.enabled, fasting: persisted.fasting.enabled, [discipline]: event.target.checked })} className="accent-[#D4A017]" />
+                    <input type="checkbox" checked={enabled} onChange={(event) => event.target.checked ? beginEdit(discipline) : void endCommitmentEarly(discipline)} className="accent-[#D4A017]" />
                     {discipline}
                   </label>
                   <button type="button" onClick={() => beginEdit(discipline)} className="min-h-9 rounded-md border border-white/15 px-3 text-xs text-white/75">{enabled ? "Edit schedule" : "Set schedule"}</button>
                 </div>
                 {enabled && savedEvents.length ? <div className="mt-1 text-xs text-white/55">{discipline === "prayer" ? `${savedEvents[0].time} · ${savedEvents[0].repeat === "daily" ? "Daily" : "Weekly"}` : `${savedEvents.length} all-day date${savedEvents.length === 1 ? "" : "s"}`}</div> : null}
+                {savedEvents.length ? <button type="button" disabled={saving} onClick={() => void endCommitmentEarly(discipline)} className="mt-1 min-h-8 text-xs text-white/55 underline disabled:opacity-40">End early</button> : null}
               </div>;
             })}
           </div>
-          <button type="button" onClick={() => {
-            setSelected({ prayer: persisted.prayer.enabled, fasting: persisted.fasting.enabled });
-            setStartDate(shiftDate(today, 1));
-            setStartConfirmed(false);
-            setFastDates([]);
-            setError("");
-            setStep("start");
-          }} className="mt-3 min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Set up commitments</button>
+          <button type="button" onClick={beginFlow} className="mt-3 min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Set up commitments</button>
           {(["prayer", "fasting"] as const).map((discipline) => {
-            if (!persisted[discipline].enabled) return null;
-            return eventsFor(discipline).map((event) => {
-              if (!eventOccursOnDate(event, today)) return null;
-              const complete = completions[`${event.id}:${today}`] === true;
-              return <button key={`${discipline}-${event.id}`} type="button" onClick={() => onToggleCompletion(event.id, today, !complete)} className="mt-3 flex min-h-11 w-full items-center justify-between rounded-md border border-white/10 bg-black/15 px-3 text-left text-sm text-white"><span>{discipline === "fasting" ? "All-day fast" : `Prayer · ${event.time}`} for today</span><span className={complete ? "text-emerald-200" : "text-white/50"}>{complete ? "Complete" : "Mark complete"}</span></button>;
-            });
+            const occurrences = recentOccurrences[discipline];
+            const completedCount = occurrences.filter((item) => item.completed).length;
+            const opportunity = discipline === "prayer" ? "scheduled times" : "scheduled days";
+            return <div key={`summary-${discipline}`} className="mt-3 border-t border-white/10 pt-2" data-testid={`discipline-summary-${discipline}`}>
+              <p className="text-xs font-medium text-white/80">
+                {occurrences.length
+                  ? `${discipline === "prayer" ? "Prayer" : "Fasting"}: ${completedCount} of ${occurrences.length} ${opportunity} completed in the last 7 days`
+                  : `No ${discipline === "prayer" ? "prayer" : "fasting"} scheduled in the last 7 days`}
+              </p>
+              {occurrences.map(({ event, date, completed }) => (
+                <button key={`${event.id}:${date}`} type="button" onClick={() => onToggleCompletion(event.id, date, !completed)} className="mt-1 flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-xs text-white/75 hover:bg-white/[0.04]" aria-label={`${completed ? "Undo" : "Mark complete"} ${discipline} for ${date}`}>
+                  <span className="min-w-0 truncate">
+                    {date === today ? "Today" : new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                    {discipline === "prayer" ? ` · ${event.time || "Prayer"}` : " · All-day"}
+                  </span>
+                  <span className={completed ? "shrink-0 text-emerald-200" : "shrink-0 text-white/55"}>{completed ? "Completed · Undo" : "Mark complete"}</span>
+                </button>
+              ))}
+            </div>;
           })}
         </>
       ) : null}
@@ -359,7 +449,7 @@ export default function MountainRhythmDisciplines({
           </div> : <div className="mt-3 space-y-2">
             {fastDates.map((item, index) => <div key={item.key} className="flex items-end gap-2">
               <label className="min-w-0 flex-1 text-sm text-white/70">Fast date {index + 1}<input aria-label={`Fasting date ${index + 1}`} type="date" min={today > actualClimbStart ? today : actualClimbStart} max={actualClimbEnd} value={item.date} onChange={(event) => setFastDates((items) => items.map((choice) => choice.key === item.key ? { ...choice, date: event.target.value } : choice))} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white [color-scheme:dark]" /></label>
-              <button type="button" aria-label={`Remove fasting date ${index + 1}`} onClick={() => setFastDates((items) => items.filter((choice) => choice.key !== item.key))} className="mb-0.5 min-h-11 rounded-md border border-white/15 px-3 text-sm text-white/70">Remove</button>
+               <button type="button" aria-label={`Remove fasting date ${index + 1}`} onClick={() => setFastDates((items) => items.filter((choice) => choice.key !== item.key))} className="mb-0.5 min-h-11 rounded-md border border-white/15 px-3 text-sm text-white/70">Remove</button>
             </div>)}
           </div>}
           {fastDates.filter((item) => item.date < today || !allClimbDates.includes(item.date)).map((item) => <div key={`invalid-${item.key}`} className="mt-2 flex items-center justify-between gap-2 rounded-md border border-amber-200/30 p-2 text-xs text-amber-100">
@@ -383,7 +473,7 @@ export default function MountainRhythmDisciplines({
         {error ? <p role="alert" className="mt-3 text-sm text-amber-100">{error}</p> : null}
         <div className="mt-4 flex flex-wrap justify-between gap-2">
           <button type="button" disabled={saving} onClick={() => { setError(""); if (step === "start") setStep("choose"); else if (step === "prayer" || step === "fasting") setStep("start"); else setStep(selected.fasting ? "fasting" : "prayer"); }} className="min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Back</button>
-          {step === "start" ? <button type="button" onClick={() => { setStartConfirmed(true); setFastDates(suggestedDates.map((date) => fastSelection(date))); setNextDetail(selected); }} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Confirm start date</button> : step === "prayer" || step === "fasting" ? <button type="button" onClick={() => setStep(step === "prayer" && selected.fasting ? "fasting" : "review")} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Next</button> : <button type="button" disabled={saving || (selected.fasting && (fastingDateErrors.length > 0 || hasDuplicateFastingDates || !plan))} onClick={() => void saveSchedule()} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">{saving ? "Saving…" : "Save schedule"}</button>}
+          {step === "start" ? <button type="button" onClick={() => { setStartConfirmed(true); if (!fastDates.length) setFastDates(suggestedDates.map((date) => fastSelection(date))); setNextDetail(selected); }} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Confirm start date</button> : step === "prayer" || step === "fasting" ? <button type="button" onClick={() => setStep(step === "prayer" && selected.fasting ? "fasting" : "review")} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Next</button> : <button type="button" disabled={saving || (selected.fasting && (fastingDateErrors.length > 0 || hasDuplicateFastingDates || !plan))} onClick={() => void saveSchedule()} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">{saving ? "Saving…" : "Save schedule"}</button>}
           <button type="button" disabled={saving} onClick={() => { setStep("choose"); setError(""); }} className="min-h-10 px-3 text-sm text-white/60">Cancel</button>
         </div>
       </div> : null}

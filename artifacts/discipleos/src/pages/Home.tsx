@@ -1029,12 +1029,12 @@ function normalizeWeekdays(weekdays: any[] = []) {
 }
 
 function eventOccursOnDate(event: any, dateISO: string) {
+  if (event?.repeatUntil && dateISO > event.repeatUntil) return false;
   if (!event?.repeat || event.repeat === "none") {
     return event.date === dateISO;
   }
 
   if (dateISO < event.date) return false;
-  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
 
   if (event.repeat === "daily") return true;
 
@@ -3460,6 +3460,44 @@ export default function DiscipleOSApp() {
 
     if (editingEventId) {
       const originalEvent = events.find((event) => event.id === editingEventId);
+      const disciplineKind = (type: string) => {
+        const normalized = type.trim().toLowerCase();
+        if (normalized === "prayer") return "prayer";
+        if (normalized === "fast" || normalized === "fasting") return "fasting";
+        return null;
+      };
+      const preserveDisciplineIdentity =
+        originalEvent &&
+        disciplineKind(originalEvent.type) &&
+        disciplineKind(originalEvent.type) === disciplineKind(normalizedEvent.type);
+      if (
+        originalEvent &&
+        disciplineKind(originalEvent.type) &&
+        !preserveDisciplineIdentity &&
+        !window.confirm("Changing this activity type will delete its saved completion history. Continue?")
+      ) return;
+      if (preserveDisciplineIdentity) {
+        const updatedEvent = { ...normalizedEvent, id: editingEventId };
+        setEvents((prev) => upsertEvent(prev, updatedEvent));
+        if (!localOnlyAfterSignOutRef.current) {
+          saveEventToServer(updatedEvent).catch((error: any) => {
+            if (error?.status >= 400 && error.status < 500) {
+              setEvents((prev) =>
+                originalEvent
+                  ? upsertEvent(removeEventById(prev, editingEventId), originalEvent)
+                  : prev,
+              );
+              setEventSavedFeedback(null);
+              setLastSyncLabel("Event was not saved — please try again");
+              return;
+            }
+            queuePendingOp({ type: "upsert-event", payload: updatedEvent, ts: Date.now() });
+          });
+        }
+        setEventSavedFeedback("Schedule updated. Completed occurrences are kept.");
+        resetEventForm();
+        return;
+      }
       const replacementEventId =
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
@@ -4425,6 +4463,11 @@ export default function DiscipleOSApp() {
   };
 
   const deleteEvent = (eventId: string) => {
+    const event = events.find((item) => item.id === eventId);
+    if (event && ["prayer", "fast", "fasting"].includes(String(event.type).trim().toLowerCase())) {
+      const label = String(event.type).trim().toLowerCase() === "prayer" ? "prayer" : "fasting";
+      if (!window.confirm(`Delete this ${label} schedule and its saved completion history? This cannot be undone.`)) return;
+    }
     setEvents((prev) => removeEventById(prev, eventId));
     if (!localOnlyAfterSignOutRef.current) {
       fetch("/api/events", {

@@ -62,9 +62,9 @@ function normalizeWeekdays(value: any) {
 }
 
 export function eventOccursOnDate(event: any, dateISO: string) {
+  if (event?.repeatUntil && dateISO > event.repeatUntil) return false;
   if (!event?.repeat || event.repeat === "none") return event.date === dateISO;
   if (dateISO < event.date) return false;
-  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
   if (event.repeat === "daily") return true;
   if (event.repeat === "weekly") {
     return normalizeWeekdays(event.repeatWeekdays).includes(getLocalWeekday(dateISO));

@@ -59,6 +59,13 @@ function rowToEvent(row: typeof eventsTable.$inferSelect) {
   };
 }
 
+function disciplineKind(type: string): "prayer" | "fasting" | null {
+  const normalized = type.trim().toLowerCase();
+  if (normalized === "prayer") return "prayer";
+  if (normalized === "fast" || normalized === "fasting") return "fasting";
+  return null;
+}
+
 // GET /api/events — returns only the current user's events
 router.get("/events", async (req, res) => {
   try {
@@ -157,11 +164,23 @@ router.post("/events", async (req, res) => {
       // while leaving its historical sent_reminders record tied to the old ID.
       if (replacesEventId) {
         const [replacedOwned] = await tx
-          .select({ id: eventsTable.id })
+          .select({ id: eventsTable.id, type: eventsTable.type })
           .from(eventsTable)
           .where(and(eq(eventsTable.id, replacesEventId), eq(eventsTable.userId, userId)))
           .limit(1);
         if (!replacedOwned) return { ok: false as const };
+
+        if (
+          disciplineKind(replacedOwned.type) &&
+          disciplineKind(replacedOwned.type) === disciplineKind(event.type)
+        ) {
+          const [updated] = await tx
+            .update(eventsTable)
+            .set({ ...values, id: replacesEventId })
+            .where(and(eq(eventsTable.id, replacesEventId), eq(eventsTable.userId, userId)))
+            .returning();
+          return { ok: true as const, event: updated };
+        }
 
         const [deletedReplacement] = await tx
           .select({ eventId: deletedEventTombstonesTable.eventId })
@@ -293,6 +312,16 @@ router.post("/events/complete", async (req, res) => {
       res.status(400).json({ success: false, error: "Birthday events are no longer supported" });
       return;
     }
+    const [existingCompletion] = await db
+      .select({ completed: eventCompletionsTable.completed })
+      .from(eventCompletionsTable)
+      .where(
+        and(
+          eq(eventCompletionsTable.eventId, eventId),
+          eq(eventCompletionsTable.occurrenceDate, occurrenceDate),
+        ),
+      )
+      .limit(1);
     if (
       !eventOccursOnDate(
         {
@@ -300,7 +329,8 @@ router.post("/events/complete", async (req, res) => {
           repeatWeekdays: normalizeWeekdays(event.repeatWeekdays),
         },
         occurrenceDate,
-      )
+      ) &&
+      !(completed === false && existingCompletion?.completed === true)
     ) {
       res.status(400).json({ success: false, error: "Occurrence does not belong to this event" });
       return;

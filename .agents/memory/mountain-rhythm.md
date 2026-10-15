@@ -100,3 +100,9 @@ Prayer and fasting remain optional Calendar commitments, independent of Scriptur
 **Why:** The owner approved a step-by-step prayer/fasting scheduler while explicitly keeping these disciplines separate from climb progress and avoiding duplicate schedule or reminder systems.
 
 **How to apply:** Reuse owner-scoped Calendar events, occurrence completions, and the existing reminder dispatcher. Validate every selected fasting date on edit, review, and save; never shift climb dates or extend a climb to fit a commitment. Preserve saved schedules and completion history; do not change prayer recurrence, reading-plan dates, or add prayer/fasting effects to Mountain Rhythm scoring.
+
+Mountain Rhythm discipline tracking reuses Calendar event occurrence records keyed by event ID and local date. Recent summaries show recorded completed actions against scheduled opportunities, without treating unrecorded opportunities as proof of failure. Same-discipline schedule edits keep event identity; ending early sets an occurrence cutoff instead of deleting records; explicit Calendar deletion confirms that the associated completion history will also be removed.
+
+**Why:** Discipline records must remain independent of Scripture progress while preserving meaningful completed actions through schedule changes and honoring an explicit request to delete.
+
+**How to apply:** Share the existing owner-scoped event and completion state between Mountain Rhythm and Calendar. Retain and display completed historical occurrences when recurrence changes, allow undo of a recorded historical completion, and exclude future occurrences after the saved cutoff from Calendar and reminders.

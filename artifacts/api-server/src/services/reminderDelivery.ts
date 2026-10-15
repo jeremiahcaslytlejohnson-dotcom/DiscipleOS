@@ -276,12 +276,12 @@ export function isReminderDue(
 }
 
 function eventOccursOnDate(event: typeof eventsTable.$inferSelect, dateISO: string): boolean {
+  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
   if (event.date === dateISO) return true;
   if (!event.repeat || event.repeat === "none") return false;
   const eventDate = new Date(event.date + "T00:00:00Z");
   const checkDate = new Date(dateISO + "T00:00:00Z");
   if (checkDate < eventDate) return false;
-  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
   if (event.repeat === "daily") return true;
   if (event.repeat === "weekly") {
     const weekdays: number[] = Array.isArray(event.repeatWeekdays)

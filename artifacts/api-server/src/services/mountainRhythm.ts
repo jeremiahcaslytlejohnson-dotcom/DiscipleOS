@@ -164,9 +164,9 @@ function normalizeWeekdays(value: unknown) {
 }
 
 export function eventOccursOnDate(event: RhythmEvent, dateISO: string) {
+  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
   if (!event.repeat || event.repeat === "none") return event.date === dateISO;
   if (dateISO < event.date) return false;
-  if (event.repeatUntil && dateISO > event.repeatUntil) return false;
 
   if (event.repeat === "daily") return true;
   if (event.repeat === "weekly") {

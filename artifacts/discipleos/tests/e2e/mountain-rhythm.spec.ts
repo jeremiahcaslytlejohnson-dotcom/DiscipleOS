@@ -578,7 +578,26 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   await expect(restoredTracker.getByTestId("mountain-rhythm-commitment-invitation")).toHaveCount(0);
   await expect(restoredTracker).toContainText("07:15 · Weekly");
   await expect(restoredTracker).toContainText("7 all-day dates");
-  await expect(restoredTracker.getByText("Complete", { exact: true }).first()).toBeVisible();
+  await expect(restoredTracker.getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 1 of 1 scheduled times completed");
+  const undoPrayerRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
+  );
+  await restoredTracker.getByRole("button", { name: `Undo prayer for ${startDate}` }).click();
+  expect((await undoPrayerRequest).postDataJSON()).toMatchObject({
+    eventId: savedPrayer.id,
+    occurrenceDate: startDate,
+    completed: false,
+  });
+  const redoPrayerRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
+  );
+  await restoredTracker.getByRole("button", { name: `Mark complete prayer for ${startDate}` }).click();
+  expect((await redoPrayerRequest).postDataJSON()).toMatchObject({
+    eventId: savedPrayer.id,
+    occurrenceDate: startDate,
+    completed: true,
+  });
   const editPrayer = restoredTracker.getByRole("button", { name: "Edit schedule" }).first();
   await editPrayer.click();
   await restoredTracker.getByRole("button", { name: "Next", exact: true }).click();
@@ -587,11 +606,85 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   );
   await restoredTracker.getByRole("button", { name: "Save schedule" }).click();
   expect((await repeatedSave).postDataJSON().id).toBe(savedPrayer.id);
-  await expect(restoredTracker.getByText("Complete", { exact: true }).first()).toBeVisible();
+  await expect(restoredTracker.getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 1 of 1 scheduled times completed");
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
   await restoredTracker.getByRole("checkbox").nth(1).check();
   await expect(restoredTracker.getByRole("checkbox").nth(1)).toBeChecked();
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
+
+  page.on("dialog", (dialog) => dialog.accept());
+  const endEarlyRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/events") &&
+      request.method() === "POST" &&
+      request.postDataJSON()?.id === savedPrayer.id &&
+      request.postDataJSON()?.repeatUntil === startDate,
+  );
+  await restoredTracker.getByRole("button", { name: "End early" }).first().click();
+  expect((await endEarlyRequest).postDataJSON()).toMatchObject({
+    id: savedPrayer.id,
+    repeatUntil: startDate,
+  });
+  await expect(restoredTracker.getByRole("checkbox").nth(0)).not.toBeChecked();
+  await expect(restoredTracker.getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 1 of 1 scheduled times completed");
+});
+
+test("shares one prayer occurrence completion between Mountain Rhythm and Calendar", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const plan = makePlan({
+    id: "stage2-cross-view-plan",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
+  const prayerEvent = {
+    id: "stage2-cross-view-prayer",
+    title: "Prayer time",
+    type: "prayer",
+    date: today,
+    time: "06:30",
+    repeat: "weekly",
+    repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    repeatUntil: plan.endDate,
+  };
+  plan.disciplineTracking = {
+    setupAnswered: true,
+    prayer: { enabled: true, eventIds: [prayerEvent.id] },
+    fasting: { enabled: false, eventIds: [] },
+  };
+  await stubApi(page, {
+    success: true,
+    userId: "stage2-cross-view-owner",
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [plan], plan.id, {
+    ownerId: "stage2-cross-view-owner",
+    events: [prayerEvent],
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/mountain-rhythm");
+  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  await expect(tracker).toBeVisible();
+  await expect(tracker.getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 0 of 1 scheduled times completed");
+  await tracker.getByRole("button", { name: `Mark complete prayer for ${today}` }).click();
+  await expect(tracker.getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 1 of 1 scheduled times completed");
+
+  await page.goto("/");
+  await page.getByTestId("dashboard-navigation-row").getByRole("button", { name: "Calendar", exact: true }).click();
+  const activities = page.getByTestId("dashboard-calendar-activities");
+  await expect(activities.getByRole("button", { name: "Reopen activity" })).toBeVisible();
+  await activities.getByRole("button", { name: "Reopen activity" }).click();
+  await expect(activities.getByRole("button", { name: "Complete activity" })).toBeVisible();
+
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("mountain-rhythm-disciplines")
+    .getByTestId("discipline-summary-prayer"))
+    .toContainText("Prayer: 0 of 1 scheduled times completed");
 });
 
 test("requires confirmation to replace a hidden active climb and keeps unrelated local plans", async ({ page }) => {
