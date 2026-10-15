@@ -379,12 +379,12 @@ test("Today progress selects one saved plan without changing readings, Calendar,
   const freeTwoChoice = page.getByTestId(`dashboard-progress-choice-${freeTwo.id}`);
   const mountainChoice = page.getByTestId(`dashboard-progress-choice-${mountain.id}`);
   await expect(guidedChoice).toContainText("Guided · Discover Scripture");
-  await expect(freeOneChoice).toContainText("Free · Morning Psalms");
+  await expect(freeOneChoice).toContainText("Free Climb · Morning Psalms");
   await expect(freeTwoChoice)
-    .toContainText("Free · Evening Wisdom and Psalms for Busy Weeks");
+    .toContainText("Free Climb · Evening Wisdom and Psalms for Busy Weeks");
   await expect(mountainChoice).toContainText("Mountain Rhythm · 7-Day Climb");
-  await expect(choices.getByRole("button", { name: "Free · Morning Psalms" })).toBeVisible();
-  await expect(choices.getByRole("button", { name: /^Free · Evening Wisdom/ })).toBeVisible();
+  await expect(choices.getByRole("button", { name: "Free Climb · Morning Psalms" })).toBeVisible();
+  await expect(choices.getByRole("button", { name: /^Free Climb · Evening Wisdom/ })).toBeVisible();
   await expect(guidedChoice).toHaveAttribute("aria-pressed", "true");
   await expect(choices.locator('button[aria-pressed="true"]')).toHaveCount(1);
   await expect(page.getByTestId("dashboard-progress-detail")).toHaveCount(1);

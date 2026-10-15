@@ -1866,7 +1866,7 @@ export default function DiscipleOSApp() {
       .map((plan: any) => ({
         plan,
         kind: isGuidedClimbSetOnePlan(plan) ? "guided" : "free",
-        optionLabel: `${isGuidedClimbSetOnePlan(plan) ? "Guided" : "Free"} · ${getGuidedClimbPlanDisplayName(plan) || plan.name}`,
+        optionLabel: `${isGuidedClimbSetOnePlan(plan) ? "Guided" : "Free Climb"} · ${getGuidedClimbPlanDisplayName(plan) || plan.name}`,
       }));
     const structured = plans
       .filter((plan: any) => {
