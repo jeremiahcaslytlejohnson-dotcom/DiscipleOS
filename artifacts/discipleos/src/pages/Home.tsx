@@ -1715,6 +1715,23 @@ export default function DiscipleOSApp() {
   const [customPlanStartDate, setCustomPlanStartDate] = useState("");
   const [isPlanTuneOpen, setIsPlanTuneOpen] = useState(false);
   const [planCreatedFeedback, setPlanCreatedFeedback] = useState(null);
+  const [planSaveError, setPlanSaveError] = useState("");
+
+  useEffect(() => {
+    if (!planCreatedFeedback) return;
+    if (activeTab !== "plans") {
+      setPlanCreatedFeedback(null);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setPlanCreatedFeedback(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTab, planCreatedFeedback]);
+
+  useEffect(() => {
+    if (activeTab !== "plans") {
+      setPlanSaveError("");
+    }
+  }, [activeTab]);
 
   const [eventForm, setEventForm] = useState({
     title: "",
@@ -2880,6 +2897,8 @@ export default function DiscipleOSApp() {
   const createPlan = ({ onboarding = false } = {}) => {
     const suggestedName = getSuggestedPlanName(form);
     if (form.selectedBooks.length === 0) return;
+    setPlanCreatedFeedback(null);
+    setPlanSaveError("");
     const journey = getReadingJourney(form.journeyKey);
     if (journey && !namedJourneysAccess) {
       setLastSyncLabel("Named journeys are not available for this account");
@@ -2914,28 +2933,42 @@ export default function DiscipleOSApp() {
 
 
     setPlans((prev) => [plan, ...prev]);
-    if (!localOnlyAfterSignOutRef.current) {
-      savePlanToServer(plan).catch((error: any) => {
+    if (localOnlyAfterSignOutRef.current) {
+      if (!onboarding) {
+        setPlanCreatedFeedback({ id: plan.id, name: plan.name });
+      }
+    } else {
+      void savePlanToServer(plan).then(() => {
+        if (!onboarding) {
+          setPlanCreatedFeedback({ id: plan.id, name: plan.name });
+        }
+      }).catch((error: any) => {
         if (error?.status === 403 && journey) {
           setPlans((prev) => prev.filter((item) => item.id !== plan.id));
           setSelectedPlanId(null);
           setLastSyncLabel("Named journeys are not available for this account");
+          if (!onboarding) {
+            setPlanSaveError("This plan could not be saved because named journeys are not available for this account.");
+          }
           return;
         }
         if (error?.status === 409 && journey) {
           setPlans((prev) => prev.filter((item) => item.id !== plan.id));
           setSelectedPlanId(null);
           setLastSyncLabel("Another structured climb is already active");
+          if (!onboarding) {
+            setPlanSaveError("This plan could not be saved because another structured climb is already active.");
+          }
           return;
         }
         queuePendingOp({ type: "upsert-plan", payload: plan, ts: Date.now() });
+        if (!onboarding) {
+          setPlanSaveError("The plan could not be synced. It remains on this device and will retry when connected.");
+        }
       });
     }
     setSelectedPlanId(plan.id);
     setActiveTab(onboarding ? "today" : "plans");
-    if (!onboarding) {
-      setPlanCreatedFeedback({ id: plan.id, name: plan.name });
-    }
     setForm((prev) => ({ ...prev, name: "" }));
   };
 
@@ -6394,42 +6427,32 @@ export default function DiscipleOSApp() {
                       data-testid="plan-created-feedback"
                       role="status"
                       aria-live="polite"
+                       aria-atomic="true"
                       className="border border-emerald-400/30 bg-emerald-500/10 p-4"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 font-medium text-emerald-200">
-                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                            Plan created
-                          </div>
-                          <div className="mt-1 truncate text-sm text-white/75">
-                            {planCreatedFeedback.name} is ready for your daily reading.
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                          <button
-                            type="button"
-                            data-testid="plan-created-view-today"
-                            onClick={() => {
-                              setPlanCreatedFeedback(null);
-                              setActiveTab("today");
-                            }}
-                            className="discipleos-control--compact border border-emerald-300/35 bg-emerald-300/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-300/25"
-                          >
-                            View Today’s Walk
-                          </button>
-                          <button
-                            type="button"
-                            data-testid="plan-created-go-plans"
-                            onClick={() => setPlanCreatedFeedback(null)}
-                            className="discipleos-control--compact border border-white/15 px-3 py-2 text-xs text-white/80 hover:bg-white/10 hover:text-white"
-                          >
-                            Go to Plans
-                          </button>
+                       <div className="flex items-start gap-2">
+                         <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                         <div className="min-w-0">
+                           <div className="font-medium text-emerald-200">
+                             Plan created
+                           </div>
+                           <div className="mt-1 text-sm text-white/75">
+                             {planCreatedFeedback.name} is ready for your daily reading.
+                           </div>
                         </div>
                       </div>
                     </div>
                   ) : null}
+                   {planSaveError ? (
+                     <div
+                       data-testid="plan-save-error"
+                       role="alert"
+                       aria-live="assertive"
+                       className="border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100"
+                     >
+                       {planSaveError}
+                     </div>
+                   ) : null}
 
                   <div className="discipleos-flat-list">
                   {planViewPlans.length === 0 ? (

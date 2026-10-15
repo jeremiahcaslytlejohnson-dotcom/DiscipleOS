@@ -1562,11 +1562,13 @@ test("labels each ordinary plan independently, preserves the Guided label, and f
 });
 
 test("guides existing users through the five-step Create Plan flow", async ({ page }) => {
+  test.setTimeout(90_000);
   for (const width of [320, 360, 390, 430, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await stubHomeApi(page, []);
     await page.addInitScript(() => localStorage.clear());
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.locator(".launch-splash").waitFor({ state: "detached" }).catch(() => {});
 
     const assigned = page.getByTestId("dashboard-assigned-reading");
     await assigned.getByTestId("today-empty-create-plan").click();
@@ -1632,10 +1634,24 @@ test("guides existing users through the five-step Create Plan flow", async ({ pa
     expect(
       Math.max(...savedPlan.assignments.map((assignment: any) => assignment.estimatedMinutes)),
     ).toBeLessThanOrEqual(30);
-    await expect(page.getByTestId("plan-created-feedback")).toBeVisible();
-    await expect(page.getByTestId("plan-created-feedback")).toContainText("Plan created");
-    await expect(page.getByTestId("plan-created-view-today")).toBeVisible();
-    await expect(page.getByTestId("plan-created-go-plans")).toBeVisible();
+    const successFeedback = page.getByTestId("plan-created-feedback");
+    await expect(successFeedback).toBeVisible();
+    await expect(successFeedback).toHaveAttribute("role", "status");
+    await expect(successFeedback).toContainText("Plan created");
+    await expect(successFeedback.locator("button, a, [tabindex]")).toHaveCount(0);
+    await successFeedback.click();
+    await expect(page.getByTestId("dashboard-plans-list")).toBeVisible();
+    if (width === 320) {
+      await expect(successFeedback).toHaveCount(0, { timeout: 7000 });
+    } else if (width === 1280) {
+      const todayNavigation = await openDashboardNavigation(page);
+      await todayNavigation.getByRole("button", { name: "Today", exact: true }).click();
+      await expect(successFeedback).toHaveCount(0);
+      const plansNavigation = await openDashboardNavigation(page);
+      await plansNavigation.getByRole("button", { name: "Plans", exact: true }).click();
+      await expect(page.getByTestId("dashboard-plans-list")).toBeVisible();
+      await expect(successFeedback).toHaveCount(0);
+    }
 
     const finalLayout = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -1657,6 +1673,45 @@ test("guides existing users through the five-step Create Plan flow", async ({ pa
       page.locator('[data-testid^="planned-reading-card-"]').filter({ hasText: "Evening Scripture" }),
     ).toBeVisible();
   }
+});
+
+test("reports a failed Free Climb save without showing success confirmation", async ({ page }) => {
+  const tomorrow = addDaysToISO(await browserTodayISO(page), 1);
+  const tomorrowPlan = {
+    ...makeOrdinaryPlan("failure-test-tomorrow-plan"),
+    startDate: tomorrow,
+    endDate: tomorrow,
+    assignments: [
+      { date: tomorrow, readings: [{ key: "failure-test-reading", label: "Psalm 1" }] },
+    ],
+  };
+  await stubHomeApi(page, [tomorrowPlan], [], { emptyEvents: true });
+  await seedPlans(page, [tomorrowPlan], []);
+  await page.route("**/api/reading/plans", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ success: false, error: "Temporary save failure" }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/");
+  await page.getByTestId("today-empty-create-plan").click();
+  await page.getByTestId("plan-create-preset-psalmsProverbs").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-name").fill("Network Retry Plan");
+  await page.getByTestId("plan-create-next").click();
+  await page.getByTestId("plan-create-submit").click();
+
+  await expect(page.getByTestId("plan-save-error")).toContainText("could not be synced");
+  await expect(page.getByTestId("plan-save-error")).toHaveAttribute("role", "alert");
+  await expect(page.getByTestId("plan-created-feedback")).toHaveCount(0);
 });
 
 test("confirms a custom Free Climb start date before creating its schedule", async ({ page }) => {
