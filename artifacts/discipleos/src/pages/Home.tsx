@@ -1194,6 +1194,7 @@ function ResponsiveSection({
   disclosureKey,
   summary = "",
   summaryTestId,
+  summaryClassName = "",
   summaryCollapsedOnly = false,
   collapsible = false,
   plain = false,
@@ -1235,7 +1236,7 @@ function ResponsiveSection({
                 {showSummary ? (
                   <span
                     data-testid={summaryTestId || `${testId}-summary`}
-                    className="discipleos-secondary-copy mt-1 block truncate text-xs leading-5"
+                    className={cn("discipleos-secondary-copy mt-1 block truncate text-xs leading-5", summaryClassName)}
                   >
                     {summary}
                   </span>
@@ -1261,7 +1262,7 @@ function ResponsiveSection({
                 {showSummary ? (
                   <span
                     data-testid={summaryTestId || `${testId}-summary`}
-                    className="discipleos-secondary-copy mt-1 block truncate text-xs leading-5"
+                    className={cn("discipleos-secondary-copy mt-1 block truncate text-xs leading-5", summaryClassName)}
                   >
                     {summary}
                   </span>
@@ -1960,29 +1961,54 @@ export default function DiscipleOSApp() {
     const plansForToday = activeClimbPlan
       ? [...ordinaryPlans, activeClimbPlan]
       : ordinaryPlans;
+    const seenPlanIds = new Set<string>();
     return plansForToday
       .map((plan) => ({
         plan,
         todayReading: getTodaysReading(plan, today),
       }))
-      .filter((entry) => entry.todayReading && entry.todayReading.readings.length > 0);
+      .filter((entry) => entry.todayReading && entry.todayReading.readings.length > 0)
+      .filter(({ plan }) => {
+        if (typeof plan.id !== "string" || !plan.id) return true;
+        if (seenPlanIds.has(plan.id)) return false;
+        seenPlanIds.add(plan.id);
+        return true;
+      });
   }, [ordinaryPlans, activeClimbPlan]);
 
   const todayAssignedReadingSummary = useMemo(() => {
-    let total = 0;
-    let completed = 0;
+    const planCountLabel = `${todaysPlans.length} ${todaysPlans.length === 1 ? "plan" : "plans"} today`;
+    if (todaysPlans.length === 0) {
+      return { label: `No reading scheduled today · ${planCountLabel}` };
+    }
 
-    todaysPlans.forEach(({ plan, todayReading }) => {
+    const readingEntries = todaysPlans.flatMap(({ plan, todayReading }) => {
       const completedMap = getCompletedMap(plan);
-      todayReading.readings.forEach((reading: any) => {
-        const units = Math.max(1, getReadingChapters(reading).length);
-        total += units;
-        if (completedMap[reading.key]) completed += units;
-      });
+      return todayReading.readings.map((reading: any) => ({
+        chapterCount: getReadingChapters(reading).length,
+        completed: Boolean(completedMap[reading.key]),
+      }));
     });
+    const allEntriesAreChapters = readingEntries.every((entry) => entry.chapterCount > 0);
+    const total = readingEntries.reduce(
+      (sum, entry) => sum + (allEntriesAreChapters ? entry.chapterCount : 1),
+      0,
+    );
+    const completed = readingEntries.reduce(
+      (sum, entry) =>
+        sum + (entry.completed ? (allEntriesAreChapters ? entry.chapterCount : 1) : 0),
+      0,
+    );
+    const unitLabel = allEntriesAreChapters ? "chapters" : "readings";
+    const planMinutes = todaysPlans.map(({ todayReading }) =>
+      getAssignedReadingDayMinutes(todayReading.readings),
+    );
+    const scheduledTimeLabel = planMinutes.every((minutes) => minutes > 0)
+      ? `${formatEstimatedReadingTime(planMinutes.reduce((sum, minutes) => sum + minutes, 0))} scheduled`
+      : "Time estimate unavailable";
 
     return {
-      label: total === 0 ? "No reading scheduled today" : `${completed} of ${total} chapters complete`,
+      label: `${completed} of ${total} ${unitLabel} complete · ${planCountLabel} · ${scheduledTimeLabel}`,
     };
   }, [todaysPlans]);
 
@@ -5132,6 +5158,7 @@ export default function DiscipleOSApp() {
               disclosureKey="assignedReading"
               summary={todayAssignedReadingSummary.label}
               summaryTestId="dashboard-assigned-reading-summary"
+              summaryClassName="whitespace-normal [overflow-wrap:anywhere]"
               headerAction={todaysPlans.length === 0 ? (
                 <button
                   type="button"
@@ -5419,6 +5446,7 @@ export default function DiscipleOSApp() {
                             .join(", ")
                         : "";
                       const isMountainRhythm = selectedTodayProgress.kind === "mountain";
+                      const singleMountainRhythm = isMountainRhythm && todayProgressPlans.length === 1;
                       const progressPercent = isMountainRhythm
                         ? Number(selectedTodayRhythmScore?.journeyProgress || 0)
                         : stats.percent;
@@ -5439,42 +5467,46 @@ export default function DiscipleOSApp() {
                         <div
                           data-testid="dashboard-progress-detail"
                           data-plan-id={plan.id}
-                          className="discipleos-flat-row space-y-2 py-3"
+                          className={cn("discipleos-flat-row py-3", singleMountainRhythm ? "space-y-1" : "space-y-2")}
                         >
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                            {todayProgressPlans.length === 1 ? (
+                          {!singleMountainRhythm ? (
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                              {todayProgressPlans.length === 1 ? (
                               <div
                                 data-testid="dashboard-progress-selected-plan"
                                 className="discipleos-safe-text min-w-0 font-medium"
                               >
                                 {selectedTodayProgress.optionLabel}
                               </div>
-                            ) : null}
-                            <div
-                              data-testid="dashboard-progress-percent"
-                              aria-label={`Overall plan progress: ${progressPercent}% complete`}
-                              className={cn(
-                                "shrink-0 text-lg font-semibold",
-                                status === "Up to date"
-                                  ? "text-emerald-200"
-                                  : "text-[#F4D77A]",
-                              )}
-                            >
-                              Overall · {progressPercent}% complete
+                              ) : null}
+                              <div
+                                data-testid="dashboard-progress-percent"
+                                aria-label={`Overall plan progress: ${progressPercent}% complete`}
+                                className={cn(
+                                  "shrink-0 text-lg font-semibold",
+                                  status === "Up to date"
+                                    ? "text-emerald-200"
+                                    : "text-[#F4D77A]",
+                                )}
+                              >
+                                Overall · {progressPercent}% complete
+                              </div>
                             </div>
-                          </div>
+                          ) : null}
                           {!isMountainRhythm && status ? (
                             <div className="discipleos-meta-copy text-sm">{status}</div>
                           ) : null}
-                          <div
-                            data-testid="dashboard-progress-next-reading"
-                            className="discipleos-safe-text text-sm text-white/80"
-                          >
-                            {dateLabel}{nextReading ? `: ${nextReading}` : ""}
-                            {nextAssignment && nextAssignment.readings.length > 3
-                              ? ` +${nextAssignment.readings.length - 3} more`
-                              : ""}
-                          </div>
+                          {(!singleMountainRhythm || nextAssignment) ? (
+                            <div
+                              data-testid="dashboard-progress-next-reading"
+                              className="discipleos-safe-text text-sm text-white/80"
+                            >
+                              {dateLabel}{nextReading ? `: ${nextReading}` : ""}
+                              {nextAssignment && nextAssignment.readings.length > 3
+                                ? ` +${nextAssignment.readings.length - 3} more`
+                                : ""}
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })() : null}

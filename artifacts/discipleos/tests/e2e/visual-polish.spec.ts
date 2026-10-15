@@ -3024,7 +3024,7 @@ test("keeps Create Plan available in the collapsed Today card for a plan startin
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(section.getByTestId("dashboard-assigned-reading-summary"))
-      .toHaveText("No reading scheduled today");
+      .toContainText("No reading scheduled today");
 
     const createPlan = section.getByTestId("today-empty-create-plan");
     await expect(createPlan).toHaveText("Create Plan");
@@ -3054,6 +3054,102 @@ test("keeps Create Plan available in the collapsed Today card for a plan startin
   await expect(page.getByTestId("plan-create-start-date-value"))
     .toContainText(tomorrow);
   expect(planWrites).toBe(0);
+});
+
+test("summarizes distinct due-today plans and only known scheduled reading time", async ({ page }) => {
+  test.setTimeout(60_000);
+  const today = await browserTodayISO(page);
+  const tomorrow = addDaysToISO(today, 1);
+  const makeDuePlan = (id: string, name: string, label = "Psalm 1") => ({
+    ...makeOrdinaryPlan(id, name),
+    assignments: [{ date: today, readings: [{ key: `${id}-reading`, label }] }],
+    completed: {},
+  });
+  const futurePlan = {
+    ...makeDuePlan("today-summary-future", "Future Plan"),
+    assignments: [
+      { date: tomorrow, readings: [{ key: "today-summary-future-reading", label: "Psalm 1" }] },
+    ],
+  };
+  const firstPlan = makeDuePlan("today-summary-first", "First Plan");
+  const secondPlan = makeDuePlan("today-summary-second", "Second Plan", "Psalm 2");
+  const unknownEstimatePlan = makeDuePlan(
+    "today-summary-unknown",
+    "Unknown Estimate",
+    "Daily devotional",
+  );
+  const cases = [
+    {
+      label: "zero due today",
+      plans: [futurePlan],
+      expected: "No reading scheduled today · 0 plans today",
+      estimateAvailable: false,
+    },
+    {
+      label: "one due today",
+      plans: [firstPlan, futurePlan],
+      expected: "0 of 1 chapters complete · 1 plan today",
+      estimateAvailable: true,
+    },
+    {
+      label: "two distinct due-today plans plus a duplicate plan ID",
+      plans: [firstPlan, { ...firstPlan }, secondPlan, futurePlan],
+      expected: "0 of 2 chapters complete · 2 plans today",
+      estimateAvailable: true,
+    },
+    {
+      label: "unknown scheduled estimate",
+      plans: [unknownEstimatePlan],
+      expected: "0 of 1 readings complete · 1 plan today · Time estimate unavailable",
+      estimateAvailable: false,
+    },
+  ];
+
+  for (const state of cases) {
+    const fixturePage = await page.context().newPage();
+    await fixturePage.setViewportSize({ width: 320, height: 900 });
+    await stubHomeApi(fixturePage, state.plans, [], { emptyEvents: true });
+    await seedPlans(fixturePage, state.plans, []);
+    await fixturePage.addInitScript(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
+    await fixturePage.goto("/");
+    await fixturePage.locator(".launch-splash").waitFor({ state: "detached" });
+    const summary = fixturePage.getByTestId("dashboard-assigned-reading-summary");
+    await expect(summary).toContainText(state.expected);
+    await expect.poll(() => summary.evaluate((element) => getComputedStyle(element).whiteSpace))
+      .toBe("normal");
+    const summaryGeometry = await summary.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return {
+        height: element.getBoundingClientRect().height,
+        lineHeight: Number.parseFloat(styles.lineHeight),
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      };
+    });
+    expect(summaryGeometry.scrollWidth).toBeLessThanOrEqual(summaryGeometry.clientWidth);
+    expect(summaryGeometry.height).toBeGreaterThanOrEqual(summaryGeometry.lineHeight);
+
+    if (state.estimateAvailable) {
+      const duePlanIds = [...new Set(
+        state.plans
+          .filter((plan: any) => plan.assignments.some((assignment: any) => assignment.date === today))
+          .map((plan: any) => plan.id),
+      )];
+      const rowEstimates = await Promise.all(duePlanIds.map(async (planId) => {
+        const row = fixturePage.getByTestId(`today-estimated-reading-time-${planId}`);
+        const estimateText = await row.innerText();
+        return Number(estimateText.match(/\d+/)?.[0] || 0);
+      }));
+      expect(rowEstimates.every((minutes) => minutes > 0)).toBe(true);
+      const totalMinutes = rowEstimates.reduce((sum, minutes) => sum + minutes, 0);
+      await expect(summary).toContainText(`${totalMinutes} min scheduled`);
+    } else {
+      await expect(summary).not.toContainText(/\d+ min scheduled/);
+    }
+    expect(await fixturePage.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(320);
+    await fixturePage.close();
+  }
 });
 
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {
@@ -3088,6 +3184,14 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       plans: [morningPlan, eveningPlan],
       ordinaryNames: ["Morning Psalms", "Evening Proverbs"],
       climbReading: false,
+    },
+    {
+      label: "single active climb",
+      plans: [climbPlan],
+      ordinaryNames: [],
+      climbReading: true,
+      climbComplete: false,
+      singleClimb: true,
     },
     {
       label: "active climb plus ordinary plans",
@@ -3151,24 +3255,44 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
         await expect(page.getByRole("button", { name: "Create Plan", exact: true })).toHaveCount(1);
       }
       const progressToggle = progress.getByRole("button", { name: /^Progress/ });
+      if (state.singleClimb) {
+        await expect(progress.getByTestId("dashboard-progress-summary"))
+          .toHaveText("Mountain Rhythm · 7-Day Climb · 0% complete");
+      }
       await progressToggle.click();
       const progressDetail = progress.getByTestId("dashboard-progress-detail");
       if (state.climbReading) {
         const structuredPlan = state.plans.find((plan: any) => plan.journeyKey === "7-day-climb");
-        const structuredChoice = progress.getByTestId(
-          `dashboard-progress-choice-${structuredPlan.id}`,
-        );
-        await expect(structuredChoice).toContainText("Mountain Rhythm · 7-Day Climb");
-        if (await structuredChoice.count()) {
+        if (state.singleClimb) {
+          await expect(progress.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
+          await expect(progress.getByTestId("dashboard-progress-selected-plan")).toHaveCount(0);
+          await expect(progress.getByTestId("dashboard-progress-percent")).toHaveCount(0);
+          await expect(progress.getByTestId("dashboard-progress-next-reading"))
+            .toContainText("Next reading · Today: Climb reading 1");
+        } else {
+          const structuredChoice = progress.getByTestId(
+            `dashboard-progress-choice-${structuredPlan.id}`,
+          );
+          await expect(structuredChoice).toContainText("Mountain Rhythm · 7-Day Climb");
           await structuredChoice.click();
           await expect(structuredChoice).toHaveAttribute("aria-pressed", "true");
-        } else {
-          await expect(progress.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
-          await expect(progress.getByTestId("dashboard-progress-selected-plan"))
-            .toHaveText("Mountain Rhythm · 7-Day Climb");
+          await expect(progress.getByTestId("dashboard-progress-percent")).toBeVisible();
+          const ordinaryPlan = state.plans.find((plan: any) => plan.id !== structuredPlan.id);
+          if (ordinaryPlan) {
+            const ordinaryChoice = progress.getByTestId(
+              `dashboard-progress-choice-${ordinaryPlan.id}`,
+            );
+            await ordinaryChoice.click();
+            await expect(ordinaryChoice).toHaveAttribute("aria-pressed", "true");
+            await expect(progressDetail).toHaveAttribute("data-plan-id", ordinaryPlan.id);
+            await structuredChoice.click();
+            await expect(structuredChoice).toHaveAttribute("aria-pressed", "true");
+          }
         }
         await expect(progressDetail).toHaveAttribute("data-plan-id", structuredPlan.id);
-        await expect(progressDetail).toContainText(state.climbComplete ? "14.3%" : "0%");
+        if (!state.singleClimb) {
+          await expect(progressDetail).toContainText(state.climbComplete ? "14.3%" : "0%");
+        }
         await expect(progressDetail).not.toContainText("Today’s climb complete");
         await expect(progressDetail).not.toContainText("planned days");
       } else if (state.ordinaryNames.length) {
@@ -3226,7 +3350,9 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
       await expect(firstAssignedAction).toBeFocused();
 
       if (state.plans.length > 0) {
-        const readingButton = assigned.getByRole("button", { name: /Morning Psalm 1/ });
+        const readingButton = assigned.getByRole("button", {
+          name: state.singleClimb ? /Climb reading 1/ : /Morning Psalm 1/,
+        });
         const before = await readingButton.getAttribute("class");
         await readingButton.click();
         await expect(readingButton).toHaveClass(/bg-emerald-500\/10/);
