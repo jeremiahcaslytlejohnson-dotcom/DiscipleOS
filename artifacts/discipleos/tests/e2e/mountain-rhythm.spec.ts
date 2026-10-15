@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { climbDatesInRange, fastingDatesForClimb, isFastingDateAllowed } from "../../src/lib/discipline-schedule";
+import {
+  buildMountainRhythmChartSeries,
+  buildMountainRhythmTerrainPoints,
+} from "../../src/lib/mountain-rhythm-chart";
 
 const STORAGE_KEY = "discipleos-data";
 
@@ -57,6 +61,105 @@ function makePlan({
     earnedDayKeys: earnedDayIndexes.map((dayIndex) => addDays(startDate, dayIndex)),
   };
 }
+
+test("builds cumulative chart overlays from opted-in, scheduled occurrences only", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const dates = Array.from({ length: 5 }, (_, index) => addDays(today, index - 3));
+  const trail = dates.map((date, index) => ({
+    date,
+    planned: 1,
+    completed: index === 0 ? 1 : 0,
+    status: index === 4 ? "future" : index === 0 ? "complete" : "missed",
+  }));
+  const plan = {
+    disciplineTracking: {
+      prayer: { enabled: true, eventIds: ["prayer-daily"] },
+      fasting: { enabled: true, eventIds: ["fast-one-day"] },
+    },
+  };
+  const events = [
+    {
+      id: "prayer-daily",
+      type: "prayer",
+      date: dates[0],
+      time: "06:30",
+      repeat: "daily",
+      repeatUntil: today,
+    },
+    {
+      id: "fast-one-day",
+      type: "fast",
+      date: dates[2],
+      time: "",
+      repeat: "none",
+    },
+    {
+      id: "unselected-prayer",
+      type: "prayer",
+      date: dates[0],
+      repeat: "daily",
+    },
+  ];
+  const completions = {
+    [`prayer-daily:${dates[0]}`]: true,
+    [`prayer-daily:${today}`]: true,
+  };
+  const series = buildMountainRhythmChartSeries({ plan, trail, events, eventCompletions: completions, today });
+  expect(series.map((item) => item.key)).toEqual(["scripture", "prayer", "fasting", "combined"]);
+  expect(series.find((item) => item.key === "prayer")?.values.at(-2)).toBe(50);
+  expect(series.find((item) => item.key === "combined")?.values.at(-2)).toBe(33);
+  expect(series.every((item) => item.values.at(-1) === null)).toBe(true);
+
+  const readingOnly = buildMountainRhythmChartSeries({
+    plan: { disciplineTracking: { prayer: { enabled: false, eventIds: ["prayer-daily"] } } },
+    trail,
+    events,
+    eventCompletions: completions,
+    today,
+  });
+  expect(readingOnly.map((item) => item.key)).toEqual(["scripture"]);
+});
+
+test("keeps planned terrain normalized for 7-, 20-, and 40-day routes", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const length of [7, 20, 40]) {
+    const points = buildMountainRhythmTerrainPoints(length);
+    expect(points).toHaveLength(length);
+    expect(points[0].x).toBe(16);
+    expect(points.at(-1)?.x).toBe(344);
+    expect(Math.min(...points.map((point) => point.y))).toBeGreaterThanOrEqual(62);
+    expect(Math.max(...points.map((point) => point.y))).toBeLessThanOrEqual(238);
+    expect(new Set(points.map((point) => point.y)).size).toBeGreaterThan(1);
+    const dates = Array.from({ length }, (_, index) => addDays(today, index - length + 1));
+    const series = buildMountainRhythmChartSeries({
+      plan: {},
+      trail: dates.map((date) => ({ date, planned: 1, completed: 0 })),
+      today,
+    });
+    expect(series.find((item) => item.key === "scripture")?.values).toHaveLength(length);
+  }
+});
+
+test("respects weekly occurrence cutoffs in cumulative chart values", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const dates = [addDays(today, -1), today, addDays(today, 1)];
+  const trail = dates.map((date) => ({ date, planned: 1, completed: 0 }));
+  const result = buildMountainRhythmChartSeries({
+    plan: { disciplineTracking: { prayer: { enabled: true, eventIds: ["weekly-prayer"] } } },
+    trail,
+    events: [{
+      id: "weekly-prayer",
+      type: "prayer",
+      date: dates[0],
+      repeat: "weekly",
+      repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+      repeatUntil: dates[0],
+    }],
+    eventCompletions: { [`weekly-prayer:${dates[0]}`]: true },
+    today,
+  });
+  expect(result.find((item) => item.key === "prayer")?.values).toEqual([100, 100, null]);
+});
 
 async function stubApi(
   page: Page,
@@ -239,10 +342,11 @@ async function seedLocalData(
     ownerId?: string | null;
     pendingOps?: unknown[];
     events?: unknown[];
+    eventCompletions?: Record<string, boolean>;
   } = {},
 ) {
   await page.addInitScript(
-    ({ plans: seededPlans, selectedId, ownerId, pendingOps, events }) => {
+    ({ plans: seededPlans, selectedId, ownerId, pendingOps, events, eventCompletions }) => {
       if (localStorage.getItem("discipleos-seed-applied") === "true") return;
       localStorage.setItem(
         "discipleos-data",
@@ -250,7 +354,7 @@ async function seedLocalData(
           ownerId,
           plans: seededPlans,
           events,
-          eventCompletions: {},
+          eventCompletions,
           selectedPlanId: selectedId,
         }),
       );
@@ -268,6 +372,7 @@ async function seedLocalData(
       ownerId: options.ownerId ?? null,
       pendingOps: options.pendingOps,
       events: options.events ?? [],
+      eventCompletions: options.eventCompletions ?? {},
     },
   );
 }
@@ -368,6 +473,107 @@ test("keeps the 20-Day Reset locked", async ({ page }) => {
   await expect(resetChoice).toBeDisabled();
   await expect(resetChoice).toContainText("Locked");
   await expect(page.getByTestId("dialog-confirm-20-day-reset")).toHaveCount(0);
+});
+
+test("shows a natural planned ridge, a flat unearned track, and only saved Stage 2 overlays", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const plan = makePlan({
+    id: "chart-stage3-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -3,
+  });
+  const pastPlan = makePlan({
+    id: "chart-stage3-past-climb",
+    days: 7,
+    name: "Earlier 7-Day Climb",
+    today,
+    startOffset: -20,
+    completedIndexes: [0, 1],
+  });
+  const start = plan.assignments[0].date;
+  const fastDate = addDays(today, -1);
+  plan.disciplineTracking = {
+    setupAnswered: true,
+    prayer: { enabled: true, eventIds: ["chart-prayer"] },
+    fasting: { enabled: true, eventIds: ["chart-fast"] },
+  };
+  const events = [
+    {
+      id: "chart-prayer",
+      title: "Prayer commitment",
+      type: "prayer",
+      date: start,
+      time: "06:30",
+      repeat: "daily",
+      repeatWeekdays: [],
+      repeatUntil: plan.endDate,
+    },
+    {
+      id: "chart-fast",
+      title: "Fasting commitment",
+      type: "fast",
+      date: fastDate,
+      time: "",
+      repeat: "none",
+      repeatWeekdays: [],
+    },
+  ];
+  const chartOwner = "chart-stage3-owner";
+  await stubApi(page, {
+    success: true,
+    authenticated: false,
+    userId: chartOwner,
+    established: false,
+    capabilities: { mountainRhythm: "full", namedJourneys: true },
+  });
+  await seedLocalData(page, [pastPlan, plan], plan.id, {
+    ownerId: chartOwner,
+    events,
+    eventCompletions: { [`chart-prayer:${start}`]: true },
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await openMountainRhythm(page);
+
+  const card = page.getByTestId("mountain-rhythm-panel");
+  await expect(card.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
+  await expect(card.getByTestId("mountain-rhythm-day-point-4")).toHaveAttribute("fill", "#D4A017");
+  await expect(card.getByTestId("mountain-rhythm-day-point-4")).toHaveAttribute("aria-label", /Today/);
+  await expect(card.getByTestId("mountain-rhythm-day-point-5")).toHaveAttribute("fill", "rgba(12,20,22,0.9)");
+  await expect(card.getByTestId("mountain-rhythm-series-scripture")).toBeVisible();
+  await expect(card.getByTestId("mountain-rhythm-series-prayer")).toBeVisible();
+  await expect(card.getByTestId("mountain-rhythm-series-fasting")).toBeVisible();
+  await expect(card.getByTestId("mountain-rhythm-series-combined")).toBeVisible();
+  await expect(card.getByTestId("mountain-rhythm-day-point-1")).toHaveCount(1);
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).toBeVisible();
+  await expect(page.getByTestId("mountain-rhythm-past-climbs")).not.toHaveAttribute("open");
+
+  const earnedTrack = card.getByTestId("mountain-rhythm-day-path");
+  const trackCoordinates = (await earnedTrack.getAttribute("d") || "").match(/\d+(?:\.\d+)?/g)?.map(Number) || [];
+  const trackY = trackCoordinates.filter((_, index) => index % 2 === 1);
+  expect(trackY.length).toBeGreaterThan(0);
+  expect(new Set(trackY)).toEqual(new Set([238]));
+
+  const terrainCoordinates = (await card.getByTestId("mountain-rhythm-planned-terrain").getAttribute("d") || "")
+    .match(/\d+(?:\.\d+)?/g)?.map(Number) || [];
+  const terrainY = terrainCoordinates.filter((_, index) => index % 2 === 1);
+  expect(Math.min(...terrainY)).toBeLessThan(Math.max(...terrainY));
+
+  const prayerToggle = card.getByTestId("mountain-rhythm-series-toggle-prayer");
+  await expect(prayerToggle).toHaveAttribute("aria-pressed", "true");
+  await prayerToggle.click();
+  await expect(card.getByTestId("mountain-rhythm-series-prayer")).toHaveCount(0);
+  await expect(prayerToggle).toHaveAttribute("aria-pressed", "false");
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      document: document.documentElement.scrollWidth,
+    }));
+    expect(layout.document).toBeLessThanOrEqual(layout.viewport + 1);
+    await expect(card.getByTestId("mountain-rhythm-mountain")).toBeVisible();
+  }
 });
 
 test("automatically starts a 7-Day Climb for an anonymous session with a user ID", async ({ page }) => {
