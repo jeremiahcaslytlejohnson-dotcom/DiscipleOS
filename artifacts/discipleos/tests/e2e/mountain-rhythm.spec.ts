@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { fastingDatesForClimb } from "../../src/lib/discipline-schedule";
+import { climbDatesInRange, fastingDatesForClimb, isFastingDateAllowed } from "../../src/lib/discipline-schedule";
 
 const STORAGE_KEY = "discipleos-data";
 
@@ -401,19 +401,36 @@ test("automatically starts a 7-Day Climb for an anonymous session with a user ID
   );
 });
 
-test("fasting schedule proposes the 10-percent dates without seeding missed dates", () => {
-  const start = "2026-01-01";
-  for (const duration of [7, 20, 40, 365, 366]) {
-    const dates = fastingDatesForClimb(start, addDays(start, duration - 1), start);
-    const expected = Array.from({ length: Math.ceil(duration / 10) }, (_, index) =>
-      addDays(start, index * 10),
-    );
-    expect(dates).toEqual(expected);
-  }
-  expect(fastingDatesForClimb(start, addDays(start, 19), "2026-01-10")).toEqual([
-    "2026-01-11",
+test("fasting suggestions honor inclusive climb dates, cadence and date-only boundaries", () => {
+  const start = "2026-10-15";
+  const end = "2026-10-21";
+  expect(climbDatesInRange(start, end)).toEqual([
+    "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18",
+    "2026-10-19", "2026-10-20", "2026-10-21",
   ]);
-  expect(fastingDatesForClimb(start, addDays(start, 19), "2026-01-12")).toEqual([]);
+  expect(fastingDatesForClimb(start, end, "2026-10-15", "7-day-climb")).toEqual(["2026-10-15"]);
+  expect(fastingDatesForClimb(start, end, "2026-10-19", "7-day-climb")).toEqual(["2026-10-19"]);
+  expect(fastingDatesForClimb(start, end, "2026-10-22", "7-day-climb")).toEqual([]);
+  expect(isFastingDateAllowed("2026-10-15", start, end, "2026-10-15")).toBe(true);
+  expect(isFastingDateAllowed(end, start, end, "2026-10-15")).toBe(true);
+  expect(isFastingDateAllowed("2026-10-22", start, end, "2026-10-15")).toBe(false);
+  expect(isFastingDateAllowed("2026-10-14", start, end, "2026-10-15")).toBe(false);
+  expect(isFastingDateAllowed("2026-02-30", start, end, "2026-10-15")).toBe(false);
+  expect(climbDatesInRange("2026-12-30", "2027-01-02")).toEqual([
+    "2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02",
+  ]);
+  expect(climbDatesInRange("2024-02-28", "2024-03-01")).toEqual([
+    "2024-02-28", "2024-02-29", "2024-03-01",
+  ]);
+
+  expect(fastingDatesForClimb("2026-01-01", "2026-01-20", "2026-01-01", "20-day-reset"))
+    .toEqual(["2026-01-01", "2026-01-11"]);
+  expect(fastingDatesForClimb("2026-01-01", "2026-02-09", "2026-01-01", "40-day-climb"))
+    .toEqual(["2026-01-01", "2026-01-11", "2026-01-21", "2026-01-31"]);
+  expect(fastingDatesForClimb("2026-01-01", "2026-01-20", "2026-01-12", "20-day-reset"))
+    .toEqual([]);
+  expect(fastingDatesForClimb("2026-01-01", "2027-01-01", "2026-01-01", "future"))
+    .toEqual([]);
 });
 
 test("declining both commitments records neither choice without creating events", async ({ page }) => {
@@ -503,13 +520,21 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   await expect(tracker.getByLabel("Prayer Saturday")).toHaveAttribute("aria-pressed", "true");
   await tracker.getByLabel("Prayer time").fill("07:15");
   await tracker.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(tracker.getByRole("heading", { name: "Is this the day you want to fast?" })).toBeVisible();
-  await expect(tracker.getByLabel("Fasting date 1")).toBeVisible();
+  await expect(tracker.getByRole("heading", { name: "Choose fasting days within this climb" })).toBeVisible();
+  await expect(tracker.getByRole("button", { name: /^Day 1/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(tracker.getByRole("button", { name: /^Day 7/ })).toBeVisible();
+  for (let day = 2; day <= 7; day++) {
+    await tracker.getByRole("button", { name: new RegExp(`^Day ${day}`) }).click();
+  }
+  for (let day = 1; day <= 7; day++) {
+    await expect(tracker.getByRole("button", { name: new RegExp(`^Day ${day}`) })).toHaveAttribute("aria-pressed", "true");
+  }
   await expect(tracker.getByLabel("Send fasting reminder")).toBeChecked();
   await expect(tracker.getByLabel("Fasting reminder lead time")).toHaveValue("720");
   await expect(tracker.getByLabel("Commitment time")).toHaveCount(0);
   await tracker.getByRole("button", { name: "Next", exact: true }).click();
   await expect(tracker.getByRole("heading", { name: "Review your schedule" })).toBeVisible();
+  await expect(tracker.getByTestId("fasting-review-date")).toHaveCount(7);
   const prayerRequest = page.waitForRequest(
     (request) => request.url().endsWith("/api/events") && request.method() === "POST" && request.postDataJSON()?.type === "prayer",
   );
@@ -517,8 +542,10 @@ test("guides optional prayer setup through a confirmed start date and preserves 
     (request) => request.url().endsWith("/api/events") && request.method() === "POST" && request.postDataJSON()?.type === "fast",
   );
   await tracker.getByRole("button", { name: "Save schedule" }).click();
+  await expect(tracker.getByRole("button", { name: "Saving…" })).toBeVisible();
   const savedPrayer = (await prayerRequest).postDataJSON();
   const savedFast = (await fastingRequest).postDataJSON();
+  await expect(tracker.getByRole("button", { name: "Saving…" })).toHaveCount(0);
   expect(savedPrayer.type).toBe("prayer");
   expect(savedPrayer.repeat).toBe("weekly");
   expect(savedPrayer.repeatWeekdays).toHaveLength(7);
@@ -531,7 +558,8 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   expect(savedFast.remind).toBe(true);
   expect(savedFast.reminderMinutes).toBe(720);
   expect(savedFast.repeat).toBe("none");
-  expect(eventPosts).toBe(2);
+  expect(savedFast.date).toBe(startDate);
+  expect(eventPosts).toBe(8);
 
   const completionRequest = page.waitForRequest(
     (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
@@ -549,7 +577,7 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   await expect(restoredTracker.getByRole("checkbox").nth(1)).toBeChecked();
   await expect(restoredTracker.getByTestId("mountain-rhythm-commitment-invitation")).toHaveCount(0);
   await expect(restoredTracker).toContainText("07:15 · Weekly");
-  await expect(restoredTracker).toContainText("1 all-day date");
+  await expect(restoredTracker).toContainText("7 all-day dates");
   await expect(restoredTracker.getByText("Complete", { exact: true }).first()).toBeVisible();
   const editPrayer = restoredTracker.getByRole("button", { name: "Edit schedule" }).first();
   await editPrayer.click();

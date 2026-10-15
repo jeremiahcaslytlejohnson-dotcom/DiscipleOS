@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, HeartHandshake, Sparkles } from "lucide-react";
 import { eventOccursOnDate } from "../lib/mountain-rhythm";
-import { fastingDatesForClimb } from "../lib/discipline-schedule";
+import { climbDatesInRange, fastingDatesForClimb, isFastingDateAllowed } from "../lib/discipline-schedule";
 
 const weekdays = [
   ["Sunday", "Su", 0], ["Monday", "M", 1], ["Tuesday", "Tu", 2],
@@ -16,6 +16,7 @@ const choices = [
 
 type Discipline = "prayer" | "fasting";
 type Step = "choose" | "start" | "prayer" | "fasting" | "review";
+type FastDateSelection = { key: string; date: string; eventId?: string };
 
 const isoDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -28,6 +29,19 @@ const dateLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
     weekday: "long", month: "long", day: "numeric", year: "numeric",
   });
+function climbKind(plan: any): "7-day-climb" | "20-day-reset" | "40-day-climb" | "future" {
+  const descriptor = [plan?.journeyType, plan?.journeyKey, plan?.templateKey, plan?.name]
+    .filter(Boolean).join(" ").toLowerCase().replaceAll("_", "-");
+  if (descriptor.includes("7-day") || descriptor.includes("7 day") || descriptor.includes("7day")) return "7-day-climb";
+  if (descriptor.includes("20-day") || descriptor.includes("20 day") || descriptor.includes("20day")) return "20-day-reset";
+  if (descriptor.includes("40-day") || descriptor.includes("40 day") || descriptor.includes("40day")) return "40-day-climb";
+  return "future";
+}
+const fastSelection = (date: string, eventId?: string): FastDateSelection => ({
+  key: eventId || `new-${crypto.randomUUID()}`,
+  date,
+  ...(eventId ? { eventId } : {}),
+});
 function trackingFor(plan: any, events: any[] = [], ownerId?: string | null) {
   const saved = plan?.disciplineTracking || {};
   const localOwner = String(ownerId || "device").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -80,11 +94,9 @@ export default function MountainRhythmDisciplines({
   const [prayerFrequency, setPrayerFrequency] = useState<"weekly" | "daily">("weekly");
   const [prayerReminder, setPrayerReminder] = useState(true);
   const [prayerReminderMinutes, setPrayerReminderMinutes] = useState(10);
-  const [fastDates, setFastDates] = useState<string[]>([]);
+  const [fastDates, setFastDates] = useState<FastDateSelection[]>([]);
   const [fastReminder, setFastReminder] = useState(true);
   const [fastReminderMinutes, setFastReminderMinutes] = useState(720);
-  const [fastRepeatWeekly, setFastRepeatWeekly] = useState(false);
-  const [fastRepeatDays, setFastRepeatDays] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -93,10 +105,21 @@ export default function MountainRhythmDisciplines({
   const prayerEvents = eventsFor("prayer");
   const fastingEvents = eventsFor("fasting");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time";
-  const climbDates = useMemo(
-    () => fastingDatesForClimb(plan?.startDate || startDate, plan?.endDate || startDate, startDate < today ? today : startDate),
-    [plan?.startDate, plan?.endDate, startDate, today],
+  const actualClimbStart = plan?.startDate || plan?.assignments?.[0]?.date || "";
+  const actualClimbEnd = plan?.endDate || plan?.assignments?.at?.(-1)?.date || "";
+  const kind = climbKind(plan);
+  const allClimbDates = useMemo(
+    () => climbDatesInRange(actualClimbStart, actualClimbEnd),
+    [actualClimbStart, actualClimbEnd],
   );
+  const suggestedDates = useMemo(
+    () => fastingDatesForClimb(actualClimbStart, actualClimbEnd, today, kind),
+    [actualClimbStart, actualClimbEnd, today, kind],
+  );
+  const fastingDateErrors = fastDates.flatMap((item) =>
+    isFastingDateAllowed(item.date, actualClimbStart, actualClimbEnd, today) ? [] : [item.date],
+  );
+  const hasDuplicateFastingDates = new Set(fastDates.map((item) => item.date)).size !== fastDates.length;
   const setNextDetail = (nextSelected: typeof selected) => {
     if (nextSelected.prayer) setStep("prayer");
     else if (nextSelected.fasting) setStep("fasting");
@@ -123,14 +146,9 @@ export default function MountainRhythmDisciplines({
       setPrayerReminderMinutes(Number(event.reminderMinutes ?? 10));
     }
     if (discipline === "fasting" && savedEvents.length) {
-      setFastDates(savedEvents.map((event) => event.date).sort());
-      setStartDate(savedEvents[0].date || today);
+      setFastDates(savedEvents.map((event) => fastSelection(event.date, event.id)).sort((a, b) => a.date.localeCompare(b.date)));
       setFastReminder(savedEvents.some((event) => Boolean(event.remind)));
       setFastReminderMinutes(Number(savedEvents[0].reminderMinutes ?? 720));
-      setFastRepeatWeekly(savedEvents[0].repeat === "weekly");
-      setFastRepeatDays(savedEvents[0].repeatWeekdays?.length
-        ? savedEvents[0].repeatWeekdays
-        : [new Date(`${savedEvents[0].date}T12:00:00`).getDay()]);
     }
     const nextSelected = { prayer: discipline === "prayer", fasting: discipline === "fasting" };
     setSelected(nextSelected);
@@ -161,13 +179,13 @@ export default function MountainRhythmDisciplines({
       setStep("prayer");
       return;
     }
-    if (selected.fasting && !fastDates.length) {
-      setError("Choose at least one fasting date.");
-      setStep("fasting");
-      return;
-    }
-    if (!plan && selected.fasting && fastRepeatWeekly && !fastRepeatDays.length) {
-      setError("Choose at least one weekday for the recurring fast.");
+    if (selected.fasting && (!plan || !actualClimbStart || !actualClimbEnd)) {
+       setError("Fasting dates can only be scheduled within an active climb. Wait for a new climb to set fasting dates.");
+       setStep("fasting");
+       return;
+     }
+     if (selected.fasting && (fastingDateErrors.length || hasDuplicateFastingDates)) {
+       setError("Every fasting date must be unique, today or later, and within the selected climb dates.");
       setStep("fasting");
       return;
     }
@@ -203,16 +221,17 @@ export default function MountainRhythmDisciplines({
       if (selected.fasting) {
         const ids: string[] = [];
         for (let index = 0; index < fastDates.length; index++) {
-          const oldId = current.fasting.eventIds[index];
+          const choice = fastDates[index];
+          const oldId = choice.eventId;
           const event = await onSaveEvent({
-            id: oldId || (plan ? `discipline-${plan.id}-fast-${index + 1}` : `${noPlanPrefix}fast-${index + 1}`),
+            id: oldId || `discipline-${plan.id}-fast-${choice.key}`,
             title: "Fasting commitment",
             type: "fast",
-            date: fastDates[index],
+            date: choice.date,
             time: "",
             timeZone: timezone,
-            repeat: !plan && fastRepeatWeekly ? "weekly" : "none",
-            repeatWeekdays: !plan && fastRepeatWeekly ? fastRepeatDays : [],
+            repeat: "none",
+            repeatWeekdays: [],
             repeatUntil: "",
             remind: fastReminder,
             reminderMinutes: fastReminderMinutes,
@@ -235,6 +254,14 @@ export default function MountainRhythmDisciplines({
 
   const toggleWeekday = (day: number) =>
     setPrayerDays((days) => days.includes(day) ? days.filter((value) => value !== day) : [...days, day].sort());
+
+  const addNextFastingDate = () => {
+    const next = allClimbDates.find((date) =>
+      isFastingDateAllowed(date, actualClimbStart, actualClimbEnd, today) &&
+      !fastDates.some((item) => item.date === date),
+    );
+    if (next) setFastDates((dates) => [...dates, fastSelection(next)]);
+  };
 
   return (
     <section className="mt-5 min-w-0" data-testid="mountain-rhythm-disciplines">
@@ -310,6 +337,7 @@ export default function MountainRhythmDisciplines({
           </div>
           <label className="mt-3 block text-sm text-white/65">Start date<input aria-label="Commitment start date" type="date" min={today} value={startDate} onChange={(event) => { setStartDate(event.target.value); setStartConfirmed(false); }} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white [color-scheme:dark]" /></label>
           <p className="mt-2 text-xs text-white/55">Your local time zone: {timezone}. This does not change your reading plan or climb dates.</p>
+          {selected.fasting && plan ? <p className="mt-2 text-xs text-white/70">Fasting dates must stay within this climb: {dateLabel(actualClimbStart)} – {dateLabel(actualClimbEnd)}. The commitment start date will not move the climb.</p> : null}
         </> : step === "prayer" ? <>
           <h3 className="text-lg font-semibold text-white">Set your prayer schedule</h3>
           <p className="mt-1 text-sm text-white/65">Begins {dateLabel(startDate)} · {timezone}</p>
@@ -320,40 +348,42 @@ export default function MountainRhythmDisciplines({
           {prayerReminder ? <select aria-label="Prayer reminder lead time" value={prayerReminderMinutes} onChange={(event) => setPrayerReminderMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white"><option value={5}>5 minutes before</option><option value={10}>10 minutes before</option><option value={15}>15 minutes before</option><option value={30}>30 minutes before</option><option value={60}>1 hour before</option></select> : null}
           <p className="mt-2 text-xs text-white/55">Repeats through {dateLabel(plan?.endDate || startDate)}.</p>
         </> : step === "fasting" ? <>
-          <h3 className="text-lg font-semibold text-white">Is this the day you want to fast?</h3>
-          <p className="mt-1 text-sm text-white/65">Suggested dates use Day 1 and every tenth climb day after it. Each date is all-day; no fast duration or time is set.</p>
-          <div className="mt-3 space-y-2">
-            {fastDates.map((date, index) => <label key={`${index}-${date}`} className="block text-sm text-white/70">Fast date {index + 1}<input aria-label={`Fasting date ${index + 1}`} type="date" min={today} value={date} onChange={(event) => setFastDates((dates) => dates.map((value, item) => item === index ? event.target.value : value))} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white [color-scheme:dark]" /></label>)}
-          </div>
-          <button type="button" onClick={() => setFastDates((dates) => [...dates, shiftDate(dates.at(-1) || startDate, 10)])} className="mt-3 min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Add a fasting date</button>
-          {!plan ? <>
-            <label className="mt-3 flex items-center gap-2 text-sm text-white/70">
-              <input type="checkbox" checked={fastRepeatWeekly} onChange={(event) => {
-                setFastRepeatWeekly(event.target.checked);
-                if (event.target.checked && !fastRepeatDays.length) {
-                  setFastRepeatDays([new Date(`${fastDates[0] || startDate}T12:00:00`).getDay()]);
-                }
-              }} className="accent-[#D4A017]" />
-              Repeat weekly (optional)
-            </label>
-            {fastRepeatWeekly ? <div className="mt-2 flex flex-wrap gap-2" aria-label="Fasting weekdays">{weekdays.map(([name, short, day]) =>
-              <button key={day} type="button" aria-label={`Fasting ${name}`} aria-pressed={fastRepeatDays.includes(day)} onClick={() => setFastRepeatDays((days) => days.includes(day) ? days.filter((value) => value !== day) : [...days, day].sort())} className={`min-h-10 min-w-10 rounded-full border px-2 text-xs ${fastRepeatDays.includes(day) ? "border-[#D4A017] bg-[#D4A017]/15 text-[#F4D77A]" : "border-white/15 text-white/65"}`}>{short}</button>
-            )}</div> : null}
-          </> : null}
+          <h3 className="text-lg font-semibold text-white">Choose fasting days within this climb</h3>
+          <p className="mt-1 text-sm text-white/65">{plan ? `Climb dates: ${dateLabel(actualClimbStart)} – ${dateLabel(actualClimbEnd)}. Each fast is all-day; no time is set.` : "Fasting dates are only available during an active climb. Wait for a new climb to schedule fasting."}</p>
+          {kind === "7-day-climb" ? <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Select fasting days in the 7-Day Climb">
+            {allClimbDates.map((date, index) => {
+              const selectedDate = fastDates.some((item) => item.date === date);
+              const past = date < today;
+              return <button key={date} type="button" disabled={past} aria-pressed={selectedDate} onClick={() => setFastDates((items) => selectedDate ? items.filter((item) => item.date !== date) : [...items, fastSelection(date)])} className={`min-h-11 rounded-md border px-2 text-xs ${selectedDate ? "border-[#D4A017] bg-[#D4A017]/15 text-[#F4D77A]" : "border-white/15 text-white/70"} disabled:cursor-not-allowed disabled:opacity-40`}>Day {index + 1}<span className="block">{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>{past ? <span className="block">Past</span> : null}</button>;
+            })}
+          </div> : <div className="mt-3 space-y-2">
+            {fastDates.map((item, index) => <div key={item.key} className="flex items-end gap-2">
+              <label className="min-w-0 flex-1 text-sm text-white/70">Fast date {index + 1}<input aria-label={`Fasting date ${index + 1}`} type="date" min={today > actualClimbStart ? today : actualClimbStart} max={actualClimbEnd} value={item.date} onChange={(event) => setFastDates((items) => items.map((choice) => choice.key === item.key ? { ...choice, date: event.target.value } : choice))} className="mt-1 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white [color-scheme:dark]" /></label>
+              <button type="button" aria-label={`Remove fasting date ${index + 1}`} onClick={() => setFastDates((items) => items.filter((choice) => choice.key !== item.key))} className="mb-0.5 min-h-11 rounded-md border border-white/15 px-3 text-sm text-white/70">Remove</button>
+            </div>)}
+          </div>}
+          {fastDates.filter((item) => item.date < today || !allClimbDates.includes(item.date)).map((item) => <div key={`invalid-${item.key}`} className="mt-2 flex items-center justify-between gap-2 rounded-md border border-amber-200/30 p-2 text-xs text-amber-100">
+            <span>{dateLabel(item.date)} is past or outside this climb.</span>
+            <button type="button" aria-label={`Remove invalid fasting date ${item.date}`} onClick={() => setFastDates((items) => items.filter((choice) => choice.key !== item.key))} className="min-h-9 rounded border border-white/20 px-2">Remove</button>
+          </div>)}
+          {kind !== "7-day-climb" ? <button type="button" onClick={addNextFastingDate} disabled={!allClimbDates.some((date) => isFastingDateAllowed(date, actualClimbStart, actualClimbEnd, today) && !fastDates.some((item) => item.date === date))} className="mt-3 min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75 disabled:opacity-40">Add a fasting date</button> : null}
+          {!plan || !allClimbDates.some((date) => date >= today) ? <p className="mt-3 text-sm text-amber-100">No valid future fasting dates remain in this climb. Wait for a new climb; this will not extend or replace your current plan.</p> : null}
+          {fastDates.length === 0 ? <p className="mt-3 text-sm text-white/65">No fasting dates selected. You can choose none, or add a valid day above.</p> : null}
+          {fastingDateErrors.length || hasDuplicateFastingDates ? <p role="alert" className="mt-3 text-sm text-amber-100">Each fasting date must be unique, today or later, and within the selected climb.</p> : null}
           <label className="mt-3 flex items-center gap-2 text-sm text-white/70"><input type="checkbox" checked={fastReminder} onChange={(event) => setFastReminder(event.target.checked)} className="accent-[#D4A017]" />Send fasting reminder</label>
           {fastReminder ? <select aria-label="Fasting reminder lead time" value={fastReminderMinutes} onChange={(event) => setFastReminderMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-md border border-white/15 bg-black/30 px-3 text-white"><option value={360}>6 hours before</option><option value={720}>12 hours before (noon the day before)</option><option value={1440}>24 hours before</option></select> : null}
-          <p className="mt-2 text-xs text-white/55">Time zone: {timezone}. {plan?.endDate ? `Climb ends ${dateLabel(plan.endDate)}.` : "No climb end date is used."}</p>
+          <p className="mt-2 text-xs text-white/55">Time zone: {timezone}. {plan?.endDate ? `Climb ends ${dateLabel(actualClimbEnd)}.` : "No climb end date is used."}</p>
         </> : <>
           <h3 className="text-lg font-semibold text-white">Review your schedule</h3>
           <div className="mt-3 space-y-3 text-sm text-white/70">
             {selected.prayer ? <div className="rounded-md border border-white/10 p-3"><strong className="text-white">Prayer</strong><div>{dateLabel(startDate)} at {prayerTime} · {prayerFrequency === "daily" ? "Daily" : `Weekly · ${prayerDays.map((day) => weekdays[day][0]).join(", ")}`} · through {dateLabel(plan?.endDate || startDate)}</div><div>{prayerReminder ? `Reminder ${prayerReminderMinutes} minutes before` : "No reminder"} · {timezone}</div></div> : null}
-            {selected.fasting ? <div className="rounded-md border border-white/10 p-3"><strong className="text-white">Fasting · all day</strong>{fastDates.map((date) => <div key={date}>{dateLabel(date)}{fastReminder ? ` · reminder ${fastReminderMinutes / 60} hours before` : ""}</div>)}{!plan && fastRepeatWeekly ? <div>Repeats weekly on {fastRepeatDays.map((day) => weekdays[day][0]).join(", ") || "no days selected"}</div> : null}<div>{timezone}</div></div> : null}
+            {selected.fasting ? <div className="rounded-md border border-white/10 p-3" data-testid="fasting-schedule-review"><strong className="text-white">Fasting · all day</strong>{fastDates.length ? fastDates.map((item) => <div key={item.key} data-testid="fasting-review-date">{dateLabel(item.date)}{fastReminder ? ` · reminder ${fastReminderMinutes / 60} hours before` : ""}</div>) : <div>No fasting dates selected.</div>}{fastingDateErrors.length || hasDuplicateFastingDates ? <p role="alert" className="mt-2 text-amber-100">Correct the fasting dates before saving. Every date must be unique and within the climb.</p> : null}<div>{plan ? `Within ${dateLabel(actualClimbStart)} – ${dateLabel(actualClimbEnd)}` : "Wait for a new climb to schedule fasting."} · {timezone}</div></div> : null}
           </div>
         </>}
         {error ? <p role="alert" className="mt-3 text-sm text-amber-100">{error}</p> : null}
         <div className="mt-4 flex flex-wrap justify-between gap-2">
           <button type="button" disabled={saving} onClick={() => { setError(""); if (step === "start") setStep("choose"); else if (step === "prayer" || step === "fasting") setStep("start"); else setStep(selected.fasting ? "fasting" : "prayer"); }} className="min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Back</button>
-          {step === "start" ? <button type="button" onClick={() => { setStartConfirmed(true); setFastDates(climbDates); setNextDetail(selected); }} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Confirm start date</button> : step === "prayer" || step === "fasting" ? <button type="button" onClick={() => setStep(step === "prayer" && selected.fasting ? "fasting" : "review")} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Next</button> : <button type="button" disabled={saving} onClick={() => void saveSchedule()} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">{saving ? "Saving…" : "Save schedule"}</button>}
+          {step === "start" ? <button type="button" onClick={() => { setStartConfirmed(true); setFastDates(suggestedDates.map((date) => fastSelection(date))); setNextDetail(selected); }} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Confirm start date</button> : step === "prayer" || step === "fasting" ? <button type="button" onClick={() => setStep(step === "prayer" && selected.fasting ? "fasting" : "review")} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">Next</button> : <button type="button" disabled={saving || (selected.fasting && (fastingDateErrors.length > 0 || hasDuplicateFastingDates || !plan))} onClick={() => void saveSchedule()} className="min-h-10 rounded-md bg-[#D4A017] px-4 text-sm font-semibold text-black">{saving ? "Saving…" : "Save schedule"}</button>}
           <button type="button" disabled={saving} onClick={() => { setStep("choose"); setError(""); }} className="min-h-10 px-3 text-sm text-white/60">Cancel</button>
         </div>
       </div> : null}
