@@ -5048,6 +5048,17 @@ export default function DiscipleOSApp() {
               disclosureKey="assignedReading"
               summary={todayAssignedReadingSummary.label}
               summaryTestId="dashboard-assigned-reading-summary"
+              headerAction={todaysPlans.length === 0 ? (
+                <button
+                  type="button"
+                  data-testid="today-empty-create-plan"
+                  onClick={beginCreatePlan}
+                  className="discipleos-action inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 border border-[#E0B449]/60 bg-[#C8921D] px-2.5 text-xs font-bold leading-tight text-black transition hover:bg-[#D4A017] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#111] sm:px-3 sm:text-sm"
+                >
+                  <Plus aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  Create Plan
+                </button>
+              ) : null}
               collapsible
             >
               {todaysPlans.length > 0 ? (
@@ -5069,14 +5080,6 @@ export default function DiscipleOSApp() {
               {todaysPlans.length === 0 ? (
                 <div className="discipleos-empty-state text-sm">
                   <div>No reading is scheduled today.</div>
-                  <button
-                    type="button"
-                    data-testid="today-empty-create-plan"
-                    onClick={beginCreatePlan}
-                    className="discipleos-action mt-3 inline-flex min-h-11 items-center justify-center border border-[#E0B449]/50 bg-[#C8921D] px-4 text-sm font-semibold text-black transition hover:bg-[#D4A017] active:translate-y-px"
-                  >
-                    Create a Plan
-                  </button>
                 </div>
               ) : (
                 todaysPlans.map(({ plan, todayReading }) => {

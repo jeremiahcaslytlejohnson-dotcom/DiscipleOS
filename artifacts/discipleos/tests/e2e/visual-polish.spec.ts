@@ -2905,6 +2905,71 @@ test("colors Today progress summaries by schedule status and keeps unknown statu
   }
 });
 
+test("keeps Create Plan available in the collapsed Today card for a plan starting tomorrow", async ({ page }) => {
+  const today = await browserTodayISO(page);
+  const tomorrow = addDaysToISO(today, 1);
+  const tomorrowPlan = {
+    ...makeOrdinaryPlan("tomorrow-reading-plan", "Morning Psalms"),
+    startDate: tomorrow,
+    endDate: tomorrow,
+    assignments: [
+      { date: tomorrow, readings: [{ key: "tomorrow-psalm", label: "Psalm 1" }] },
+    ],
+    completed: {},
+  };
+  await stubHomeApi(page, [tomorrowPlan], [], { emptyEvents: true });
+  await seedPlans(page, [tomorrowPlan], []);
+  await page.addInitScript(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
+  let planWrites = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().includes("/api/reading/plans")
+    ) {
+      planWrites += 1;
+    }
+  });
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const section = page.getByTestId("dashboard-assigned-reading");
+    const disclosure = section.getByRole("button", { name: /Today’s Reading/ });
+    await disclosure.click();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(section.getByTestId("dashboard-assigned-reading-summary"))
+      .toHaveText("No reading scheduled today");
+
+    const createPlan = section.getByTestId("today-empty-create-plan");
+    await expect(createPlan).toHaveText("Create Plan");
+    await expect(createPlan).toBeVisible();
+    const [buttonBox, disclosureBox] = await Promise.all([
+      createPlan.boundingBox(),
+      disclosure.boundingBox(),
+    ]);
+    expect(buttonBox).not.toBeNull();
+    expect(disclosureBox).not.toBeNull();
+    expect(buttonBox!.x).toBeGreaterThanOrEqual(
+      disclosureBox!.x + disclosureBox!.width,
+    );
+    expect(buttonBox!.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(width);
+  }
+
+  await page.getByTestId("dashboard-assigned-reading")
+    .getByTestId("today-empty-create-plan")
+    .click();
+  await expect(page.getByTestId("plan-create-step-1")).toBeVisible();
+  await page.getByTestId("plan-create-preset-psalmsProverbs").click();
+  await page.getByTestId("plan-create-next").click();
+  await expect(page.getByTestId("plan-create-start-date-tomorrow"))
+    .toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("plan-create-start-date-value"))
+    .toContainText(tomorrow);
+  expect(planWrites).toBe(0);
+});
+
 test("keeps Today’s Reading complete across empty, ordinary, and mixed climb states", async ({ page }) => {
   test.setTimeout(90_000);
   const morningPlan = makeOrdinaryPlan("today-morning", "Morning Psalms");
@@ -2997,7 +3062,7 @@ test("keeps Today’s Reading complete across empty, ordinary, and mixed climb s
 
       if (state.plans.length === 0) {
         await expect(assigned.getByTestId("today-empty-create-plan")).toHaveCount(1);
-        await expect(page.getByRole("button", { name: "Create a Plan", exact: true })).toHaveCount(1);
+        await expect(page.getByRole("button", { name: "Create Plan", exact: true })).toHaveCount(1);
       }
       const progressToggle = progress.getByRole("button", { name: /^Progress/ });
       await progressToggle.click();
