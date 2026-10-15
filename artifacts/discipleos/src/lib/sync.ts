@@ -56,7 +56,7 @@ export type DashboardDisclosureState = {
 
 export const DEFAULT_DASHBOARD_DISCLOSURES: DashboardDisclosureState = {
   today: true,
-  schedule: true,
+  schedule: false,
   assignedReading: true,
   progress: false,
   mountainRhythm: false,
@@ -64,7 +64,7 @@ export const DEFAULT_DASHBOARD_DISCLOSURES: DashboardDisclosureState = {
 
 /**
  * Dashboard disclosures are device preferences, not account data. Keep them
- * separate from the server-sync queue and fall back to the expanded defaults
+ * separate from the server-sync queue and fall back to the configured defaults
  * if localStorage is unavailable, malformed, or contains an older shape.
  */
 export function loadDashboardDisclosureState(): DashboardDisclosureState {

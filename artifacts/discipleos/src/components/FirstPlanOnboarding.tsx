@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import ReadingPathChoices from "./ReadingPathChoices";
+import PlanStartDateChoice, {
+  type PlanStartDateChoice as PlanStartDateChoiceValue,
+} from "./PlanStartDateChoice";
 
 type PlanForm = {
   selectedBooks: string[];
@@ -28,6 +31,10 @@ type FirstPlanOnboardingProps = {
   form: PlanForm;
   step: number;
   planPreview: PlanPreview;
+  todayDate: string;
+  tomorrowDate: string;
+  startDateChoice: PlanStartDateChoiceValue;
+  customStartDate: string;
   formatDate: (value: string) => string;
   presetBooks: {
     newTestament: string[];
@@ -41,7 +48,8 @@ type FirstPlanOnboardingProps = {
   onToggleBook: (bookName: string) => void;
   onCloseBookPicker: () => void;
   onMinutesChange: (minutes: number) => void;
-  onStartDateChange: (date: string) => void;
+  onStartDateChoiceChange: (choice: PlanStartDateChoiceValue) => void;
+  onCustomStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
   onUseSuggestedEndDate: () => void;
   onCreatePlan: () => void;
@@ -67,6 +75,10 @@ export default function FirstPlanOnboarding({
   form,
   step,
   planPreview,
+  todayDate,
+  tomorrowDate,
+  startDateChoice,
+  customStartDate,
   formatDate,
   presetBooks,
   books,
@@ -77,7 +89,8 @@ export default function FirstPlanOnboarding({
   onToggleBook,
   onCloseBookPicker,
   onMinutesChange,
-  onStartDateChange,
+  onStartDateChoiceChange,
+  onCustomStartDateChange,
   onEndDateChange,
   onUseSuggestedEndDate,
   onCreatePlan,
@@ -87,11 +100,8 @@ export default function FirstPlanOnboarding({
 }: FirstPlanOnboardingProps) {
   const hasBooks = form.selectedBooks.length > 0;
   const canContinue =
-    step === 0 ||
-    (step === 1 && hasBooks) ||
-    step === 2 ||
-    Boolean(form.startDate) ||
-    step === 5;
+    (step !== 1 || hasBooks) &&
+    (step !== 3 || startDateChoice !== "custom" || Boolean(customStartDate));
   const readingLabel = selectionIncludes(form.selectedBooks, presetBooks.gospels)
     ? "Gospels"
     : selectionIncludes(form.selectedBooks, presetBooks.newTestament)
@@ -292,27 +302,16 @@ export default function FirstPlanOnboarding({
 
         {step === 3 ? (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-white sm:text-3xl">
-                When would you like to begin?
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-white/65">
-                Today is ready by default, but you can choose another day.
-              </p>
-            </div>
-            <label className="block max-w-sm text-sm font-medium text-white">
-              Start date
-              <span className="relative mt-2 block">
-                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#D4A017]" />
-                <input
-                  type="date"
-                  aria-label="Start date"
-                  value={form.startDate}
-                  onChange={(event) => onStartDateChange(event.target.value)}
-                  className="discipleos-form-control w-full border border-white/12 bg-black/30 pl-11 pr-3 outline-none"
-                />
-              </span>
-            </label>
+            <PlanStartDateChoice
+              todayDate={todayDate}
+              tomorrowDate={tomorrowDate}
+              value={form.startDate}
+              customValue={customStartDate}
+              choice={startDateChoice}
+              testIdPrefix="first-plan"
+              onChoiceChange={onStartDateChoiceChange}
+              onCustomDateChange={onCustomStartDateChange}
+            />
           </div>
         ) : null}
 

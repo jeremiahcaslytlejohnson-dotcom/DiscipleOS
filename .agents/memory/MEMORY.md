@@ -25,7 +25,7 @@
 - [Calendar reading disclosure tests](calendar-reading-disclosure-tests.md) — test disclosure separately from completion state; plan rows may render as already complete.
 - [Today progress selection](today-progress-selection.md) — Today’s progress picker is transient UI state; derive options from real incomplete plans without changing reading, Calendar, plan-selection, or sync state.
 - [Feedback operations](feedback-operations.md) — feedback is permanent in Postgres; owner access is server-gated and notification failures never roll back saved rows.
-- [Plan-day grouping](plan-day-grouping.md) — preserve date-based grouping and keep plan-summary wording unchanged when color-coding schedule status.
+- [Plan-day grouping](plan-day-grouping.md) — current-day incomplete reading stays in progress; only incomplete past days count as catch-up.
 - [Git credential safety](git-credential-safety.md) — keep GitHub tokens out of remote URLs; Replit blocks local `.git` writes unless explicitly enabled.
 - [Tailwind spacing overrides](tailwind-spacing-overrides.md) — inspect both physical and logical margins before changing a vertical spacing utility; complementary margins can accumulate.
 - [Active-climb sync tests](active-climb-sync-tests.md) — offline browser fixtures must persist earned schedule days and actual completion dates, not just completed chapter flags.

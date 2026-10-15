@@ -104,7 +104,12 @@ async function stubHomeApi(
   page: Page,
   planOrPlans: unknown = makeOrdinaryPlan(),
   seededEvents: unknown[] = [],
-  options: { authenticated?: boolean; authState?: { authenticated: boolean }; userId?: string } = {},
+  options: {
+    authenticated?: boolean;
+    authState?: { authenticated: boolean };
+    userId?: string;
+    emptyEvents?: boolean;
+  } = {},
 ) {
   const today = todayISO();
   const plans = Array.isArray(planOrPlans) ? planOrPlans : [planOrPlans];
@@ -198,7 +203,7 @@ async function stubHomeApi(
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          events: seededEvents.length > 0
+          events: seededEvents.length > 0 || options.emptyEvents
             ? seededEvents
             : [
                 {
@@ -1654,6 +1659,55 @@ test("guides existing users through the five-step Create Plan flow", async ({ pa
   }
 });
 
+test("confirms a custom Free Climb start date before creating its schedule", async ({ page }) => {
+  await stubHomeApi(page, []);
+  await page.addInitScript(() => localStorage.clear());
+  const planWrites: any[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().includes("/api/reading/plans")
+    ) {
+      planWrites.push(request.postDataJSON());
+    }
+  });
+
+  await page.goto("/");
+  await page.getByTestId("today-empty-create-plan").click();
+  await page.getByTestId("plan-create-preset-psalmsProverbs").click();
+  await page.getByTestId("plan-create-next").click();
+
+  const today = await browserTodayISO(page);
+  const tomorrow = addDaysToISO(today, 1);
+  await expect(page.getByTestId("plan-create-start-date-tomorrow"))
+    .toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("plan-create-start-date-today").click();
+  await expect(page.getByTestId("plan-create-start-date-value")).toContainText(today);
+  await page.getByTestId("plan-create-start-date-custom").click();
+  const next = page.getByTestId("plan-create-next");
+  await expect(next).toBeDisabled();
+  const customDate = addDaysToISO(today, 2);
+  await page.getByTestId("plan-create-start-date-custom-input").fill(customDate);
+  await expect(next).toBeEnabled();
+  expect(planWrites).toHaveLength(0);
+
+  await next.click();
+  await next.click();
+  await next.click();
+  await expect(page.getByTestId("plan-create-review")).toBeVisible();
+  expect(planWrites).toHaveLength(0);
+  const saveRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/reading/plans") && request.method() === "POST",
+  );
+  await page.getByTestId("plan-create-submit").click();
+  const savedPlan = (await saveRequest).postDataJSON();
+  expect(savedPlan.startDate).toBe(customDate);
+  expect(savedPlan.assignments[0].date).toBe(customDate);
+  expect(savedPlan.endDate).toBe(savedPlan.assignments.at(-1).date);
+  expect(planWrites).toHaveLength(1);
+});
+
 test("keeps Mountain Rhythm, empty, and auth secondary states legible", async ({ page }) => {
   await stubMountainApi(page);
 
@@ -2534,11 +2588,82 @@ test("keeps mobile pages inside the viewport and wraps active route labels", asy
   expect(mountainLayout.documentWidth).toBeLessThanOrEqual(mountainLayout.viewportWidth + 1);
 });
 
+test("shows compact Today activity and progress summaries with details on demand", async ({ page }) => {
+  const today = await browserTodayISO(page);
+  const plan = {
+    ...makeOrdinaryPlan("today-summary-plan", "Morning Psalms"),
+    startDate: today,
+    endDate: today,
+    assignments: [
+      { date: today, readings: [{ key: "today-summary-reading", label: "Psalm 1" }] },
+    ],
+    completed: {},
+  };
+  const events = [
+    {
+      id: "today-summary-prayer",
+      title: "Prayer",
+      type: "prayer",
+      date: today,
+      time: "06:30",
+      remind: true,
+      reminderMinutes: 10,
+      repeat: "none",
+      repeatWeekdays: [],
+      repeatUntil: "",
+    },
+    {
+      id: "today-summary-fast",
+      title: "Fasting",
+      type: "fast",
+      date: today,
+      time: "07:00",
+      remind: false,
+      reminderMinutes: 0,
+      repeat: "none",
+      repeatWeekdays: [],
+      repeatUntil: "",
+    },
+  ];
+  await stubHomeApi(page, [plan], events);
+  await seedPlans(page, [plan], events);
+  await page.addInitScript(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+
+  const activities = page.getByTestId("dashboard-schedule");
+  const activityToggle = activities.getByRole("button", { name: /Today’s Activities/ });
+  await expect(activityToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(activities.getByTestId("dashboard-schedule-summary"))
+    .toHaveText("2 activities · Prayer 6:30 AM · Fasting 7:00 AM");
+  await expect(activities.getByText("Prayer", { exact: true })).toBeHidden();
+  await expect(activities.getByTestId("dashboard-schedule-empty")).toHaveCount(0);
+
+  const progress = page.getByTestId("dashboard-progress");
+  await expect(progress.getByRole("button", { name: /^Progress/ }))
+    .toHaveAttribute("aria-expanded", "false");
+  await expect(progress.getByTestId("dashboard-progress-summary"))
+    .toHaveText("Free Climb · Morning Psalms · Up to date");
+
+  await activityToggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(activityToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(activities.getByTestId("dashboard-schedule-summary")).toHaveCount(0);
+  await expect(activities.getByText("Prayer", { exact: true })).toBeVisible();
+  await expect(activities.getByText("Fasting", { exact: true })).toBeVisible();
+  await expect(activities.getByRole("button", { name: "Complete activity" })).toHaveCount(2);
+  await expect(activities.getByRole("button", { name: "Edit Prayer" })).toBeVisible();
+  await expect(activities.getByTestId("today-add-activity")).toBeVisible();
+
+  await activities.getByTestId("today-add-activity").click();
+  await expect(page.getByTestId("calendar-event-form")).toBeVisible();
+});
+
 test("prioritizes Today’s Reading across supported dashboard widths", async ({ page }) => {
   const firstPlan = makeOrdinaryPlan("visual-polish-morning", "Morning Psalms");
   const secondPlan = makeOrdinaryPlan("visual-polish-evening", "Evening Proverbs");
-  await stubHomeApi(page, [firstPlan, secondPlan]);
-  await seedPlans(page, [firstPlan, secondPlan]);
+  await stubHomeApi(page, [firstPlan, secondPlan], [], { emptyEvents: true });
+  await seedPlans(page, [firstPlan, secondPlan], []);
   await page.addInitScript(() => localStorage.removeItem("discipleos:dashboard-disclosures"));
 
   for (const width of [320, 390, 480, 1280]) {
@@ -2575,8 +2700,14 @@ test("prioritizes Today’s Reading across supported dashboard widths", async ({
     await expect(assigned.getByText("0 of 2 chapters complete", { exact: true })).toHaveCount(1);
     await expect(assigned.getByText("Morning Psalms", { exact: true })).toBeVisible();
     await expect(assigned.getByText("Evening Proverbs", { exact: true })).toBeVisible();
-    await expect(activities.getByRole("button", { name: /Today’s Activities/ })).toHaveAttribute("aria-expanded", "true");
+    const activitiesToggle = activities.getByRole("button", { name: /Today’s Activities/ });
+    await expect(activitiesToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(activities.getByTestId("dashboard-schedule-summary"))
+      .toHaveText("No activities scheduled today");
+    await expect(activities.getByTestId("dashboard-schedule-empty")).toBeHidden();
     await expect(progress.getByRole("button", { name: /^Progress/ })).toHaveAttribute("aria-expanded", "false");
+    await expect(progress.getByTestId("dashboard-progress-summary"))
+      .toContainText("2 active plans · Free Climb · Morning Psalms · Up to date");
 
     const layout = await page.evaluate(() => {
       const top = (testId: string) =>
@@ -2652,12 +2783,22 @@ test("colors Today progress summaries by schedule status and keeps unknown statu
       { date: today, readings: [{ key: "behind-today", label: "Psalm 2" }] },
       { date: tomorrow, readings: [{ key: "behind-tomorrow", label: "Psalm 3" }] },
     ],
-    completed: { "behind-yesterday": true },
+    completed: { "behind-today": true },
+  };
+  const currentDayPlan = {
+    ...makeOrdinaryPlan("current-day-summary-plan", "Today’s Psalms"),
+    startDate: today,
+    endDate: today,
+    readingTime: "07:00",
+    assignments: [
+      { date: today, readings: [{ key: "current-day-reading", label: "Psalm 1" }] },
+    ],
+    completed: {},
   };
   const mountainPlan = makeStructuredClimbPlan("unknown-status-progress-plan");
 
-  await stubHomeApi(page, [upToDatePlan, behindPlan, mountainPlan]);
-  await seedPlans(page, [upToDatePlan, behindPlan, mountainPlan]);
+  await stubHomeApi(page, [upToDatePlan, behindPlan, currentDayPlan, mountainPlan]);
+  await seedPlans(page, [upToDatePlan, behindPlan, currentDayPlan, mountainPlan]);
   await page.goto("/");
   await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
 
@@ -2665,6 +2806,7 @@ test("colors Today progress summaries by schedule status and keeps unknown statu
   await progress.getByRole("button", { name: /^Progress/ }).click();
   const upToDateChoice = progress.getByTestId(`dashboard-progress-choice-${upToDatePlan.id}`);
   const behindChoice = progress.getByTestId(`dashboard-progress-choice-${behindPlan.id}`);
+  const currentDayChoice = progress.getByTestId(`dashboard-progress-choice-${currentDayPlan.id}`);
   const mountainChoice = progress.getByTestId(`dashboard-progress-choice-${mountainPlan.id}`);
   const progressDetail = progress.getByTestId("dashboard-progress-detail");
   const progressPercent = progress.getByTestId("dashboard-progress-percent");
@@ -2683,6 +2825,11 @@ test("colors Today progress summaries by schedule status and keeps unknown statu
   await expect(progressDetail).toContainText("33% complete");
   await expect(progressDetail).toContainText("Catch-up needed");
   await expect(progressPercent).toHaveCSS("color", "rgb(244, 197, 66)");
+  await currentDayChoice.click();
+  await expect(progressDetail).toHaveAttribute("data-plan-id", currentDayPlan.id);
+  await expect(progressDetail).toContainText("0% complete");
+  await expect(progressDetail).toContainText("Up to date");
+  await expect(progressPercent).toHaveCSS("color", "oklch(0.905 0.093 164.15)");
   await expect(progressDetail).toHaveCount(1);
   await mountainChoice.click();
   await expect(progressDetail).toHaveAttribute("data-plan-id", mountainPlan.id);
@@ -3151,7 +3298,7 @@ test("remembers Today section disclosures and restores defaults after local data
   const assignedReadingToggle = page.getByTestId("dashboard-assigned-reading").getByRole("button", { name: /Today’s Reading/ });
   const progressToggle = page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ });
 
-  await expect(scheduleToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(scheduleToggle).toHaveAttribute("aria-expanded", "false");
   await expect(assignedReadingToggle).toHaveAttribute("aria-expanded", "true");
   await expect(progressToggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
@@ -3160,7 +3307,7 @@ test("remembers Today section disclosures and restores defaults after local data
   await scheduleToggle.click();
   await assignedReadingToggle.click();
   await progressToggle.click();
-  await expect(scheduleToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(scheduleToggle).toHaveAttribute("aria-expanded", "true");
   await expect(assignedReadingToggle).toHaveAttribute("aria-expanded", "false");
   await expect(progressToggle).toHaveAttribute("aria-expanded", "true");
 
@@ -3168,7 +3315,7 @@ test("remembers Today section disclosures and restores defaults after local data
   const reloadedScheduleToggle = page.getByTestId("dashboard-schedule").getByRole("button", { name: /Today’s Activities/ });
   const reloadedAssignedReadingToggle = page.getByTestId("dashboard-assigned-reading").getByRole("button", { name: /Today’s Reading/ });
   const reloadedProgressToggle = page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ });
-  await expect(reloadedScheduleToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(reloadedScheduleToggle).toHaveAttribute("aria-expanded", "true");
   await expect(reloadedAssignedReadingToggle).toHaveAttribute("aria-expanded", "false");
   await expect(reloadedProgressToggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("dashboard-assigned-reading")).toBeVisible();
@@ -3177,7 +3324,7 @@ test("remembers Today section disclosures and restores defaults after local data
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.getByTestId("dashboard-schedule").getByRole("button", { name: /Today’s Activities/ }))
-    .toHaveAttribute("aria-expanded", "true");
+    .toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("dashboard-assigned-reading").getByRole("button", { name: /Today’s Reading/ }))
     .toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("dashboard-progress").getByRole("button", { name: /^Progress/ }))

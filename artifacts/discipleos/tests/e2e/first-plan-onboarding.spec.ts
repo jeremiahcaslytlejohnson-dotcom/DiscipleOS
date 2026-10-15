@@ -164,8 +164,16 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
   await page.getByTestId("first-plan-minutes-15").click();
   await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
 
-  const today = todayISO();
-  await page.locator('input[aria-label="Start date"]').fill(today);
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  });
+  await expect(page.getByTestId("first-plan-start-date-tomorrow"))
+    .toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("first-plan-start-date-custom").click();
+  await expect(onboarding.getByRole("button", { name: "Continue", exact: true }))
+    .toBeDisabled();
+  await page.getByLabel("Choose another date").fill(today);
   await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator('input[aria-label="Finish date"]')).not.toHaveValue("");
   await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
@@ -183,7 +191,68 @@ test("guides a new user through a first plan and opens Today's Walk", async ({ p
     selectedBooks: ["Matthew", "Mark", "Luke", "John"],
     dailyMinutes: 15,
     paceMode: "time",
+    startDate: today,
   });
+  expect(savedPlans[0].assignments[0].date).toBe(today);
+});
+
+test("defaults a first Free Climb to tomorrow and waits for confirmation before saving", async ({ page }) => {
+  const savedPlans: any[] = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({ status: 200, json: { authenticated: false, user: null } });
+    } else if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          established: false,
+          authenticated: false,
+          userId: "synthetic-first-plan-owner",
+        },
+      });
+    } else if (pathname.endsWith("/reading/plans")) {
+      if (request.method() === "POST") savedPlans.push(request.postDataJSON());
+      await route.fulfill({
+        status: 200,
+        json: { success: true, plans: savedPlans },
+      });
+    } else if (pathname.endsWith("/events")) {
+      await route.fulfill({ status: 200, json: { success: true, events: [] } });
+    } else {
+      await route.fulfill({ status: 200, json: { success: true } });
+    }
+  });
+  await page.addInitScript(() => localStorage.clear());
+  await page.goto("/");
+  await page.getByTestId("reading-path-free-climb-action").click();
+  await page.getByTestId("first-plan-preset-newTestament").click();
+  const onboarding = page.getByTestId("first-plan-onboarding");
+  await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByTestId("first-plan-minutes-20").click();
+  await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
+
+  const tomorrow = await page.evaluate(() => {
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const now = new Date();
+    return iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  });
+  await expect(page.getByTestId("first-plan-start-date-tomorrow"))
+    .toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("first-plan-start-date-value")).toContainText(tomorrow);
+  const continueButton = onboarding.getByRole("button", { name: "Continue", exact: true });
+  await expect(continueButton).toBeEnabled();
+  expect(savedPlans).toHaveLength(0);
+
+  await continueButton.click();
+  await onboarding.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByTestId("first-plan-save-action").click();
+  await expect.poll(() => savedPlans.length).toBe(1);
+  expect(savedPlans[0].startDate).toBe(tomorrow);
+  expect(savedPlans[0].assignments[0].date).toBe(tomorrow);
 });
 
 test("development first-launch preview shows the chooser without mutating saved data", async ({ page }) => {

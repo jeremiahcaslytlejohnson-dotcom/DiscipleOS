@@ -89,7 +89,7 @@ async function createLocalPlan(page: Page, name: string) {
     await firstPlanOnboarding.getByRole("button", { name: "Continue", exact: true }).click();
     await page.getByTestId("first-plan-minutes-20").click();
     await firstPlanOnboarding.getByRole("button", { name: "Continue", exact: true }).click();
-    await firstPlanOnboarding.getByLabel("Start date").fill(new Date().toISOString().slice(0, 10));
+    await firstPlanOnboarding.getByTestId("first-plan-start-date-today").click();
     await firstPlanOnboarding.getByRole("button", { name: "Continue", exact: true }).click();
     await firstPlanOnboarding.getByRole("button", { name: "Continue", exact: true }).click();
     await page.getByTestId("first-plan-save-action").click();

@@ -27,6 +27,9 @@ import {
 } from "../lib/reading-schedule";
 import InstallButton from "../install-button";
 import FirstPlanOnboarding from "../components/FirstPlanOnboarding";
+import PlanStartDateChoice, {
+  type PlanStartDateChoice as PlanStartDateChoiceValue,
+} from "../components/PlanStartDateChoice";
 import GuidedClimbPreview from "../components/GuidedClimbPreview";
 import ReadingPathChoices from "../components/ReadingPathChoices";
 import EstimatedReadingTime from "../components/EstimatedReadingTime";
@@ -530,8 +533,8 @@ function getPlanDayGroups(plan: any, today: string) {
 }
 
 function isPlanCaughtUpThroughToday(plan: any, today: string) {
-  const { past, current } = getPlanDayGroups(plan, today);
-  return [...past, ...current].every(({ day }: any) =>
+  const { past } = getPlanDayGroups(plan, today);
+  return past.every(({ day }: any) =>
     isPlanDayComplete(plan, day.date),
   );
 }
@@ -1191,6 +1194,7 @@ function ResponsiveSection({
   disclosureKey,
   summary = "",
   summaryTestId,
+  summaryCollapsedOnly = false,
   collapsible = false,
   plain = false,
   headerAction = null,
@@ -1201,6 +1205,7 @@ function ResponsiveSection({
     return loadDashboardDisclosureState()[disclosureKey];
   });
   const contentId = `${testId}-content`;
+  const showSummary = Boolean(summary) && (!summaryCollapsedOnly || !open);
   const toggle = () => {
     setOpen((current) => {
       const next = !current;
@@ -1227,7 +1232,7 @@ function ResponsiveSection({
               <Icon className="discipleos-section-heading__icon" />
               <span className="min-w-0">
                 <span className="block truncate text-base font-semibold text-white sm:text-lg">{title}</span>
-                {summary ? (
+                {showSummary ? (
                   <span
                     data-testid={summaryTestId || `${testId}-summary`}
                     className="discipleos-secondary-copy mt-1 block truncate text-xs leading-5"
@@ -1253,7 +1258,7 @@ function ResponsiveSection({
               <Icon className="discipleos-section-heading__icon" />
               <span className="min-w-0">
                 <span className="block truncate text-base font-semibold text-white sm:text-lg">{title}</span>
-                {summary ? (
+                {showSummary ? (
                   <span
                     data-testid={summaryTestId || `${testId}-summary`}
                     className="discipleos-secondary-copy mt-1 block truncate text-xs leading-5"
@@ -1696,8 +1701,8 @@ export default function DiscipleOSApp() {
     preset: "custom",
     journeyKey: "custom",
     selectedBooks: [],
-    startDate: todayISO(),
-    endDate: todayISO(),
+    startDate: addDays(todayISO(), 1),
+    endDate: addDays(todayISO(), 1),
     color: "from-[#D4A017] via-[#C8921D] to-[#8A6414]",
     readingMode: "consecutive",
     readingTime: "07:00",
@@ -1705,6 +1710,9 @@ export default function DiscipleOSApp() {
     ...applyReadingDefaultsToPlanForm(DEFAULT_READING_DEFAULTS),
   });
   const [planCreationStep, setPlanCreationStep] = useState(1);
+  const [planStartDateChoice, setPlanStartDateChoice] =
+    useState<PlanStartDateChoiceValue>("tomorrow");
+  const [customPlanStartDate, setCustomPlanStartDate] = useState("");
   const [isPlanTuneOpen, setIsPlanTuneOpen] = useState(false);
   const [planCreatedFeedback, setPlanCreatedFeedback] = useState(null);
 
@@ -1908,6 +1916,23 @@ export default function DiscipleOSApp() {
         : null,
     [plans, rhythmAccessTier, selectedTodayProgress],
   );
+  const todayProgressSummary = useMemo(() => {
+    if (!selectedTodayProgress) return "No active reading plans";
+
+    const { plan, kind, optionLabel } = selectedTodayProgress;
+    const planCount = todayProgressPlans.length > 1
+      ? `${todayProgressPlans.length} active plans · `
+      : "";
+    if (kind === "mountain") {
+      const progress = Number(selectedTodayRhythmScore?.journeyProgress || 0);
+      return `${planCount}${optionLabel} · ${progress}% complete`;
+    }
+
+    const status = isPlanCaughtUpThroughToday(plan, todayISO())
+      ? "Up to date"
+      : "Catch-up needed";
+    return `${planCount}${optionLabel} · ${status}`;
+  }, [selectedTodayProgress, selectedTodayRhythmScore, todayProgressPlans]);
   const selectedGuidedClimbIsComplete = isGuidedClimbSetOneComplete(
     selectedPlan,
     getCompletedMap(selectedPlan),
@@ -2015,6 +2040,25 @@ export default function DiscipleOSApp() {
     }));
     return { manual };
   }, [events, eventCompletions]);
+  const todayActivitiesSummary = useMemo(() => {
+    const activities = todayFocusItems.manual;
+    if (activities.length === 0) return "No activities scheduled today";
+
+    const summarizeActivity = (event: any) => {
+      const time = event.time ? formatTime(event.time) : "Time not set";
+      const completion = event.completionEligible && event.rhythmCompleted
+        ? " · Complete"
+        : "";
+      return `${event.title || "Activity"} ${time}${completion}`;
+    };
+    const examples = activities.slice(0, 2).map(summarizeActivity).join(" · ");
+    const remaining = activities.length > 2
+      ? ` · +${activities.length - 2} more`
+      : "";
+    return activities.length === 1
+      ? examples
+      : `${activities.length} activities · ${examples}${remaining}`;
+  }, [todayFocusItems]);
 
   const calendarVisiblePlans = useMemo(() => {
     const today = todayISO();
@@ -2984,17 +3028,51 @@ export default function DiscipleOSApp() {
     setActiveTab("today");
   };
 
+  const applyNewPlanStartDate = (startDate: string) => {
+    if (!startDate) return;
+    setForm((prev) => ({
+      ...prev,
+      startDate,
+      endDate: prev.autoSchedule
+        ? calculateAutoEndDate(
+            prev.selectedBooks,
+            startDate,
+            prev.targetChaptersPerDay,
+            "time",
+            prev.dailyMinutes,
+            prev.readingWpm,
+          )
+        : prev.endDate,
+    }));
+  };
+
+  const chooseNewPlanStartDate = (choice: PlanStartDateChoiceValue) => {
+    setPlanStartDateChoice(choice);
+    setCustomPlanStartDate("");
+    if (choice === "custom") return;
+    const today = todayISO();
+    applyNewPlanStartDate(choice === "today" ? today : addDays(today, 1));
+  };
+
+  const setCustomPlanStartDateValue = (startDate: string) => {
+    setCustomPlanStartDate(startDate);
+    if (startDate) applyNewPlanStartDate(startDate);
+  };
+
   const beginCreatePlan = () => {
     planSessionStartedRef.current = true;
     const scheduleDefaults = applyReadingDefaultsToPlanForm(readingDefaults);
+    const tomorrow = addDays(todayISO(), 1);
+    setPlanStartDateChoice("tomorrow");
+    setCustomPlanStartDate("");
     setForm((prev) => ({
       ...prev,
       name: "",
       preset: "custom",
       journeyKey: "custom",
       selectedBooks: [],
-      startDate: todayISO(),
-      endDate: todayISO(),
+      startDate: tomorrow,
+      endDate: tomorrow,
       autoSchedule: true,
       ...scheduleDefaults,
       paceMode: "time",
@@ -3265,6 +3343,15 @@ export default function DiscipleOSApp() {
     setEventTypeChosen(false);
     setIsEventMoreOptionsOpen(false);
     setEventTitleError("");
+  };
+
+  const beginAddTodayActivity = () => {
+    const today = todayISO();
+    resetEventForm(today);
+    setEventSavedFeedback(null);
+    setIsEventFormOpen(true);
+    setActiveTab("calendar");
+    showEventDate(today);
   };
 
   const beginEditEvent = (event) => {
@@ -4580,20 +4667,16 @@ export default function DiscipleOSApp() {
   };
 
   const setOnboardingStartDate = (startDate: string) => {
-    setForm((prev) => ({
-      ...prev,
-      startDate,
-      endDate: prev.autoSchedule
-        ? calculateAutoEndDate(
-            prev.selectedBooks,
-            startDate,
-            prev.targetChaptersPerDay,
-            "time",
-            prev.dailyMinutes,
-            prev.readingWpm,
-          )
-        : prev.endDate,
-    }));
+    setPlanStartDateChoice("custom");
+    setCustomPlanStartDate(startDate);
+    applyNewPlanStartDate(startDate);
+  };
+
+  const beginOnboardingFreeClimb = () => {
+    setPlanStartDateChoice("tomorrow");
+    setCustomPlanStartDate("");
+    applyNewPlanStartDate(addDays(todayISO(), 1));
+    setOnboardingStep(1);
   };
 
   const useOnboardingSuggestedEndDate = () => {
@@ -4671,6 +4754,10 @@ export default function DiscipleOSApp() {
               form={form}
               step={onboardingStep}
               planPreview={planPreview}
+              todayDate={todayISO()}
+              tomorrowDate={addDays(todayISO(), 1)}
+              startDateChoice={planStartDateChoice}
+              customStartDate={customPlanStartDate}
               formatDate={formatDate}
               presetBooks={{
                 newTestament: PRESETS.newTestament,
@@ -4684,7 +4771,8 @@ export default function DiscipleOSApp() {
               onToggleBook={toggleBook}
               onCloseBookPicker={() => setIsBookPickerOpen(false)}
               onMinutesChange={setOnboardingMinutes}
-              onStartDateChange={setOnboardingStartDate}
+              onStartDateChoiceChange={chooseNewPlanStartDate}
+              onCustomStartDateChange={setOnboardingStartDate}
               onEndDateChange={(endDate) =>
                 setForm((prev) => ({ ...prev, autoSchedule: false, endDate }))
               }
@@ -5098,10 +5186,17 @@ export default function DiscipleOSApp() {
               title="Today’s Activities"
               icon={Calendar}
               disclosureKey="schedule"
+              summary={todayActivitiesSummary}
+              summaryTestId="dashboard-schedule-summary"
+              summaryCollapsedOnly
+              collapsible
             >
               <div className="discipleos-flat-list">
                 {todayFocusItems.manual.length === 0 ? (
-                  <div className="discipleos-empty-state text-sm">
+                  <div
+                    data-testid="dashboard-schedule-empty"
+                    className="discipleos-empty-state text-sm"
+                  >
                     No spiritual events scheduled today — add prayer, fasting, church, or a custom event.
                   </div>
                 ) : (
@@ -5149,6 +5244,17 @@ export default function DiscipleOSApp() {
                   ))
                 )}
               </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  data-testid="today-add-activity"
+                  onClick={beginAddTodayActivity}
+                  className="discipleos-control--compact inline-flex min-h-10 items-center gap-2 border border-[#D4A017]/30 px-3 py-2 text-sm font-medium text-[#F4D77A] hover:bg-[#D4A017]/10"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add activity
+                </button>
+              </div>
             </ResponsiveSection>
 
             <ResponsiveSection
@@ -5156,6 +5262,9 @@ export default function DiscipleOSApp() {
               title="Progress"
               icon={Bookmark}
               disclosureKey="progress"
+              summary={todayProgressSummary}
+              summaryTestId="dashboard-progress-summary"
+              summaryCollapsedOnly
               collapsible
             >
               <div data-testid="dashboard-progress-list" className="space-y-3">
@@ -5388,35 +5497,20 @@ export default function DiscipleOSApp() {
                       Set your basic schedule
                     </h2>
                     <p className="discipleos-secondary-copy mt-1 text-sm leading-6">
-                      Choose when to start and how much time you can give each day.
+                      Confirm when to start and how much time you can give each day.
                     </p>
                   </div>
 
-                  <label className="text-sm text-white">
-                    <div className="mb-2 font-medium">Start date</div>
-                    <input
-                      aria-label="Start date"
-                      type="date"
-                      value={form.startDate}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          startDate: e.target.value,
-                          endDate: prev.autoSchedule
-                            ? calculateAutoEndDate(
-                              prev.selectedBooks,
-                              e.target.value,
-                              prev.targetChaptersPerDay,
-                              "time",
-                              prev.dailyMinutes,
-                              prev.readingWpm,
-                            )
-                            : prev.endDate,
-                        }))
-                      }
-                      className="discipleos-form-control w-full border border-white/10 bg-black/30 px-3 outline-none"
-                    />
-                  </label>
+                  <PlanStartDateChoice
+                    todayDate={todayISO()}
+                    tomorrowDate={addDays(todayISO(), 1)}
+                    value={form.startDate}
+                    customValue={customPlanStartDate}
+                    choice={planStartDateChoice}
+                    testIdPrefix="plan-create"
+                    onChoiceChange={chooseNewPlanStartDate}
+                    onCustomDateChange={setCustomPlanStartDateValue}
+                  />
 
                   <div>
                     <div className="mb-2 font-medium text-white">Daily reading time</div>
@@ -5903,7 +5997,12 @@ export default function DiscipleOSApp() {
                   <button
                     type="button"
                     data-testid="plan-create-next"
-                    disabled={planCreationStep <= 2 && form.selectedBooks.length === 0}
+                    disabled={
+                      (planCreationStep <= 2 && form.selectedBooks.length === 0) ||
+                      (planCreationStep === 2 &&
+                        planStartDateChoice === "custom" &&
+                        !customPlanStartDate)
+                    }
                     onClick={() => setPlanCreationStep((step) => Math.min(5, step + 1))}
                     className="discipleos-action bg-[#C8921D] px-5 font-semibold text-black hover:bg-[#D4A017] disabled:cursor-not-allowed disabled:opacity-45"
                   >
@@ -6338,7 +6437,7 @@ export default function DiscipleOSApp() {
                       <ReadingPathChoices
                         title="Choose a reading path"
                         onStartGuidedClimb={selectGuidedClimb}
-                        onStartFreeClimb={beginCreatePlan}
+              onStartFreeClimb={beginOnboardingFreeClimb}
                         activeMountainRhythmLabel={activeMountainRhythmLabel}
                       />
                     </div>
