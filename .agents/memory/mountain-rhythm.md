@@ -94,3 +94,9 @@ The same owner-scoped active climb and plan ID must drive Mountain Rhythm, Home/
 **Why:** Filtering structured plans for a screen-specific list must not make their assigned readings, dates, completion state, or progress appear lost elsewhere.
 
 **How to apply:** Hydrate the complete owner-scoped plan collection once per source, retain valid owner-matched local state during sync, and exclude structured plans only from ordinary-plan presentation. Provide the active climb's scheduled readings on Today and its schedule on Plans; Calendar and Mountain Rhythm should continue using the same plan ID and assignments.
+
+Prayer and fasting remain optional Calendar commitments, independent of Scripture completion and climb metrics. Guided setup confirms a local start date first (Tomorrow by default), defaults prayer to all seven weekdays, and suggests all-day fasts on climb Day 1 and every tenth day after it; missed past dates are never seeded. All-day fast reminders default to noon the preceding local day.
+
+**Why:** The owner approved a step-by-step prayer/fasting scheduler while explicitly keeping these disciplines separate from climb progress and avoiding duplicate schedule or reminder systems.
+
+**How to apply:** Reuse owner-scoped Calendar events, occurrence completions, recurrence, and the existing reminder dispatcher. Preserve saved schedules and completion history; do not change reading-plan dates or add prayer/fasting effects to Mountain Rhythm scoring.

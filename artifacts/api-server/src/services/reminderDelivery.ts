@@ -292,6 +292,14 @@ function eventOccursOnDate(event: typeof eventsTable.$inferSelect, dateISO: stri
   return false;
 }
 
+function reminderTimeForEvent(event: typeof eventsTable.$inferSelect): string | null {
+  if (event.time) return event.time;
+  // All-day fasting reminders are due at local noon on the preceding date.
+  return ["fast", "fasting"].includes(event.type.trim().toLowerCase())
+    ? "00:00"
+    : null;
+}
+
 /**
  * Sends all reminders that are due now. Used by both the protected HTTP route
  * and the scheduled command, keeping delivery rules identical in each runtime.
@@ -362,26 +370,21 @@ export async function sendDueReminders(
     const requestedTimeZone = event.timeZone || fallbackTZ;
     const { today, nowHHMM, timeZone } = getNowInTimeZone(requestedTimeZone, runNow);
     const reminderMinutes = Number(event.reminderMinutes ?? 10);
-    if (!event.time) {
-      continue;
-    }
+    const eventTime = reminderTimeForEvent(event);
+    if (!eventTime) continue;
 
     const eventKey = eventDiagnosticKey(event.id);
     const dueOccurrenceDate =
       [today, nextDateISO(today)].find(
         (occurrenceDate) =>
-          reminderDueDateISO(
-            occurrenceDate,
-            event.time!,
-            reminderMinutes,
-          ) === today,
+          reminderDueDateISO(occurrenceDate, eventTime, reminderMinutes) === today,
       ) ?? null;
     const occursOnDueOccurrence =
       dueOccurrenceDate !== null &&
       eventOccursOnDate(event, dueOccurrenceDate);
     const elapsedMinutesSinceDue = dueOccurrenceDate
       ? minutesSinceReminderDue(
-          event.time,
+          eventTime,
           reminderMinutes,
           dueOccurrenceDate,
           today,
@@ -389,7 +392,7 @@ export async function sendDueReminders(
         )
       : null;
     const dueNow = isReminderDue(
-      event.time,
+      eventTime,
       reminderMinutes,
       dueOccurrenceDate ?? today,
       today,

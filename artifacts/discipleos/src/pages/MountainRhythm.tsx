@@ -939,17 +939,16 @@ export default function MountainRhythm() {
           >
             <div className="min-w-0">
               <MountainRhythmCard score={score} loading={isLoading} />
-              {activeClimb && selectedPlan?.id === activeClimb.id ? (
-                <MountainRhythmDisciplines
-                  plan={selectedPlan}
-                  events={events}
-                  completions={eventCompletions}
-                  today={today}
-                  onSavePlan={saveDisciplinePlan}
-                  onSaveEvent={saveDisciplineEvent}
-                  onToggleCompletion={toggleDisciplineCompletion}
-                />
-              ) : null}
+              <MountainRhythmDisciplines
+                plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
+                events={events}
+                completions={eventCompletions}
+                today={today}
+                ownerId={ownerId}
+                onSavePlan={saveDisciplinePlan}
+                onSaveEvent={saveDisciplineEvent}
+                onToggleCompletion={toggleDisciplineCompletion}
+              />
             </div>
 
             <section data-testid="mountain-rhythm-choose" className="min-w-0">

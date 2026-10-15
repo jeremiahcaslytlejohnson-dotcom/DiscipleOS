@@ -2062,7 +2062,11 @@ export default function DiscipleOSApp() {
     if (activities.length === 0) return "No activities scheduled today";
 
     const summarizeActivity = (event: any) => {
-      const time = event.time ? formatTime(event.time) : "Time not set";
+      const time = event.time
+        ? formatTime(event.time)
+        : ["fast", "fasting"].includes(String(event.type || "").toLowerCase())
+          ? "All day"
+          : "Time not set";
       const completion = event.completionEligible && event.rhythmCompleted
         ? " · Complete"
         : "";
@@ -2289,17 +2293,19 @@ export default function DiscipleOSApp() {
       const today = todayISO();
 
       events.forEach((event) => {
-        if (!event.remind || !event.time) return;
-        if (!eventOccursOnDate(event, today)) return;
+        if (!event.remind) return;
+        const isAllDayFast =
+          !event.time && ["fast", "fasting"].includes(String(event.type || "").toLowerCase());
+        const occurrenceDate = isAllDayFast
+          ? [today, addDays(today, 1)].find((date) => eventOccursOnDate(event, date))
+          : eventOccursOnDate(event, today) ? today : null;
+        if (!occurrenceDate || (!event.time && !isAllDayFast)) return;
 
-        const [hours, minutes] = event.time.split(":").map(Number);
-        const eventDate = new Date();
-        eventDate.setHours(hours || 0, minutes || 0, 0, 0);
-
-        const reminderTime = new Date(
-          eventDate.getTime() - Number(event.reminderMinutes || 0) * 60_000,
+        const reminderTime = new Date(`${occurrenceDate}T${isAllDayFast ? "00:00" : event.time}:00`);
+        reminderTime.setMinutes(
+          reminderTime.getMinutes() - Number(event.reminderMinutes || 0),
         );
-        const tag = `discipleos-${event.id}-${today}`;
+        const tag = `discipleos-${event.id}-${occurrenceDate}`;
 
         if (
           now >= reminderTime &&
@@ -2307,7 +2313,9 @@ export default function DiscipleOSApp() {
         ) {
           showForegroundReminder({
             title: event.title || "DiscipleOS Reminder",
-            body: event.notes || `${event.type || "Event"} starts at ${formatTime(event.time)}`,
+            body: isAllDayFast
+              ? "Your all-day fast is tomorrow."
+              : event.notes || `${event.type || "Event"} starts at ${formatTime(event.time)}`,
             tag,
           });
         }
@@ -5241,7 +5249,15 @@ export default function DiscipleOSApp() {
                       <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
                         <EventBadge type={event.type} />
                         <div className="flex items-center gap-2">
-                          {event.remind ? <Pill accent>{event.reminderMinutes} min reminder</Pill> : null}
+                          {event.remind ? (
+                            <Pill accent>
+                          {!event.time && ["fast", "fasting"].includes(String(event.type || "").toLowerCase())
+                                ? Number(event.reminderMinutes) === 720
+                                  ? "Reminder: previous day at noon"
+                                  : `Reminder: ${Number(event.reminderMinutes) / 60} hours before`
+                                : `${event.reminderMinutes} min reminder`}
+                            </Pill>
+                          ) : null}
                           {event.completionEligible ? (
                             <button
                               type="button"
@@ -5267,7 +5283,7 @@ export default function DiscipleOSApp() {
                         </div>
                       </div>
                       <div className="discipleos-safe-text text-base font-medium">{event.title}</div>
-                      <div className="discipleos-meta-copy mt-1 text-sm">{formatTime(event.time)} today</div>
+                      <div className="discipleos-meta-copy mt-1 text-sm">{event.time ? `${formatTime(event.time)} today` : ["fast", "fasting"].includes(String(event.type || "").toLowerCase()) ? "All day today" : "Time not set"}</div>
                       {event.notes ? <div className="discipleos-safe-text mt-2 text-sm text-white/70">{event.notes}</div> : null}
                       {event.repeat && event.repeat !== "none" ? (
                         <div className="discipleos-meta-copy mt-2 text-xs">
