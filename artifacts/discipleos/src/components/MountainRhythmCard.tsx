@@ -60,7 +60,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M0 242 C18 234 32 216 48 211 C61 207 73 220 85 224 C99 230 114 194 128 178 C142 164 152 195 165 201 C182 206 201 147 217 124 C233 108 245 146 257 159 C272 172 291 130 306 ${peakY} C324 ${peakY + 17} 342 198 360 211`;
+    `M0 242 L41 215 L48 209 L55 214 L84 227 Q88 229 92 222 L123 182 L129 176 L135 182 L162 199 L171 194 L212 128 Q217 118 222 127 L252 157 L260 162 L267 153 L298 ${peakY + 10} L305 ${peakY} L314 ${peakY + 12} L326 ${peakY + 38} L360 211`;
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
