@@ -194,6 +194,24 @@ export default function MountainRhythmCard({
                   <stop offset="1" stopColor="#86EFAC" />
                 </linearGradient>
               </defs>
+              <g
+                data-testid="mountain-rhythm-distant-ridges"
+                fill="#15241F"
+                stroke="#334A3D"
+                strokeOpacity="0.16"
+                strokeWidth="1"
+                strokeLinejoin="round"
+              >
+                <path
+                  d="M0 187 L27 169 L43 174 L76 148 L96 160 L119 151 L151 131 L176 148 L198 136 L222 151 L249 129 L269 143 L294 119 L315 136 L340 119 L360 132 V280 H0 Z"
+                  fillOpacity="0.34"
+                />
+                <path
+                  d="M0 210 L24 192 L45 199 L70 181 L92 187 L118 169 L143 186 L164 174 L190 188 L217 164 L237 178 L261 157 L282 171 L307 148 L329 164 L350 151 L360 158 V280 H0 Z"
+                  fill="#1B2C24"
+                  fillOpacity="0.3"
+                />
+              </g>
               <path
                 d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
