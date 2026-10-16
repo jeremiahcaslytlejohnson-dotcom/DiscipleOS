@@ -64,7 +64,6 @@ import {
   resolveStructuredClimbPlanId,
   isStructuredClimbPlan,
 } from "../lib/mountain-rhythm";
-import { buildMountainRhythmChartSeries } from "../lib/mountain-rhythm-chart";
 import {
   createConsistencyResetPlan,
   isRetiredConsistencyResetPlan,
@@ -246,16 +245,6 @@ export default function MountainRhythm() {
     [score.trail],
   );
   const today = todayISO();
-  const chartSeries = useMemo(
-    () => buildMountainRhythmChartSeries({
-      plan: selectedPlan,
-      trail: score.trail || [],
-      events,
-      eventCompletions,
-      today,
-    }),
-    [selectedPlan, score.trail, events, eventCompletions, today],
-  );
   const cachedPlanOwnerIsTrusted =
     isAuthLoaded &&
     isSignedIn &&
@@ -949,7 +938,7 @@ export default function MountainRhythm() {
             className="mt-8 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
           >
             <div className="min-w-0">
-              <MountainRhythmCard score={score} chartSeries={chartSeries} loading={isLoading} />
+              <MountainRhythmCard score={score} loading={isLoading} />
               <MountainRhythmDisciplines
                 plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
                 events={events}

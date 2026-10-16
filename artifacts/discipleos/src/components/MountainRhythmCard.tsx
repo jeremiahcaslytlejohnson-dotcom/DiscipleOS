@@ -1,48 +1,31 @@
-import { useState } from "react";
 import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
-import {
-  buildMountainRhythmTerrainPoints,
-  type RhythmChartSeries,
-} from "../lib/mountain-rhythm-chart";
 
 const ASCENT_MARKERS = RHYTHM_LEVELS.map((level) => level.min);
 
 function trailGeometry(trail: any[]) {
-  const points = (Array.isArray(trail) ? trail : []).map((point, index, all) => ({
-    ...point,
-    x: all.length === 1 ? 24 : 16 + (index / (all.length - 1)) * 328,
-    y: 238 - (Number(point.earnedPercent || 0) / 100) * 145,
-  }));
-  return { points, current: [...points].reverse().find((point) => point.status !== "future") || points[0] };
-}
-
-function smoothPath(points: Array<{ x: number; y: number }>) {
-  if (!points.length) return "";
-  if (points.length === 1) return `M${points[0].x} ${points[0].y}`;
-  let path = `M${points[0].x} ${points[0].y}`;
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    const midX = (previous.x + current.x) / 2;
-    const midY = (previous.y + current.y) / 2;
-    path += ` Q${previous.x} ${previous.y} ${midX} ${midY}`;
+  if (!Array.isArray(trail) || trail.length === 0) {
+    return {
+      path: "M24 236L336 78",
+      points: [],
+      current: { x: 24, y: 236 },
+    };
   }
-  const last = points[points.length - 1];
-  return `${path} T${last.x} ${last.y}`;
-}
 
-function seriesPath(series: RhythmChartSeries, points: any[]) {
-  const plotted = series.values.flatMap((value, index) =>
-    value === null || !points[index] ? [] : [{
-      x: points[index].x,
-      y: 236 - (value / 100) * 145,
-      value,
-      date: points[index].date,
-      day: index + 1,
-    }],
-  );
-  return { path: smoothPath(plotted), plotted };
+  const points = trail.map((point, index) => ({
+    ...point,
+    x: trail.length === 1 ? 24 : 24 + (index / (trail.length - 1)) * 312,
+    y: 236 - (Number(point.elevationPercent || 0) / 100) * 158,
+  }));
+  const current =
+    [...points].reverse().find((point) => point.status !== "future") ||
+    points[0];
+
+  return {
+    path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(""),
+    points,
+    current,
+  };
 }
 
 function todayLabel(score: any) {
@@ -54,43 +37,28 @@ function todayLabel(score: any) {
 
 export default function MountainRhythmCard({
   score,
-  chartSeries = [],
   loading = false,
   summaryOnly = false,
   title = "Mountain Rhythm",
   showRhythmMetric = true,
 }: any) {
-  const [visibleSeries, setVisibleSeries] = useState<Record<string, boolean>>({});
   const hasJourney = Number(score?.journeyDays || 0) > 0;
   const currentLevel = hasJourney ? score?.level || "Basecamp" : "No active journey";
   const currentIndex = hasJourney
     ? Math.max(0, RHYTHM_LEVELS.findIndex((level) => level.name === currentLevel))
     : -1;
   const nextLevel = currentIndex >= 0 ? RHYTHM_LEVELS[currentIndex + 1] : undefined;
+  const mountainScale = Number(score?.mountainScale || 0.72);
+  const peakY = Math.round(58 + (1 - mountainScale) * 74);
   const geometry = trailGeometry(score?.trail || []);
-  const terrainPoints = buildMountainRhythmTerrainPoints(
-    geometry.points.length || Number(score?.journeyDays || 7),
-  );
-  const terrainPath = smoothPath(terrainPoints);
-  const terrainArea = terrainPath
-    ? `${terrainPath} L344 280 L16 280 Z`
-    : "";
-  const visibleSeriesItems = (chartSeries as RhythmChartSeries[])
-    .filter((series) => visibleSeries[series.key] !== false);
-  const todayPoint = geometry.points.find((point) => point.date === score?.windowEnd);
-  const currentPoint = todayPoint;
-  let previousEarnedPercent = 0;
-  const plottedDayPoints = geometry.points.map((point, index) => {
-    const earned = point.date <= score?.windowEnd &&
-      Number(point.earnedPercent || 0) > previousEarnedPercent;
-    previousEarnedPercent = Math.max(previousEarnedPercent, Number(point.earnedPercent || 0));
-    return { ...point, index, earned };
-  });
-  const traveledPath = smoothPath(
-    plottedDayPoints
-      .filter((point) => point.date <= score?.windowEnd)
-      .map((point) => ({ x: point.x, y: point.y })),
-  );
+  const traveledPoints = geometry.points.filter((point) => point.status !== "future");
+  const traveledPath = traveledPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join("");
+  const flagX = Math.max(7, Math.min(geometry.current.x - 5, 342));
+  const flagY = Math.max(8, Math.min(geometry.current.y - 30, 246));
+  const currentPointIsToday = geometry.current.date === score?.windowEnd;
+  const flagLabel = currentPointIsToday ? "Today" : "Latest day";
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -158,7 +126,7 @@ export default function MountainRhythmCard({
 
           {!summaryOnly ? (
             <>
-              <div className="relative mt-5 h-[240px] overflow-hidden px-2 py-2 sm:h-[270px] sm:px-4">
+             <div className="relative mt-5 h-[220px] overflow-hidden px-2 py-3 sm:h-[250px] sm:px-4 sm:py-3">
               <div
                 data-testid="mountain-rhythm-stage-rail"
                 className="pointer-events-none absolute inset-y-0 left-0 z-[1] flex w-28 flex-col border-r border-white/[0.12] bg-[#0B1418]/60 px-2 py-3"
@@ -207,98 +175,114 @@ export default function MountainRhythmCard({
               </div>
             <svg
               data-testid="mountain-rhythm-mountain"
-              className="absolute inset-y-0 left-28 h-full w-[calc(100%-7rem)]"
+               className="absolute inset-y-0 left-28 h-full w-[calc(100%-7rem)]"
               viewBox="0 0 360 280"
               preserveAspectRatio="none"
-              role="group"
-              aria-label={`${score.journeyLabel} planned mountain route and earned progress chart`}
+              role="img"
+                aria-label={`${score.journeyLabel} recent seven-day reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
             >
+              <defs>
+                <linearGradient id="mountain-fill" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stopColor="#D4A017" stopOpacity="0.22" />
+                  <stop offset="0.48" stopColor="#4F9D69" stopOpacity="0.15" />
+                  <stop offset="1" stopColor="#091216" stopOpacity="0.05" />
+                </linearGradient>
+                <linearGradient id="earned-route" x1="0" x2="1" y1="1" y2="0">
+                  <stop offset="0" stopColor="#4F9D69" />
+                  <stop offset="1" stopColor="#86EFAC" />
+                </linearGradient>
+              </defs>
               <path
-                d={terrainArea}
-                fill="#52735F"
-                fillOpacity="0.16"
+                d={`M0 242L48 211L85 224L128 178L165 201L217 124L257 159L306 ${peakY}L360 211V280H0Z`}
+                fill="url(#mountain-fill)"
               />
               <path
-                data-testid="mountain-rhythm-planned-terrain"
-                d={terrainPath}
+                d={`M0 242L48 211L85 224L128 178L165 201L217 124L257 159L306 ${peakY}L360 211`}
                 fill="none"
-                stroke="#91A98E"
-                strokeOpacity="0.45"
-                strokeWidth="1.4"
-                aria-label="Planned route terrain"
+                stroke="rgba(255,255,255,0.12)"
+                strokeWidth="1.5"
               />
+               <g
+                 transform="translate(8 214)"
+                opacity="0.42"
+                aria-label="Basecamp cabin"
+              >
+                <path
+                  d="M1 10L11 2L21 10V22H1Z"
+                  fill="#0D181A"
+                  stroke="#53645A"
+                  strokeLinejoin="round"
+                  strokeWidth="1.25"
+                />
+                <path
+                  d="M0 10L11 1L22 10"
+                  fill="none"
+                  stroke="#6B704C"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.75"
+                />
+                <rect x="8.5" y="15" width="5" height="7" rx="0.75" fill="#53604D" />
+                <rect x="3.75" y="14.25" width="3.25" height="3.25" rx="0.5" fill="#9B8747" />
+                <rect x="15" y="14.25" width="3.25" height="3.25" rx="0.5" fill="#9B8747" />
+              </g>
               <path
                 data-testid="mountain-rhythm-day-path"
-                d={traveledPath}
+                d={geometry.path}
                 fill="none"
-                stroke="#5E9A70"
-                strokeOpacity="0.8"
+                stroke="rgba(255,255,255,0.2)"
+                strokeDasharray="3 6"
                 strokeLinecap="round"
-                strokeWidth="2"
+                strokeWidth="2.5"
               />
-              {visibleSeriesItems.map((series) => {
-                const { path, plotted } = seriesPath(series, geometry.points);
-                return path ? (
-                  <g key={series.key} data-testid={`mountain-rhythm-series-${series.key}`}>
-                    <path
-                      d={path}
-                      fill="none"
-                      stroke={series.color}
-                      strokeOpacity={series.key === "combined" ? 0.72 : 0.9}
-                      strokeWidth={series.key === "scripture" ? 2.5 : 1.6}
-                      strokeDasharray={series.key === "fasting" ? "4 3" : series.key === "combined" ? "2 3" : undefined}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      tabIndex={0}
-                      aria-label={`${series.label} line, cumulative completion of scheduled commitments`}
-                    >
-                      <title>{series.label}: scheduled commitment completion over time</title>
-                    </path>
-                    {plotted.map((point) => (
-                      <circle
-                        key={`${series.key}-${point.date}`}
-                        cx={point.x}
-                        cy={point.y}
-                        r="2.3"
-                        fill={series.color}
-                        stroke="#0B1418"
-                        strokeWidth="1"
-                        aria-label={`${series.label}, day ${point.day}, ${point.date}, ${point.value}% of scheduled commitments completed`}
-                      >
-                        <title>{`${series.label} · ${point.date} · ${point.value}%`}</title>
-                      </circle>
-                    ))}
-                  </g>
-                ) : null;
-              })}
-              {plottedDayPoints.map((point) => {
-                const today = point.date === score?.windowEnd;
-                const future = point.date > score?.windowEnd;
+              {traveledPath ? (
+                <path
+                  d={traveledPath}
+                  fill="none"
+                  stroke="url(#earned-route)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="4"
+                />
+              ) : null}
+              {geometry.points.map((point, index) => {
+                const rhythmStatus = point.rhythmStatus || point.status;
                 return (
                   <circle
                     key={point.date}
-                    data-testid={`mountain-rhythm-day-point-${point.index + 1}`}
+                    data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
                     cy={point.y}
-                    r={today ? 5.5 : 3.5}
-                    fill={today ? "#D4A017" : point.earned ? "#86EFAC" : "rgba(12,20,22,0.9)"}
-                    stroke={today ? "#F4D77A" : future ? "rgba(255,255,255,0.28)" : point.earned ? "#C7F3D0" : "rgba(255,255,255,0.38)"}
-                    strokeWidth={today ? 2 : 1}
-                    tabIndex={today ? 0 : -1}
-                    aria-label={`Day ${point.index + 1}, ${point.date}, ${today ? "Today" : future ? "Upcoming" : point.earned ? "Completed and earned" : "Scheduled"}${today ? `, ${todayLabel(score)}` : ""}`}
+                    r={rhythmStatus === "future" ? 4 : rhythmStatus === "missed" ? 5 : 5.5}
+                    fill={
+                      rhythmStatus === "future"
+                        ? "rgba(255,255,255,0.2)"
+                        : rhythmStatus === "missed"
+                          ? "#94A3B8"
+                          : rhythmStatus === "partial"
+                            ? "#D4A017"
+                            : "#86EFAC"
+                    }
+                    stroke={point.date === geometry.current.date ? "#F4D77A" : "rgba(8,16,18,0.9)"}
+                    strokeWidth={point.date === geometry.current.date ? 2 : 1}
+                    aria-label={`Day ${index + 1}, ${rhythmStatus}, readings ${point.status}, ${point.elevationPercent}% current elevation, ${point.earnedPercent}% earned ascent`}
                   />
                 );
               })}
               <g data-testid="mountain-rhythm-day-labels" aria-hidden="true">
                 {geometry.points.map((point, index) => {
-                  const interval = geometry.points.length <= 10 ? 1 : geometry.points.length <= 20 ? 4 : 5;
-                  const showLabel = index === 0 || index === geometry.points.length - 1 || (index + 1) % interval === 0;
+                  const isShortJourney = geometry.points.length <= 10;
+                  const showLabel =
+                    isShortJourney ||
+                    index === 0 ||
+                    index === geometry.points.length - 1 ||
+                    (index + 1) % 5 === 0;
                   return showLabel ? (
                     <text
                       key={`day-label-${point.date}`}
                       x={point.x}
-                      y="266"
-                      fill={point.date === score?.windowEnd ? "#F4D77A" : "#C9CDD3"}
+                      y="272"
+                      fill="#C9CDD3"
                       fontSize="12"
                       textAnchor="middle"
                     >
@@ -306,46 +290,45 @@ export default function MountainRhythmCard({
                     </text>
                   ) : null;
                 })}
-                <text x="16" y="24" fill="#DDE6DF" fontSize="10">100%</text>
-                <text x="16" y="235" fill="#AAB5AE" fontSize="10">0%</text>
               </g>
-              {currentPoint ? (
+              <g
+                transform={`translate(${flagX} ${flagY})`}
+                 aria-label={`${flagLabel}'s position at ${currentLevel}`}
+              >
+                <line
+                  x1="5"
+                  y1="30"
+                  x2="5"
+                  y2="3"
+                  stroke="#F4D77A"
+                  strokeLinecap="round"
+                  strokeWidth="1.75"
+                />
+                <path
+                  d="M6 4L19 8L6 13Z"
+                  fill="#D4A017"
+                  stroke="#F4D77A"
+                  strokeLinejoin="round"
+                  strokeWidth="0.75"
+                />
                 <text
                   data-testid="mountain-rhythm-current-flag-label"
-                  x={currentPoint.x}
-                  y={Math.max(38, currentPoint.y - 11)}
-                  textAnchor="middle"
+                  x={flagX > 300 ? -3 : 22}
+                  y="10"
+                  textAnchor={flagX > 300 ? "end" : "start"}
                   fill="#F4D77A"
-                  fontSize="11"
+                  fontSize="15"
                   fontWeight="600"
+                  stroke="#0B1418"
+                  strokeWidth="2.5"
+                  paintOrder="stroke"
                 >
-                  Today
+                  {flagLabel}
                 </text>
-              ) : null}
+              </g>
             </svg>
 
           </div>
-          {chartSeries.length ? (
-            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Chart series">
-              {(chartSeries as RhythmChartSeries[]).map((series) => {
-                const visible = visibleSeries[series.key] !== false;
-                return (
-                  <button
-                    key={series.key}
-                    type="button"
-                    aria-pressed={visible}
-                    aria-label={`${visible ? "Hide" : "Show"} ${series.label} line. ${series.description}`}
-                    data-testid={`mountain-rhythm-series-toggle-${series.key}`}
-                    onClick={() => setVisibleSeries((current) => ({ ...current, [series.key]: !visible }))}
-                    className="discipleos-control--touch inline-flex min-h-9 items-center gap-2 border border-white/10 bg-white/[0.025] px-2.5 py-1 text-xs text-white/80 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A]"
-                  >
-                    <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: series.color }} aria-hidden="true" />
-                    {series.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
 
           <div
             className="discipleos-safe-text mt-4 flex min-w-0 items-start gap-2 text-sm leading-5"
