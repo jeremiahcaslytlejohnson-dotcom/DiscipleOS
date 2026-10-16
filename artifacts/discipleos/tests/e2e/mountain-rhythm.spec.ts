@@ -1257,6 +1257,7 @@ test("does not replace an unsynced fresh climb with an expired server record", a
 
 test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
+  const ownerId = "mountain-rhythm-visual-owner";
   const plan = makePlan({
     id: "point-by-point-climb",
     days: 7,
@@ -1266,8 +1267,13 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     completedIndexes: [2],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const chart = page.getByTestId("mountain-rhythm-mountain");
@@ -1315,6 +1321,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
 
 test("keeps the chart at Basecamp when every reading is unchecked", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
+  const ownerId = "mountain-rhythm-visual-owner";
   const plan = makePlan({
     id: "stale-earned-history",
     days: 7,
@@ -1326,8 +1333,13 @@ test("keeps the chart at Basecamp when every reading is unchecked", async ({ pag
   plan.earnedDayKeys = [firstDay];
   plan.dayCompletionDates = { [firstDay]: firstDay };
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const pointY = await page
