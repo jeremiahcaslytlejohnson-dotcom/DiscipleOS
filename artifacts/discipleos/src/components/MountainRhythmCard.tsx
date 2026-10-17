@@ -2,7 +2,7 @@ import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
 const ASCENT_MARKERS = RHYTHM_LEVELS.map((level) => level.min);
-const PLANNED_TRAVERSE_Y = [240, 234, 231, 223, 218, 207, 214];
+const PLANNED_TRAVERSE_Y = [240, 232, 236, 220, 224, 203, 211];
 
 function plannedTraverseY(index: number, pointCount: number) {
   if (pointCount <= 1) return PLANNED_TRAVERSE_Y[0];

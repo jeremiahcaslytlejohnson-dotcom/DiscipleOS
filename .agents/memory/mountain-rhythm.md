@@ -111,4 +111,10 @@ The chart should read as one dominant asymmetric foreground mountain supported b
 
 **Why:** The owner wants layered mountain depth without graph-like terrain clutter and a visible planned path without implying that future or incomplete days were earned; the configured database may not be isolated from user data.
 
-**How to apply:** Keep the foreground summit distinct and its shoulders natural, limit low-contrast background layers to two or three, keep route coordinates presentation-only, anchor markers and the Today flag to their schedule indexes, and derive earned emphasis only from actual completion status. Use fully mocked UI fixtures for visual verification; do not run DB-writing tests without an isolated database.
+**How to apply:** Keep the foreground summit distinct and its shoulders natural, limit low-contrast background layers to two or three, keep route coordinates presentation-only and deterministic across reloads, anchor markers and the Today flag to their schedule indexes, and derive earned emphasis only from actual Scripture completion status. Use fully mocked UI fixtures for visual verification; do not run DB-writing tests without an isolated database.
+
+Stage 2 discipline accents are explicitly deferred until the owner separately approves implementation. If approved, completed prayer and fasting may strengthen a day's visual trail accent only when Scripture is also complete; discipline activity alone must never advance ascent. This must not change Scripture completion percentages, consistency, milestones, or earned days.
+
+**Why:** The owner requested a staged rollout and explicitly authorized only the current visual terrain refinement.
+
+**How to apply:** Do not implement discipline-driven visual changes without a new, separate owner approval. Any future accent remains visual-only and gated by completed Scripture.

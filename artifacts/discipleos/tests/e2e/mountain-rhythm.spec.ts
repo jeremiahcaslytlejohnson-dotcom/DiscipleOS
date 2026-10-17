@@ -1282,10 +1282,10 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   );
   expect(pointY).toHaveLength(7);
   expect(pointY[0]).toBeGreaterThan(pointY[1]);
-  expect(pointY[1]).toBeGreaterThan(pointY[2]);
+  expect(pointY[1]).toBeLessThan(pointY[2]);
   expect(pointY[2]).toBeGreaterThan(pointY[3]);
-  expect(pointY[3]).toBeGreaterThan(pointY[4]);
-  expect(pointY[4]).toBeGreaterThan(pointY[5]);
+  expect(pointY[3]).toBeLessThan(pointY[4]);
+  expect(pointY[0]).toBeGreaterThan(pointY[5]);
   expect(pointY[6]).toBeGreaterThan(pointY[5]);
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
@@ -1367,6 +1367,13 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       expect(Math.abs(labelBox!.y + labelBox!.height / 2 - indicatorBox!.y - indicatorBox!.height / 2)).toBeLessThan(3);
     }
   }
+  const plannedPathBeforeReload = await plannedPath.getAttribute("d");
+  await page.reload();
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("mountain-rhythm-day-path")).toHaveAttribute(
+    "d",
+    plannedPathBeforeReload!,
+  );
 });
 
 test("keeps the Day 1 route entirely planned when no reading is complete", async ({ page }) => {
