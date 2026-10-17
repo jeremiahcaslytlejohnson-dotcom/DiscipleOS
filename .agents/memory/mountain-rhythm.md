@@ -106,3 +106,9 @@ Mountain Rhythm discipline tracking reuses Calendar event occurrence records key
 **Why:** Discipline records must remain independent of Scripture progress while preserving meaningful completed actions through schedule changes and honoring an explicit request to delete.
 
 **How to apply:** Share the existing owner-scoped event and completion state between Mountain Rhythm and Calendar. Retain and display completed historical occurrences when recurrence changes, allow undo of a recorded historical completion, and exclude future occurrences after the saved cutoff from Calendar and reminders.
+
+The chart's dashed traverse is planned terrain geometry, independent of earned elevation. Only trail points with an existing fully completed status may brighten their corresponding route segment; future and incomplete segments remain muted. Mountain Rhythm visual tests must mock API requests and avoid database writes unless an isolated test database is explicitly configured.
+
+**Why:** The owner wants a visible planned path without implying that future or incomplete days were earned, and the configured database may not be isolated from user data.
+
+**How to apply:** Keep route coordinates presentation-only, anchor markers and the Today flag to their schedule indexes, and derive earned emphasis only from actual completion status. Use fully mocked UI fixtures for visual verification; do not run DB-writing tests without an isolated database.

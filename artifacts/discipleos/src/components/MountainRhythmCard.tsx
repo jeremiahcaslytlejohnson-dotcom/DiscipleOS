@@ -2,6 +2,22 @@ import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
 const ASCENT_MARKERS = RHYTHM_LEVELS.map((level) => level.min);
+const PLANNED_TRAVERSE_Y = [232, 225, 221, 213, 207, 193, 198];
+
+function plannedTraverseY(index: number, pointCount: number) {
+  if (pointCount <= 1) return PLANNED_TRAVERSE_Y[0];
+
+  const anchorPosition =
+    (index / (pointCount - 1)) * (PLANNED_TRAVERSE_Y.length - 1);
+  const start = Math.floor(anchorPosition);
+  const end = Math.min(start + 1, PLANNED_TRAVERSE_Y.length - 1);
+  const progress = anchorPosition - start;
+
+  return (
+    PLANNED_TRAVERSE_Y[start] +
+    (PLANNED_TRAVERSE_Y[end] - PLANNED_TRAVERSE_Y[start]) * progress
+  );
+}
 
 function trailGeometry(trail: any[]) {
   if (!Array.isArray(trail) || trail.length === 0) {
@@ -15,7 +31,7 @@ function trailGeometry(trail: any[]) {
   const points = trail.map((point, index) => ({
     ...point,
     x: trail.length === 1 ? 24 : 24 + (index / (trail.length - 1)) * 312,
-    y: 236 - (Number(point.elevationPercent || 0) / 100) * 158,
+    y: plannedTraverseY(index, trail.length),
   }));
   const current =
     [...points].reverse().find((point) => point.status !== "future") ||
@@ -51,9 +67,14 @@ export default function MountainRhythmCard({
   const mountainScale = Number(score?.mountainScale || 0.72);
   const peakY = Math.round(58 + (1 - mountainScale) * 74);
   const geometry = trailGeometry(score?.trail || []);
-  const traveledPoints = geometry.points.filter((point) => point.status !== "future");
-  const traveledPath = traveledPoints
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+  const earnedRoute = geometry.points
+    .map((point, index) => {
+      if (point.status !== "complete" || Number(point.planned || 0) <= 0) {
+        return "";
+      }
+      const previous = geometry.points[index - 1] || { x: 0, y: 234 };
+      return `M${previous.x} ${previous.y}L${point.x} ${point.y}`;
+    })
     .join("");
   const flagX = Math.max(7, Math.min(geometry.current.x - 5, 342));
   const flagY = Math.max(6, Math.min(geometry.current.y - 22, 252));
@@ -185,13 +206,9 @@ export default function MountainRhythmCard({
             >
               <defs>
                 <linearGradient id="mountain-fill" x1="0" x2="0.15" y1="0" y2="1">
-                  <stop offset="0" stopColor="#6F9B7D" stopOpacity="0.2" />
-                  <stop offset="0.55" stopColor="#38664C" stopOpacity="0.16" />
+                  <stop offset="0" stopColor="#6F9B7D" stopOpacity="0.25" />
+                  <stop offset="0.55" stopColor="#38664C" stopOpacity="0.2" />
                   <stop offset="1" stopColor="#091216" stopOpacity="0.035" />
-                </linearGradient>
-                <linearGradient id="earned-route" x1="0" x2="1" y1="1" y2="0">
-                  <stop offset="0" stopColor="#4F9D69" />
-                  <stop offset="1" stopColor="#86EFAC" />
                 </linearGradient>
               </defs>
               <g
@@ -220,8 +237,8 @@ export default function MountainRhythmCard({
                 d={mountainRidgePath}
                 fill="none"
                 stroke="#8DAE96"
-                strokeOpacity="0.34"
-                strokeWidth="1.7"
+                strokeOpacity="0.43"
+                strokeWidth="1.8"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
@@ -259,14 +276,16 @@ export default function MountainRhythmCard({
                 strokeLinecap="round"
                 strokeWidth="2.7"
               />
-              {traveledPath ? (
+              {earnedRoute ? (
                 <path
-                  d={traveledPath}
+                  data-testid="mountain-rhythm-earned-route"
+                  d={earnedRoute}
                   fill="none"
-                  stroke="url(#earned-route)"
+                  stroke="#6DAE7B"
+                  strokeOpacity="0.86"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth="4"
+                  strokeWidth="3.1"
                 />
               ) : null}
               {geometry.points.map((point, index) => {
