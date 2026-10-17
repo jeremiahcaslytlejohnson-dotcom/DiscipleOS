@@ -81,7 +81,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M0 247 L22 241 L43 236 L60 235 L81 226 L101 220 L116 212 L132 203 L145 199 L156 203 L169 212 L184 218 L198 212 L213 201 L229 188 L244 178 L256 174 L266 177 L276 166 L283 149 L289 ${peakY} L296 ${peakY + 11} L304 ${peakY + 25} L313 ${peakY + 40} L323 ${peakY + 54} L335 163 L347 172 L360 180`;
+    `M0 244 L55 220 Q82 204 110 193 L127 196 Q137 199 145 205 L165 193 L185 180 L207 164 L230 147 L247 140 L260 120 L276 ${peakY + 12} L283 ${peakY + 3} Q291 ${peakY - 2} 298 ${peakY + 5} L310 ${peakY + 36} L320 ${peakY + 50} L340 151 L360 170`;
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -218,19 +218,19 @@ export default function MountainRhythmCard({
               >
                 <path
                   data-testid="mountain-rhythm-far-range"
-                  d="M0 191 L27 178 L48 184 L76 148 L96 157 L124 132 L148 151 L174 162 L202 139 L226 151 L253 119 L276 138 L301 111 L324 129 L346 143 L360 138 V280 H0 Z"
+                  d="M0 202 L28 187 L46 192 L74 157 L96 169 L119 177 L145 157 L168 169 L190 181 L217 156 L239 168 L263 139 L285 154 L310 123 L332 142 L348 150 L360 145 V280 H0 Z"
                   fill="#34483A"
-                  fillOpacity="0.3"
+                  fillOpacity="0.22"
                   stroke="#526B55"
-                  strokeOpacity="0.32"
+                  strokeOpacity="0.2"
                 />
                 <path
                   data-testid="mountain-rhythm-mid-range"
-                  d="M0 216 L30 200 L53 207 L82 182 L106 194 L132 173 L155 189 L180 207 L207 187 L230 197 L256 171 L280 185 L305 158 L328 175 L348 192 L360 187 V280 H0 Z"
+                  d="M0 218 L24 207 L43 211 L69 190 L92 201 L115 210 L140 187 L164 198 L186 210 L210 192 L232 200 L255 178 L278 189 L301 165 L321 180 L344 194 L360 189 V280 H0 Z"
                   fill="#3E5943"
-                  fillOpacity="0.27"
+                  fillOpacity="0.18"
                   stroke="#5D765F"
-                  strokeOpacity="0.3"
+                  strokeOpacity="0.17"
                 />
               </g>
               <path
@@ -242,8 +242,8 @@ export default function MountainRhythmCard({
                 d={mountainRidgePath}
                 fill="none"
                 stroke="#A3B69A"
-                strokeOpacity="0.58"
-                strokeWidth="1.5"
+                strokeOpacity="0.48"
+                strokeWidth="1.4"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
