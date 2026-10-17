@@ -2,7 +2,7 @@ import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
 const ASCENT_MARKERS = RHYTHM_LEVELS.map((level) => level.min);
-const PLANNED_TRAVERSE_Y = [232, 225, 221, 213, 207, 193, 198];
+const PLANNED_TRAVERSE_Y = [240, 234, 231, 223, 218, 207, 214];
 
 function plannedTraverseY(index: number, pointCount: number) {
   if (pointCount <= 1) return PLANNED_TRAVERSE_Y[0];
@@ -81,7 +81,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M0 242 L41 215 L48 209 L55 214 L84 227 Q88 229 92 222 L123 182 L129 176 L135 182 L162 199 L171 194 L212 128 Q217 118 222 127 L252 157 L260 162 L267 153 L298 ${peakY + 10} L305 ${peakY} L314 ${peakY + 12} L326 ${peakY + 38} L360 211`;
+    `M0 246 C24 235 41 221 62 219 C83 217 93 233 112 230 C136 226 151 198 174 183 C193 171 207 175 223 161 C243 144 256 ${peakY + 32} 274 ${peakY + 10} C285 ${peakY - 2} 296 ${peakY + 3} 307 ${peakY + 23} C324 ${peakY + 53} 338 163 360 184`;
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -154,7 +154,7 @@ export default function MountainRhythmCard({
                 data-testid="mountain-rhythm-stage-rail"
                 className="pointer-events-none absolute inset-y-0 left-0 z-[1] flex w-28 flex-col border-r border-white/[0.12] bg-[#0B1418]/60 px-2 py-3"
               >
-                <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/55">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75">
                   Milestones
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col-reverse justify-between gap-y-1">
@@ -179,14 +179,14 @@ export default function MountainRhythmCard({
                         />
                         <span
                           data-testid={`mountain-rhythm-stage-label-${index}`}
-                          className={`min-w-0 text-[11px] font-medium leading-[1.25] ${
+                            className={`min-w-0 text-xs font-medium leading-[1.25] ${
                             current
                               ? "text-[#F4D77A]"
                               : next
                                 ? "text-[#E7C76A]"
                               : reached
-                                ? "text-white/85"
-                                : "text-white/65"
+                                ? "text-white/95"
+                                : "text-white/80"
                           }`}
                         >
                           {level.name}
@@ -206,39 +206,28 @@ export default function MountainRhythmCard({
             >
               <defs>
                 <linearGradient id="mountain-fill" x1="0" x2="0.15" y1="0" y2="1">
-                  <stop offset="0" stopColor="#6F9B7D" stopOpacity="0.25" />
-                  <stop offset="0.55" stopColor="#38664C" stopOpacity="0.2" />
-                  <stop offset="1" stopColor="#091216" stopOpacity="0.035" />
+                  <stop offset="0" stopColor="#456B50" stopOpacity="0.66" />
+                  <stop offset="0.6" stopColor="#284833" stopOpacity="0.58" />
+                  <stop offset="1" stopColor="#0B1712" stopOpacity="0.34" />
                 </linearGradient>
               </defs>
-              <g
-                data-testid="mountain-rhythm-distant-ridges"
-                fill="#15241F"
-                stroke="#334A3D"
-                strokeOpacity="0.16"
-                strokeWidth="1"
-                strokeLinejoin="round"
-              >
-                <path
-                  d="M0 187 L27 169 L43 174 L76 148 L96 160 L119 151 L151 131 L176 148 L198 136 L222 151 L249 129 L269 143 L294 119 L315 136 L340 119 L360 132 V280 H0 Z"
-                  fillOpacity="0.34"
-                />
-                <path
-                  d="M0 210 L24 192 L45 199 L70 181 L92 187 L118 169 L143 186 L164 174 L190 188 L217 164 L237 178 L261 157 L282 171 L307 148 L329 164 L350 151 L360 158 V280 H0 Z"
-                  fill="#1B2C24"
-                  fillOpacity="0.3"
-                />
-              </g>
+              <path
+                data-testid="mountain-rhythm-distant-ridge"
+                d="M0 207 C49 202 77 185 125 181 C172 177 202 188 244 174 C289 159 324 163 360 151 V280 H0 Z"
+                fill="#14231C"
+                fillOpacity="0.34"
+              />
               <path
                 d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
               />
               <path
+                data-testid="mountain-rhythm-main-ridge"
                 d={mountainRidgePath}
                 fill="none"
-                stroke="#8DAE96"
-                strokeOpacity="0.43"
-                strokeWidth="1.8"
+                stroke="#819985"
+                strokeOpacity="0.62"
+                strokeWidth="1.9"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />

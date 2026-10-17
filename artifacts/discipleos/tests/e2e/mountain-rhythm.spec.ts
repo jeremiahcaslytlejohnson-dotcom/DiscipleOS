@@ -1287,6 +1287,11 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[3]).toBeGreaterThan(pointY[4]);
   expect(pointY[4]).toBeGreaterThan(pointY[5]);
   expect(pointY[6]).toBeGreaterThan(pointY[5]);
+  const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
+  const mainRidgeData = await mainRidge.getAttribute("d");
+  expect(mainRidgeData).toContain("C");
+  expect(mainRidgeData).not.toMatch(/L[\d.]/);
+  await expect(chart.getByTestId("mountain-rhythm-distant-ridge")).toHaveCount(1);
   const plannedPath = chart.getByTestId("mountain-rhythm-day-path");
   await expect(plannedPath).toHaveAttribute("stroke-dasharray", "3.5 5");
   const earnedRoute = chart.getByTestId("mountain-rhythm-earned-route");
@@ -1329,6 +1334,13 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   ).toHaveAttribute("aria-label", "On the Trail: Next stage");
   const stageRail = page.getByTestId("mountain-rhythm-stage-rail");
   await expect(stageRail.getByText("Milestones")).toBeVisible();
+  const currentMilestone = page.getByTestId("mountain-rhythm-stage-label-0");
+  const nextMilestone = page.getByTestId("mountain-rhythm-stage-label-1");
+  await expect(currentMilestone).toHaveCSS("font-size", "12px");
+  await expect(nextMilestone).toHaveCSS("font-size", "12px");
+  expect(await currentMilestone.evaluate((label) => getComputedStyle(label).color)).not.toBe(
+    await nextMilestone.evaluate((label) => getComputedStyle(label).color),
+  );
   for (const width of [320, 360, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     const railBox = await stageRail.boundingBox();
