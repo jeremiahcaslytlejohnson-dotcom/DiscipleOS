@@ -81,7 +81,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M0 246 C24 235 41 221 62 219 C83 217 93 233 112 230 C136 226 151 198 174 183 C193 171 207 175 223 161 C243 144 256 ${peakY + 32} 274 ${peakY + 10} C285 ${peakY - 2} 296 ${peakY + 3} 307 ${peakY + 23} C324 ${peakY + 53} 338 163 360 184`;
+    `M0 246 C19 237 31 226 45 224 L58 227 C72 230 81 218 92 208 C103 198 109 186 120 184 L132 191 C144 197 153 181 165 169 C177 157 188 154 200 160 L212 168 C224 175 233 157 244 143 C256 126 263 ${peakY + 38} 274 ${peakY + 14} L284 ${peakY} L294 ${peakY + 7} C306 ${peakY + 19} 310 ${peakY + 37} 318 ${peakY + 54} C331 152 344 171 360 185`;
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -211,12 +211,18 @@ export default function MountainRhythmCard({
                   <stop offset="1" stopColor="#0B1712" stopOpacity="0.34" />
                 </linearGradient>
               </defs>
-              <path
-                data-testid="mountain-rhythm-distant-ridge"
-                d="M0 207 C49 202 77 185 125 181 C172 177 202 188 244 174 C289 159 324 163 360 151 V280 H0 Z"
-                fill="#14231C"
-                fillOpacity="0.34"
-              />
+              <g data-testid="mountain-rhythm-distant-ridges">
+                <path
+                  d="M0 210 C18 200 31 185 48 184 C66 183 71 197 87 196 C104 194 112 169 130 166 C148 163 157 180 174 179 C190 178 200 151 218 149 C235 147 246 168 264 166 C281 164 292 142 310 140 C330 138 345 158 360 159 V280 H0 Z"
+                  fill="#101C17"
+                  fillOpacity="0.24"
+                />
+                <path
+                  d="M0 224 C23 212 38 203 54 204 C70 205 77 217 92 216 C108 215 120 192 138 189 C154 186 164 199 181 198 C198 197 211 176 228 173 C246 170 256 187 273 186 C292 185 303 165 321 163 C338 161 350 176 360 181 V280 H0 Z"
+                  fill="#1A2921"
+                  fillOpacity="0.2"
+                />
+              </g>
               <path
                 d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
