@@ -277,6 +277,7 @@ async function openMountainRhythm(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Mountain Rhythm", exact: true }),
   ).toBeVisible();
+  await page.locator(".launch-splash").waitFor({ state: "detached" });
   await expect(page.getByTestId("button-choose-7-day-climb")).toBeVisible();
 }
 
@@ -1293,7 +1294,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(40);
   await expect(chart.getByTestId("mountain-rhythm-far-range")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-mid-range")).toBeVisible();
-  await expect(chart.getByTestId("mountain-rhythm-foreground-facets").locator("path")).toHaveCount(3);
+  await expect(chart.getByTestId("mountain-rhythm-foreground-facets").locator("path")).toHaveCount(4);
   const farRangeData = await chart.getByTestId("mountain-rhythm-far-range").getAttribute("d");
   const midRangeData = await chart.getByTestId("mountain-rhythm-mid-range").getAttribute("d");
   expect(farRangeData).not.toBe(midRangeData);
