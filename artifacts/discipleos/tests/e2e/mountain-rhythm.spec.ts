@@ -1291,10 +1291,11 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
   expect(mainRidgeData).not.toContain("C");
-  expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(40);
+  expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(25);
+  expect(mainRidgeData?.match(/L/g)?.length).toBeLessThan(40);
   await expect(chart.getByTestId("mountain-rhythm-far-range")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-mid-range")).toBeVisible();
-  await expect(chart.getByTestId("mountain-rhythm-foreground-facets").locator("path")).toHaveCount(4);
+  await expect(chart.getByTestId("mountain-rhythm-foreground-facets")).toHaveCount(0);
   const farRangeData = await chart.getByTestId("mountain-rhythm-far-range").getAttribute("d");
   const midRangeData = await chart.getByTestId("mountain-rhythm-mid-range").getAttribute("d");
   expect(farRangeData).not.toBe(midRangeData);
