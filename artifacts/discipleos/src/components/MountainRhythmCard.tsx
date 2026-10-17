@@ -81,7 +81,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M0 246 C19 237 31 226 45 224 L58 227 C72 230 81 218 92 208 C103 198 109 186 120 184 L132 191 C144 197 153 181 165 169 C177 157 188 154 200 160 L212 168 C224 175 233 157 244 143 C256 126 263 ${peakY + 38} 274 ${peakY + 14} L284 ${peakY} L294 ${peakY + 7} C306 ${peakY + 19} 310 ${peakY + 37} 318 ${peakY + 54} C331 152 344 171 360 185`;
+    `M0 247 L12 243 L23 240 L34 237 L45 232 L55 231 L66 226 L77 223 L88 218 L99 215 L108 207 L116 202 L124 193 L131 188 L139 192 L146 199 L154 204 L163 207 L171 211 L180 208 L189 202 L198 195 L207 185 L215 176 L222 172 L230 176 L237 182 L244 181 L250 174 L256 170 L261 166 L266 159 L271 153 L276 148 L281 139 L286 ${peakY} L291 ${peakY + 13} L296 ${peakY + 21} L301 ${peakY + 35} L306 ${peakY + 49} L311 ${peakY + 59} L317 ${peakY + 69} L324 ${peakY + 82} L330 157 L337 163 L344 169 L352 173 L360 180`;
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -211,29 +211,62 @@ export default function MountainRhythmCard({
                   <stop offset="1" stopColor="#0B1712" stopOpacity="0.34" />
                 </linearGradient>
               </defs>
-              <g data-testid="mountain-rhythm-distant-ridges">
+              <g
+                data-testid="mountain-rhythm-distant-ridges"
+                strokeLinejoin="round"
+                strokeWidth="1.1"
+              >
                 <path
-                  d="M0 210 C18 200 31 185 48 184 C66 183 71 197 87 196 C104 194 112 169 130 166 C148 163 157 180 174 179 C190 178 200 151 218 149 C235 147 246 168 264 166 C281 164 292 142 310 140 C330 138 345 158 360 159 V280 H0 Z"
-                  fill="#101C17"
-                  fillOpacity="0.24"
+                  data-testid="mountain-rhythm-far-range"
+                  d="M0 188 L12 177 L21 180 L34 160 L43 166 L57 146 L66 153 L80 135 L91 142 L103 151 L114 145 L127 157 L139 152 L151 166 L163 158 L176 169 L188 147 L197 154 L211 128 L221 137 L234 121 L244 132 L257 114 L268 123 L281 103 L291 112 L304 126 L316 118 L330 134 L343 127 L360 143 V280 H0 Z"
+                  fill="#34483A"
+                  fillOpacity="0.42"
+                  stroke="#526B55"
+                  strokeOpacity="0.46"
                 />
                 <path
-                  d="M0 224 C23 212 38 203 54 204 C70 205 77 217 92 216 C108 215 120 192 138 189 C154 186 164 199 181 198 C198 197 211 176 228 173 C246 170 256 187 273 186 C292 185 303 165 321 163 C338 161 350 176 360 181 V280 H0 Z"
-                  fill="#1A2921"
-                  fillOpacity="0.2"
+                  data-testid="mountain-rhythm-mid-range"
+                  d="M0 211 L14 203 L25 207 L38 190 L49 196 L62 181 L73 186 L86 174 L97 181 L108 187 L119 179 L132 192 L143 186 L157 199 L169 190 L182 201 L194 183 L205 189 L218 171 L230 179 L242 165 L253 175 L266 159 L278 168 L291 154 L303 163 L316 178 L328 169 L340 182 L351 176 L360 185 V280 H0 Z"
+                  fill="#3E5943"
+                  fillOpacity="0.42"
+                  stroke="#5D765F"
+                  strokeOpacity="0.43"
                 />
               </g>
               <path
                 d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
               />
+              <g
+                data-testid="mountain-rhythm-foreground-facets"
+                stroke="#9AAF91"
+                strokeOpacity="0.15"
+                strokeWidth="1"
+                strokeLinejoin="round"
+              >
+                <path
+                  d="M45 232L88 218L124 193L139 192L154 204L131 238L85 251Z"
+                  fill="#A0AE7C"
+                  fillOpacity="0.15"
+                />
+                <path
+                  d={`M139 192L180 208L222 172L237 182L250 174L266 159L286 ${peakY}L291 ${peakY + 13}L276 148L256 170L230 176L207 185L180 208L163 207Z`}
+                  fill="#B4B98A"
+                  fillOpacity="0.13"
+                />
+                <path
+                  d={`M286 ${peakY}L291 ${peakY + 13}L296 ${peakY + 21}L301 ${peakY + 35}L306 ${peakY + 49}L311 ${peakY + 59}L317 ${peakY + 69}L324 ${peakY + 82}L330 157L337 163L344 169L352 173L360 180L324 226L292 190L276 148L291 ${peakY + 13}Z`}
+                  fill="#17281E"
+                  fillOpacity="0.28"
+                />
+              </g>
               <path
                 data-testid="mountain-rhythm-main-ridge"
                 d={mountainRidgePath}
                 fill="none"
-                stroke="#819985"
-                strokeOpacity="0.62"
-                strokeWidth="1.9"
+                stroke="#A3B69A"
+                strokeOpacity="0.72"
+                strokeWidth="1.65"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
