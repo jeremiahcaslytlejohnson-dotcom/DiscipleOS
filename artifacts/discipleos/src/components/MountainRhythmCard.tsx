@@ -64,9 +64,6 @@ export default function MountainRhythmCard({
     ? Math.max(0, RHYTHM_LEVELS.findIndex((level) => level.name === currentLevel))
     : -1;
   const nextLevel = currentIndex >= 0 ? RHYTHM_LEVELS[currentIndex + 1] : undefined;
-  const mountainScale = Number(score?.mountainScale || 0.72);
-  const peakY = Math.round(58 + (1 - mountainScale) * 74);
-  const summitY = peakY - 7;
   const geometry = trailGeometry(score?.trail || []);
   const earnedRoute = geometry.points
     .map((point, index) => {
@@ -82,7 +79,7 @@ export default function MountainRhythmCard({
   const currentPointIsToday = geometry.current.date === score?.windowEnd;
   const flagLabel = currentPointIsToday ? "Today" : "Latest day";
   const mountainRidgePath =
-    `M 0 242 C 18 241 34 239 47 233 C 66 218 88 192 112 178 C 121 172 129 169 137 173 C 153 181 167 189 180 185 C 194 181 207 162 224 151 C 237 143 251 137 260 122 C 272 105 278 ${summitY + 7} 292 ${summitY} C 296 ${summitY - 2} 302 ${summitY + 2} 307 ${summitY + 7} C 318 92 326 116 337 131 C 345 141 353 149 360 155`;
+    "M0 248 L35 239 L68 226 Q96 212 125 204 Q146 205 165 215 L190 200 Q202 192 215 187 L238 169 Q250 157 260 149 L274 125 L283 105 Q288 96 293 97 L307 115 L326 142 L344 157 L360 167";
 
   return (
     <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#D4A017]/25 bg-[linear-gradient(145deg,rgba(12,22,28,0.98),rgba(16,37,35,0.94),rgba(212,160,23,0.10))] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.25)] sm:p-5">
@@ -221,21 +218,21 @@ export default function MountainRhythmCard({
                   data-testid="mountain-rhythm-far-range"
                   d="M0 210 L28 196 L50 202 L82 177 L106 185 L132 194 L163 170 L188 182 L214 191 L246 164 L270 176 L304 148 L331 165 L360 158 V280 H0 Z"
                   fill="#34483A"
-                  fillOpacity="0.17"
+                  fillOpacity="0.15"
                   stroke="#526B55"
-                  strokeOpacity="0.12"
+                  strokeOpacity="0.1"
                 />
                 <path
                   data-testid="mountain-rhythm-mid-range"
                   d="M0 224 L32 213 L56 219 L88 196 L111 205 L139 216 L170 191 L194 202 L218 214 L248 188 L273 198 L306 175 L334 190 L360 185 V280 H0 Z"
                   fill="#3E5943"
-                  fillOpacity="0.13"
+                  fillOpacity="0.11"
                   stroke="#5D765F"
-                  strokeOpacity="0.1"
+                  strokeOpacity="0.08"
                 />
               </g>
               <path
-                d={`${mountainRidgePath} L 360 280 L 0 280 Z`}
+                d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
               />
               <path
