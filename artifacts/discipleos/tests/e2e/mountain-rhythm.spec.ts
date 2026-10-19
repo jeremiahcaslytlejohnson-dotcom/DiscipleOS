@@ -1375,8 +1375,8 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     days: 7,
     name: "7-Day Climb",
     today,
-    startOffset: -2,
-    completedIndexes: [2],
+    startOffset: -3,
+    completedIndexes: [0, 1, 2, 3],
   });
 
   await stubApi(page, {
@@ -1393,12 +1393,16 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     (points) => points.map((point) => Number(point.getAttribute("cy"))),
   );
   expect(pointY).toHaveLength(7);
+  expect(pointY).toEqual([240, 231, 235, 219, 223, 201, 190]);
+  expect(pointY[0] - pointY[6]).toBeGreaterThanOrEqual(45);
+  expect(pointY[0] - pointY[6]).toBeLessThanOrEqual(55);
   expect(pointY[0]).toBeGreaterThan(pointY[1]);
   expect(pointY[1]).toBeLessThan(pointY[2]);
   expect(pointY[2]).toBeGreaterThan(pointY[3]);
   expect(pointY[3]).toBeLessThan(pointY[4]);
   expect(pointY[0]).toBeGreaterThan(pointY[5]);
-  expect(pointY[6]).toBeGreaterThan(pointY[5]);
+  expect(pointY[6]).toBeLessThan(pointY[5]);
+  expect(pointY.every((y) => y >= 180 && y <= 245)).toBe(true);
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
   expect(mainRidgeData).toContain("Q96 212 125 204");
@@ -1417,7 +1421,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   await expect(plannedPath).toHaveAttribute("stroke-dasharray", "3.5 5");
   const earnedRoute = chart.getByTestId("mountain-rhythm-earned-route");
   const earnedRouteData = await earnedRoute.getAttribute("d");
-  expect(earnedRouteData?.match(/M/g)).toHaveLength(1);
+  expect(earnedRouteData?.match(/M/g)).toHaveLength(4);
   const dayPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]').evaluateAll(
     (points) =>
       points.map((point) => ({
@@ -1425,10 +1429,11 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
         y: Number(point.getAttribute("cy")),
       })),
   );
-  const completedRouteEndpoint = earnedRouteData?.match(/L([\d.]+) ([\d.]+)/);
+  const completedRouteEndpoints = earnedRouteData?.match(/L[\d.]+ [\d.]+/g);
+  const completedRouteEndpoint = completedRouteEndpoints?.at(-1)?.match(/L([\d.]+) ([\d.]+)/);
   expect(completedRouteEndpoint).not.toBeNull();
-  expect(Number(completedRouteEndpoint![1])).toBe(dayPoints[2].x);
-  expect(Number(completedRouteEndpoint![2])).toBe(dayPoints[2].y);
+  expect(Number(completedRouteEndpoint![1])).toBe(dayPoints[3].x);
+  expect(Number(completedRouteEndpoint![2])).toBe(dayPoints[3].y);
   const labelXs = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
     (labels) => labels.map((label) => Number(label.getAttribute("x"))),
   );
@@ -1446,24 +1451,24 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
         Number(match?.[2]) + Number(pole?.getAttribute("y1")),
       ];
     });
-  expect(flagAnchor).toEqual([dayPoints[2].x, dayPoints[2].y]);
+  expect(flagAnchor).toEqual([dayPoints[3].x, dayPoints[3].y]);
   await expect(
-    page.getByTestId("mountain-rhythm-stage-indicator-0"),
-  ).toHaveAttribute("aria-label", "Basecamp: Current stage");
+    page.getByTestId("mountain-rhythm-stage-indicator-2"),
+  ).toHaveAttribute("aria-label", "Gaining Elevation: Current stage");
   await expect(
-    page.getByTestId("mountain-rhythm-stage-indicator-1"),
-  ).toHaveAttribute("aria-label", "On the Trail: Next stage");
+    page.getByTestId("mountain-rhythm-stage-indicator-3"),
+  ).toHaveAttribute("aria-label", "Ridgeline: Next stage");
   const stageRail = page.getByTestId("mountain-rhythm-stage-rail");
   await expect(stageRail.getByText("Milestones")).toBeVisible();
-  const currentMilestone = page.getByTestId("mountain-rhythm-stage-label-0");
-  const nextMilestone = page.getByTestId("mountain-rhythm-stage-label-1");
+  const currentMilestone = page.getByTestId("mountain-rhythm-stage-label-2");
+  const nextMilestone = page.getByTestId("mountain-rhythm-stage-label-3");
   await expect(currentMilestone).toHaveCSS("font-size", "12px");
   await expect(nextMilestone).toHaveCSS("font-size", "12px");
   expect(await currentMilestone.evaluate((label) => getComputedStyle(label).color)).not.toBe(
     await nextMilestone.evaluate((label) => getComputedStyle(label).color),
   );
-  for (const width of [320, 360, 390, 768, 1280]) {
-    await page.setViewportSize({ width, height: 844 });
+  for (const width of [320, 360, 375, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: width === 375 ? 667 : 844 });
     const railBox = await stageRail.boundingBox();
     const chartBox = await chart.boundingBox();
     const flagBox = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
@@ -1473,6 +1478,67 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
     expect(flagBox!.x).toBeGreaterThanOrEqual(chartBox!.x);
     expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
+    const landmarkGroup = chart.getByTestId(
+      width < 1024 ? "mountain-rhythm-landmarks-mobile" : "mountain-rhythm-landmarks-wide",
+    );
+    const expectedLandmarks = width < 1024 ? 3 : 5;
+    await expect(landmarkGroup.locator("text")).toHaveCount(expectedLandmarks);
+    const landmarkBoxes = await landmarkGroup.locator("text").evaluateAll((labels) =>
+      labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return {
+          name: label.textContent,
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+        };
+      }),
+    );
+    const markedBoxes = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]').evaluateAll(
+      (points) => points.map((point) => {
+        const box = point.getBoundingClientRect();
+        return {
+          name: point.getAttribute("data-testid"),
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+        };
+      }),
+    );
+    const dayNumberBoxes = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
+      (labels) => labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return {
+          name: label.textContent,
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+        };
+      }),
+    );
+    const flagRect = {
+      left: flagBox!.x,
+      right: flagBox!.x + flagBox!.width,
+      top: flagBox!.y,
+      bottom: flagBox!.y + flagBox!.height,
+    };
+    for (const labelBox of landmarkBoxes) {
+      expect(labelBox.left).toBeGreaterThanOrEqual(chartBox!.x);
+      expect(labelBox.right).toBeLessThanOrEqual(chartBox!.x + chartBox!.width);
+      for (const otherBox of [...markedBoxes, ...dayNumberBoxes, { ...flagRect, name: "Today flag" }]) {
+        const overlaps = labelBox.left < otherBox.right &&
+          labelBox.right > otherBox.left &&
+          labelBox.top < otherBox.bottom &&
+          labelBox.bottom > otherBox.top;
+        expect(
+          overlaps,
+          `${labelBox.name} overlaps ${otherBox.name} at ${width}px: ${JSON.stringify({ labelBox, otherBox })}`,
+        ).toBe(false);
+      }
+    }
     for (let index = 0; index < 5; index += 1) {
       const label = stageRail.getByTestId(`mountain-rhythm-stage-label-${index}`);
       const indicator = stageRail.getByTestId(`mountain-rhythm-stage-indicator-${index}`);

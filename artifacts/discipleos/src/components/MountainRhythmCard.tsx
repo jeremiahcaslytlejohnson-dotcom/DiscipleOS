@@ -2,7 +2,7 @@ import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
 const ASCENT_MARKERS = RHYTHM_LEVELS.map((level) => level.min);
-const PLANNED_TRAVERSE_Y = [240, 232, 236, 220, 224, 203, 211];
+const PLANNED_TRAVERSE_Y = [240, 231, 235, 219, 223, 201, 190];
 
 function plannedTraverseY(index: number, pointCount: number) {
   if (pointCount <= 1) return PLANNED_TRAVERSE_Y[0];
@@ -256,6 +256,44 @@ export default function MountainRhythmCard({
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
+              <g
+                data-testid="mountain-rhythm-landmarks-wide"
+                aria-hidden="true"
+                fill="#D4DDCD"
+                fillOpacity="0.48"
+                fontSize="12"
+                fontWeight="500"
+                stroke="#0B1418"
+                strokeOpacity="0.8"
+                strokeWidth="2.5"
+                paintOrder="stroke"
+                pointerEvents="none"
+                className="hidden lg:inline"
+              >
+                <text data-testid="mountain-rhythm-landmark-basecamp-wide" x="54" y="251">Basecamp</text>
+                <text data-testid="mountain-rhythm-landmark-trail-wide" x="40" y="220">On the Trail</text>
+                <text data-testid="mountain-rhythm-landmark-gaining-wide" x="220" y="170">Gaining Elevation</text>
+                <text data-testid="mountain-rhythm-landmark-ridgeline-wide" x="300" y="140">Ridgeline</text>
+                <text data-testid="mountain-rhythm-landmark-summit-wide" x="305" y="108">Summit</text>
+              </g>
+              <g
+                data-testid="mountain-rhythm-landmarks-mobile"
+                aria-hidden="true"
+                fill="#D4DDCD"
+                fillOpacity="0.48"
+                fontSize="15"
+                fontWeight="500"
+                stroke="#0B1418"
+                strokeOpacity="0.8"
+                strokeWidth="2.5"
+                paintOrder="stroke"
+                pointerEvents="none"
+                className="lg:hidden"
+              >
+                <text data-testid="mountain-rhythm-landmark-basecamp-mobile" x="54" y="251" fontSize="12">Basecamp</text>
+                <text data-testid="mountain-rhythm-landmark-gaining-mobile" x="220" y="170">Gaining Elevation</text>
+                <text data-testid="mountain-rhythm-landmark-summit-mobile" x="305" y="108">Summit</text>
+              </g>
                <g
                  transform="translate(8 214)"
                 opacity="0.42"
