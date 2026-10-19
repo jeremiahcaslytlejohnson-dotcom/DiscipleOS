@@ -905,7 +905,7 @@ test("starts a fresh 7-Day Climb after an expired one and keeps it selected afte
   expect(mobilePositions.contentWidth).toBeLessThanOrEqual(mobilePositions.viewportWidth);
   await expandPastClimbs(page);
   await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).toContainText("Expired");
-  await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).toContainText(expiredPlan.id);
+  await expect(page.getByTestId(`past-climb-${expiredPlan.id}`)).not.toContainText(expiredPlan.id);
   await expect.poll(async () =>
     page.evaluate(() => {
       const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
@@ -1145,6 +1145,30 @@ test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async (
     name: "7-Day Climb",
     today,
   });
+  const prayerEvent = {
+    id: "aligned-today-prayer",
+    title: "Prayer time",
+    type: "prayer",
+    date: today,
+    time: "06:30",
+    repeat: "daily",
+    repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    repeatUntil: activePlan.endDate,
+  };
+  const yesterday = addDays(today, -1);
+  const oldPrayerEvent = { ...prayerEvent, id: "aligned-old-prayer", date: yesterday, repeatUntil: yesterday };
+  const fastingEvent = {
+    id: "aligned-today-fast",
+    title: "Fasting commitment",
+    type: "fast",
+    date: today,
+    repeat: "none",
+  };
+  activePlan.disciplineTracking = {
+    setupAnswered: true,
+    prayer: { enabled: true, eventIds: [prayerEvent.id, oldPrayerEvent.id] },
+    fasting: { enabled: true, eventIds: [fastingEvent.id] },
+  };
   const ownerId = "anonymous-layout-session";
   await stubApi(page, {
     success: true,
@@ -1152,43 +1176,130 @@ test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async (
     authenticated: false,
     established: false,
   });
-  await seedLocalData(page, [activePlan], activePlan.id, { ownerId });
+  await seedLocalData(page, [activePlan], activePlan.id, {
+    ownerId,
+    events: [prayerEvent, oldPrayerEvent, fastingEvent],
+  });
   await openMountainRhythm(page);
 
-  for (const width of [390, 1280]) {
+  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  await expect(tracker.getByRole("button", { name: "Set up commitments" })).toHaveCount(0);
+  await expect(tracker.getByRole("button", { name: "Edit schedule" })).toHaveCount(2);
+  await expect(tracker.getByTestId("discipline-summary-prayer")).toContainText("Prayer: 0 of 2 scheduled times completed");
+  await expect(tracker.getByTestId("discipline-summary-fasting")).toContainText("Fasting: 0 of 1 scheduled days completed");
+  await expect(tracker.getByTestId("discipline-recent-prayer")).not.toHaveAttribute("open", "");
+  expect((await tracker.getByRole("button", { name: "Edit schedule" }).first().boundingBox())?.height)
+    .toBeGreaterThanOrEqual(44);
+  expect((await tracker.getByRole("button", { name: "End early" }).first().boundingBox())?.height)
+    .toBeGreaterThanOrEqual(44);
+  const todayPrayerAction = tracker.getByRole("button", { name: `Mark complete prayer for ${today}` });
+  await expect(todayPrayerAction).toBeVisible();
+  expect((await todayPrayerAction.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  const completeRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
+  );
+  await todayPrayerAction.click();
+  expect((await completeRequest).postDataJSON()).toMatchObject({
+    eventId: prayerEvent.id,
+    occurrenceDate: today,
+    completed: true,
+  });
+  await expect(tracker.getByRole("button", { name: `Undo prayer for ${today}` })).toBeVisible();
+  const undoRequest = page.waitForRequest(
+    (request) => request.url().endsWith("/api/events/complete") && request.method() === "POST",
+  );
+  await tracker.getByRole("button", { name: `Undo prayer for ${today}` }).click();
+  expect((await undoRequest).postDataJSON()).toMatchObject({
+    eventId: prayerEvent.id,
+    occurrenceDate: today,
+    completed: false,
+  });
+  await tracker.getByTestId("discipline-recent-prayer").locator("summary").evaluate(
+    (summary: HTMLElement) => summary.click(),
+  );
+  await expect(tracker.getByRole("button", { name: `Mark complete prayer for ${yesterday}` })).toBeVisible();
+
+  for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     const layout = await page.evaluate(() => {
-      const boxes = (testId: string) =>
-        Array.from(
-          document.querySelector(`[data-testid="${testId}"]`)?.children || [],
-        ).map((child) => {
-          const box = child.getBoundingClientRect();
-          return { x: box.x, y: box.y, width: box.width, height: box.height };
-        });
+      const box = (testId: string) => {
+        const rect = document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect();
+        return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null;
+      };
       return {
         documentWidth: document.documentElement.scrollWidth,
-        overview: boxes("mountain-rhythm-overview-grid"),
-        details: boxes("mountain-rhythm-details-grid"),
+        card: box("mountain-rhythm-panel"),
+        choose: box("mountain-rhythm-choose"),
+        commitments: box("mountain-rhythm-disciplines"),
+        details: Array.from(document.querySelector('[data-testid="mountain-rhythm-details-grid"]')?.children || []).map((child) => {
+          const rect = child.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }),
       };
     });
     expect(layout.documentWidth).toBeLessThanOrEqual(width + 1);
-    expect(layout.overview).toHaveLength(2);
+    expect(layout.card).not.toBeNull();
+    expect(layout.choose).not.toBeNull();
+    expect(layout.commitments).not.toBeNull();
     expect(layout.details).toHaveLength(2);
 
     if (width >= 1024) {
-      for (const index of [0, 1]) {
-        expect(Math.abs(layout.overview[index].x - layout.details[index].x)).toBeLessThanOrEqual(1);
-        expect(Math.abs(layout.overview[index].width - layout.details[index].width)).toBeLessThanOrEqual(1);
-      }
+      expect(Math.abs(layout.card!.x - layout.choose!.x)).toBeGreaterThan(1);
+      expect(Math.abs(layout.card!.y - layout.choose!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(layout.card!.x - layout.details[0].x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(layout.choose!.x - layout.details[1].x)).toBeLessThanOrEqual(1);
+      expect(layout.commitments!.y).toBeGreaterThan(layout.card!.y);
+      await expect(page.getByTestId("mountain-rhythm-stage-indicator-0"))
+        .toHaveAttribute("aria-label", "Basecamp: Current stage");
+      await expect(page.getByTestId("mountain-rhythm-stage-label-0")).toContainText("Current");
+      await expect(page.getByTestId("mountain-rhythm-stage-indicator-1"))
+        .toHaveAttribute("aria-label", "On the Trail: Next stage");
+      await expect(page.getByTestId("mountain-rhythm-stage-label-1")).toContainText("Next");
     } else {
-      expect(layout.overview[1].y).toBeGreaterThanOrEqual(
-        layout.overview[0].y + layout.overview[0].height - 1,
-      );
-      expect(layout.details[1].y).toBeGreaterThanOrEqual(
-        layout.details[0].y + layout.details[0].height - 1,
-      );
+      expect(layout.commitments!.y).toBeGreaterThanOrEqual(layout.card!.y + layout.card!.height - 1);
+      expect(layout.choose!.y).toBeGreaterThanOrEqual(layout.commitments!.y + layout.commitments!.height - 1);
     }
   }
+});
+
+test("shows climb selection before optional setup on a phone with no active climb", async ({ page }) => {
+  const ownerId = "anonymous-empty-mountain-session";
+  const expiredPlan = makePlan({
+    id: "expired-climb-without-active-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today: new Date().toISOString().slice(0, 10),
+    startOffset: -14,
+  });
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [expiredPlan], expiredPlan.id, { ownerId });
+  await page.setViewportSize({ width: 375, height: 667 });
+  await openMountainRhythm(page);
+
+  const boxes = await page.evaluate(() => {
+    const get = (selector: string) => {
+      const element = document.querySelector(selector);
+      const rect = element?.getBoundingClientRect();
+      return rect ? { top: rect.top, bottom: rect.bottom } : null;
+    };
+    return {
+      card: get('[data-testid="mountain-rhythm-panel"]'),
+      choose: get('[data-testid="mountain-rhythm-choose"]'),
+      invitation: get('[data-testid="mountain-rhythm-commitment-invitation"]'),
+      width: document.documentElement.scrollWidth,
+    };
+  });
+  expect(boxes.width).toBeLessThanOrEqual(376);
+  expect(boxes.card).not.toBeNull();
+  expect(boxes.choose).not.toBeNull();
+  expect(boxes.invitation).not.toBeNull();
+  expect(boxes.choose!.top).toBeGreaterThanOrEqual(boxes.card!.bottom - 1);
+  expect(boxes.invitation!.top).toBeGreaterThanOrEqual(boxes.choose!.bottom - 1);
 });
 
 test("does not replace an unsynced fresh climb with an expired server record", async ({

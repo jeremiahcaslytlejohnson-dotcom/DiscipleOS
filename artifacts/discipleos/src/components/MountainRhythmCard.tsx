@@ -169,7 +169,7 @@ export default function MountainRhythmCard({
                             current
                               ? "border-[#F4D77A] bg-[#D4A017] shadow-[0_0_0_2px_rgba(212,160,23,0.16)]"
                               : next
-                                ? "border-[#D4A017] bg-transparent"
+                                ? "border-sky-300 bg-[#0B1418]"
                               : reached
                                 ? "border-emerald-200 bg-emerald-400"
                                 : "border-white/30 bg-[#10171A]"
@@ -180,14 +180,25 @@ export default function MountainRhythmCard({
                             className={`min-w-0 text-xs font-medium leading-[1.25] ${
                             current
                               ? "text-[#F4D77A]"
-                              : next
-                                ? "text-[#E7C76A]"
+                            : next
+                              ? "text-sky-200"
                               : reached
                                 ? "text-white/95"
                                 : "text-white/80"
                           }`}
                         >
                           {level.name}
+                          {current || next ? (
+                            <span
+                              className={`ml-1.5 inline-flex align-middle rounded px-1 py-0.5 text-[8px] font-bold uppercase leading-none tracking-[0.08em] ${
+                                current
+                                  ? "bg-[#D4A017]/20 text-[#F4D77A]"
+                                  : "bg-sky-300/10 text-sky-200"
+                              }`}
+                            >
+                              {current ? "Current" : "Next"}
+                            </span>
+                          ) : null}
                         </span>
                       </div>
                     );

@@ -345,6 +345,34 @@ export default function MountainRhythmDisciplines({
       fasting: recentDisciplineOccurrences(fastingEvents, completions, today),
     };
   }, [prayerEvents, fastingEvents, today, completions]);
+  const renderOccurrenceButton = (
+    discipline: Discipline,
+    occurrence: (typeof recentOccurrences.prayer)[number],
+    prominent = false,
+  ) => {
+    const { event, date, completed } = occurrence;
+    return (
+      <button
+        key={`${event.id}:${date}`}
+        type="button"
+        onClick={() => onToggleCompletion(event.id, date, !completed)}
+        className={`mt-1 flex min-h-11 w-full items-center justify-between gap-2 rounded-md px-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] ${
+          prominent
+            ? "border border-[#D4A017]/40 bg-[#D4A017]/[0.08] text-white hover:bg-[#D4A017]/[0.14]"
+            : "px-2 text-white/75 hover:bg-white/[0.04]"
+        }`}
+        aria-label={`${completed ? "Undo" : "Mark complete"} ${discipline} for ${date}`}
+      >
+        <span className="min-w-0 truncate">
+          {date === today ? "Today" : new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+          {discipline === "prayer" ? ` · ${event.time || "Prayer"}` : " · All-day"}
+        </span>
+        <span className={`shrink-0 font-semibold ${completed ? "text-emerald-200" : prominent ? "text-[#F4D77A]" : "text-white/65"}`}>
+          {completed ? "Completed · Undo" : "Mark complete"}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <section className="mt-5 min-w-0" data-testid="mountain-rhythm-disciplines">
@@ -381,37 +409,49 @@ export default function MountainRhythmDisciplines({
               const enabled = persisted[discipline].enabled;
               return <div key={discipline} className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-sm font-medium capitalize text-white">
-                    <input type="checkbox" checked={enabled} onChange={(event) => event.target.checked ? beginEdit(discipline) : void endCommitmentEarly(discipline)} className="accent-[#D4A017]" />
+                  <label className="flex min-h-11 items-center gap-2 text-sm font-medium capitalize text-white">
+                    <input type="checkbox" checked={enabled} onChange={(event) => event.target.checked ? beginEdit(discipline) : void endCommitmentEarly(discipline)} className="h-5 w-5 accent-[#D4A017] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A]" />
                     {discipline}
                   </label>
-                  <button type="button" onClick={() => beginEdit(discipline)} className="min-h-9 rounded-md border border-white/15 px-3 text-xs text-white/75">{enabled ? "Edit schedule" : "Set schedule"}</button>
+                  <button type="button" onClick={() => beginEdit(discipline)} className="min-h-11 rounded-md border border-white/15 px-3 text-sm text-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A]">{enabled ? "Edit schedule" : "Set schedule"}</button>
                 </div>
                 {enabled && savedEvents.length ? <div className="mt-1 text-xs text-white/55">{discipline === "prayer" ? `${savedEvents[0].time} · ${savedEvents[0].repeat === "daily" ? "Daily" : "Weekly"}` : `${savedEvents.length} all-day date${savedEvents.length === 1 ? "" : "s"}`}</div> : null}
-                {savedEvents.length ? <button type="button" disabled={saving} onClick={() => void endCommitmentEarly(discipline)} className="mt-1 min-h-8 text-xs text-white/55 underline disabled:opacity-40">End early</button> : null}
+                {savedEvents.length ? <button type="button" disabled={saving} onClick={() => void endCommitmentEarly(discipline)} className="mt-1 min-h-11 px-2 text-sm text-white/65 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A] disabled:opacity-40">End early</button> : null}
               </div>;
             })}
           </div>
-          <button type="button" onClick={beginFlow} className="mt-3 min-h-10 rounded-md border border-white/15 px-3 text-sm text-white/75">Set up commitments</button>
           {(["prayer", "fasting"] as const).map((discipline) => {
             const occurrences = recentOccurrences[discipline];
             const completedCount = occurrences.filter((item) => item.completed).length;
+            const todayOccurrences = occurrences.filter((item) => item.date === today);
+            const olderOccurrences = occurrences.filter((item) => item.date !== today);
             const opportunity = discipline === "prayer" ? "scheduled times" : "scheduled days";
             return <div key={`summary-${discipline}`} className="mt-3 border-t border-white/10 pt-2" data-testid={`discipline-summary-${discipline}`}>
-              <p className="text-xs font-medium text-white/80">
+              <p className="text-sm font-medium text-white/85">
                 {occurrences.length
                   ? `${discipline === "prayer" ? "Prayer" : "Fasting"}: ${completedCount} of ${occurrences.length} ${opportunity} completed in the last 7 days`
                   : `No ${discipline === "prayer" ? "prayer" : "fasting"} scheduled in the last 7 days`}
               </p>
-              {occurrences.map(({ event, date, completed }) => (
-                <button key={`${event.id}:${date}`} type="button" onClick={() => onToggleCompletion(event.id, date, !completed)} className="mt-1 flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-xs text-white/75 hover:bg-white/[0.04]" aria-label={`${completed ? "Undo" : "Mark complete"} ${discipline} for ${date}`}>
-                  <span className="min-w-0 truncate">
-                    {date === today ? "Today" : new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                    {discipline === "prayer" ? ` · ${event.time || "Prayer"}` : " · All-day"}
-                  </span>
-                  <span className={completed ? "shrink-0 text-emerald-200" : "shrink-0 text-white/55"}>{completed ? "Completed · Undo" : "Mark complete"}</span>
-                </button>
-              ))}
+              {todayOccurrences.length ? (
+                <div className="mt-2" data-testid={`discipline-today-actions-${discipline}`}>
+                  {todayOccurrences.map((occurrence) => renderOccurrenceButton(discipline, occurrence, true))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-white/55" data-testid={`discipline-today-empty-${discipline}`}>
+                  No {discipline} scheduled today.
+                </p>
+              )}
+              {olderOccurrences.length ? (
+                <details className="mt-2 border-t border-white/[0.08] pt-1" data-testid={`discipline-recent-${discipline}`}>
+                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-sm text-white/70 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4D77A]">
+                    <span>Recent activity</span>
+                    <span className="text-xs text-white/50">{olderOccurrences.length}</span>
+                  </summary>
+                  <div className="pb-1">
+                    {olderOccurrences.map((occurrence) => renderOccurrenceButton(discipline, occurrence))}
+                  </div>
+                </details>
+              ) : null}
             </div>;
           })}
         </>

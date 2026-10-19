@@ -5481,7 +5481,11 @@ export default function DiscipleOSApp() {
                               ) : null}
                               <div
                                 data-testid="dashboard-progress-percent"
-                                aria-label={`Overall plan progress: ${progressPercent}% complete`}
+                                aria-label={
+                                  isMountainRhythm
+                                    ? `Journey progress: ${progressPercent}%, ${selectedTodayRhythmScore?.completedDays || 0} of ${selectedTodayRhythmScore?.journeyDays || 0} planned days completed`
+                                    : `Assigned chapter progress: ${progressPercent}% complete`
+                                }
                                 className={cn(
                                   "shrink-0 text-lg font-semibold",
                                   status === "Up to date"
@@ -5489,7 +5493,9 @@ export default function DiscipleOSApp() {
                                     : "text-[#F4D77A]",
                                 )}
                               >
-                                Overall · {progressPercent}% complete
+                                {isMountainRhythm
+                                  ? `Journey · ${progressPercent}% · ${selectedTodayRhythmScore?.completedDays || 0} of ${selectedTodayRhythmScore?.journeyDays || 0} planned days`
+                                  : `Reading · ${progressPercent}% of assigned chapters`}
                               </div>
                             </div>
                           ) : null}
@@ -6428,7 +6434,7 @@ export default function DiscipleOSApp() {
                       <div className="discipleos-meta-copy mt-1 text-sm">
                         {formatDate(activeClimbPlan.startDate)} – {formatDate(activeClimbPlan.endDate)}
                         {" · "}
-                        {getPlanStats(activeClimbPlan).percent}% complete
+                        Reading · {getPlanStats(activeClimbPlan).percent}% of assigned chapters complete
                       </div>
                     </div>
                     <Link
@@ -6650,7 +6656,7 @@ export default function DiscipleOSApp() {
                                }}
                                data-testid={`plan-card-status-${plan.id}`}
                              >
-                              {stats.percent}% complete
+                              Reading · {stats.percent}% of assigned chapters complete
                              </span>
                              {isGuidedClimbSetOnePlan(plan) ? (
                                <button

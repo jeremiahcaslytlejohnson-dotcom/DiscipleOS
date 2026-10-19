@@ -937,21 +937,16 @@ export default function MountainRhythm() {
             data-testid="mountain-rhythm-overview-grid"
             className="mt-8 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
           >
-            <div className="min-w-0">
+            <div className="order-1 min-w-0 lg:col-start-1 lg:row-start-1">
               <MountainRhythmCard score={score} loading={isLoading} />
-              <MountainRhythmDisciplines
-                plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
-                events={events}
-                completions={eventCompletions}
-                today={today}
-                ownerId={ownerId}
-                onSavePlan={saveDisciplinePlan}
-                onSaveEvent={saveDisciplineEvent}
-                onToggleCompletion={toggleDisciplineCompletion}
-              />
             </div>
 
-            <section data-testid="mountain-rhythm-choose" className="min-w-0">
+            <section
+              data-testid="mountain-rhythm-choose"
+              className={`min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 ${
+                activeClimb ? "order-3" : "order-2"
+              }`}
+            >
               <div className="discipleos-section-heading">
                 <Mountain className="discipleos-section-heading__icon" />
                 Choose your climb
@@ -971,15 +966,15 @@ export default function MountainRhythm() {
                       key={choice.kind}
                       onClick={() => !later && !locked && !unavailable && requestStartClimb(choice.kind)}
                       disabled={later || locked || unavailable}
-                      className={`discipleos-item-surface w-full p-4 text-left ${active ? "border-[#D4A017] bg-[#D4A017]/15" : choice.kind === "7-day-climb" ? "border-sky-300/25 bg-sky-300/[0.06]" : choice.kind === "20-day-reset" ? "border-[#D4A017]/35 bg-[#D4A017]/[0.08]" : "border-white/10 bg-white/[0.03]"} ${later || locked || unavailable ? "cursor-not-allowed opacity-80" : "hover:border-[#D4A017]/60 hover:bg-[#D4A017]/10"}`}
+                      className={`discipleos-item-surface w-full text-left ${unavailable ? "p-3" : "p-4"} ${active ? "border-[#D4A017] bg-[#D4A017]/15" : choice.kind === "7-day-climb" ? "border-sky-300/25 bg-sky-300/[0.06]" : choice.kind === "20-day-reset" ? "border-[#D4A017]/35 bg-[#D4A017]/[0.08]" : "border-white/10 bg-white/[0.03]"} ${later || locked || unavailable ? "cursor-not-allowed opacity-75" : "hover:border-[#D4A017]/60 hover:bg-[#D4A017]/10"}`}
                       data-testid={`button-choose-${choice.kind}`}
                     >
                       <div className="flex min-w-0 items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="break-words text-base leading-6 font-semibold text-white">
+                          <div className={`break-words font-semibold text-white ${unavailable ? "text-sm leading-5" : "text-base leading-6"}`}>
                             {active ? `${choice.label} · In Progress` : completed ? `${choice.label} · Complete` : choice.label}
                           </div>
-                            <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-sm leading-5">{choice.description}</div>
+                            <div className={`discipleos-secondary-copy discipleos-safe-text mt-1 leading-5 ${unavailable ? "text-xs" : "text-sm"}`}>{choice.description}</div>
                         </div>
                         {later || locked ? <LockKeyhole className="h-5 w-5 text-white/75" /> : active ? <Check className="h-5 w-5 text-[#F4D77A]" /> : <span className="text-lg text-[#D4A017]">+</span>}
                       </div>
@@ -1167,6 +1162,24 @@ export default function MountainRhythm() {
               ) : null}
               {saveError ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100" data-testid="status-mountain-save">{saveError}</div> : null}
             </section>
+
+            <div
+              data-testid="mountain-rhythm-commitments-layout"
+              className={`min-w-0 lg:col-start-1 lg:row-start-2 ${
+                activeClimb ? "order-2" : "order-3"
+              }`}
+            >
+              <MountainRhythmDisciplines
+                plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
+                events={events}
+                completions={eventCompletions}
+                today={today}
+                ownerId={ownerId}
+                onSavePlan={saveDisciplinePlan}
+                onSaveEvent={saveDisciplineEvent}
+                onToggleCompletion={toggleDisciplineCompletion}
+              />
+            </div>
           </section>
 
           {selectedPlan ? (
@@ -1364,7 +1377,6 @@ export default function MountainRhythm() {
                           <div className="discipleos-secondary-copy text-xs">
                             {climb.completedDays} of {climb.journeyDays} days earned · {climb.journeyProgress}% journey progress
                           </div>
-                          <div className="mt-1 break-all text-[11px] text-white/35">Plan ID: {climb.planId}</div>
                         </div>
                         <div className="text-sm font-semibold text-emerald-200">
                           {climb.earnedAscent} ascent
