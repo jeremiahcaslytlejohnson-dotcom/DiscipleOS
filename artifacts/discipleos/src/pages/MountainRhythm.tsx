@@ -60,7 +60,6 @@ import {
   mergeLocalCompletionHistory,
   isStructuredClimbComplete,
   MOUNTAIN_RHYTHM_ROUTES,
-  RHYTHM_LEVELS,
   resolveStructuredClimbPlanId,
   isStructuredClimbPlan,
 } from "../lib/mountain-rhythm";
@@ -204,6 +203,7 @@ export default function MountainRhythm() {
   const [pendingReplacement, setPendingReplacement] = useState<any>(null);
   const [isReplacingClimb, setIsReplacingClimb] = useState(false);
   const [replacementError, setReplacementError] = useState("");
+  const [today, setToday] = useState(() => todayISO());
   const [pendingCancelClimbPlanId, setPendingCancelClimbPlanId] = useState<
     string | null
   >(null);
@@ -211,6 +211,18 @@ export default function MountainRhythm() {
     Record<string, boolean>
   >({});
   const autoStartedEntryRef = useRef(false);
+
+  useEffect(() => {
+    const refreshToday = () => setToday(todayISO());
+    const interval = window.setInterval(refreshToday, 60_000);
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", refreshToday);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", refreshToday);
+    };
+  }, []);
 
   const structuredPlans = useMemo(
     () => plans.filter((plan) => isStructuredClimbPlan(plan)),
@@ -232,19 +244,18 @@ export default function MountainRhythm() {
   );
   const score = useMemo(
     () => calculateMountainRhythm({
-      today: todayISO(),
+      today,
       plans,
       events,
       eventCompletions,
       selectedPlanId: selectedClimbPlanId,
     }),
-    [plans, events, eventCompletions, selectedClimbPlanId],
+    [plans, events, eventCompletions, selectedClimbPlanId, today],
   );
   const trailByDate = useMemo(
     () => new Map((score.trail || []).map((point) => [point.date, point])),
     [score.trail],
   );
-  const today = todayISO();
   const cachedPlanOwnerIsTrusted =
     isAuthLoaded &&
     isSignedIn &&
@@ -1321,22 +1332,6 @@ export default function MountainRhythm() {
                       </div>
                   </section>
 
-                    <section data-testid="mountain-rhythm-milestones" className="min-w-0 border-t border-white/10 pt-5">
-                     <div className="discipleos-section-heading">Milestones</div>
-                     <div className="mt-4 space-y-3">
-                      {RHYTHM_LEVELS.map((level) => {
-                        const reached = score.currentElevationPercent >= level.min;
-                        const current = score.level === level.name;
-                        return (
-                          <div key={level.name} className={`flex items-center gap-3 border-b border-white/10 px-3 py-3 ${current ? "bg-[#D4A017]/10" : "bg-white/[0.025]"}`}>
-                            <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${reached ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-200" : "border-white/15 text-white/30"}`}>{reached ? <Check className="h-3.5 w-3.5" /> : <span className="text-xs">{level.min}</span>}</span>
-                             <div className="min-w-0"><div data-testid={`mountain-rhythm-level-name-${level.min}`} className={`text-base font-medium ${reached ? "text-white" : "discipleos-meta-copy"}`}>{level.name}</div><div data-testid={`mountain-rhythm-level-threshold-${level.min}`} className="discipleos-meta-copy text-[13px] leading-5">{level.min}% elevation</div></div>
-                            {current ? <span className="ml-auto text-xs font-semibold uppercase tracking-[0.08em] text-[#F4D77A]">Current</span> : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
                 </div>
               </section>
             </>
