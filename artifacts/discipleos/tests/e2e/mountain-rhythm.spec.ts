@@ -1422,13 +1422,19 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   const completedRouteEndpoint = completedRouteEndpoints?.at(-1)?.match(/L([\d.]+) ([\d.]+)/);
   expect(completedRouteEndpoint).not.toBeNull();
   expect(Number(completedRouteEndpoint![1])).toBe(dayPoints[3].x);
-  expect(Number(completedRouteEndpoint![2])).toBeCloseTo(147.5, 0);
+   expect(Number(completedRouteEndpoint![2])).toBeCloseTo(145.2, 0);
   const labelXs = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
     (labels) => labels.map((label) => Number(label.getAttribute("x"))),
   );
   expect(labelXs).toEqual(dayPoints.map((point) => point.x));
   await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(7);
   await expect(chart.getByTestId("mountain-rhythm-current-flag-label")).toHaveText("Today");
+  const plannedTodayPoint = chart.getByTestId("mountain-rhythm-day-point-4");
+  await expect(plannedTodayPoint).toHaveAttribute("fill", "none");
+  await expect(plannedTodayPoint).toHaveAttribute("stroke", "#A9C0AE");
+  await expect(plannedTodayPoint).toHaveAttribute("stroke-opacity", "0.55");
+  await expect(chart.getByTestId("mountain-rhythm-current-elevation-marker"))
+    .toHaveAttribute("fill", "#F4D77A");
   const flagAnchor = await chart
     .locator('g[aria-label^="Today"]')
     .evaluate((flag) => {
@@ -1441,7 +1447,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       ];
     });
   expect(flagAnchor[0]).toBe(dayPoints[3].x);
-  expect(flagAnchor[1]).toBeCloseTo(147.5, 0);
+  expect(flagAnchor[1]).toBeCloseTo(145.2, 0);
   await expect(page.getByTestId("mountain-rhythm-current-status"))
     .toContainText("Current elevation: Gaining Elevation · 57.1%");
   await expect(chart.getByTestId("mountain-rhythm-elevation-label-50"))
@@ -1459,6 +1465,15 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     await expect(guideLabels).toHaveCount(5);
     const visibleGuideLabels = chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible");
     await expect(visibleGuideLabels).toHaveCount(width < 640 ? 2 : 5);
+    const guideAnchors = await visibleGuideLabels.evaluateAll((labels) =>
+      labels.map((label) => ({
+        x: label.getAttribute("x"),
+        anchor: label.getAttribute("text-anchor"),
+      })),
+    );
+    expect(guideAnchors).toEqual(
+      Array.from({ length: width < 640 ? 2 : 5 }, () => ({ x: "8", anchor: "start" })),
+    );
     const activeGuideText = await visibleGuideLabels.evaluateAll((labels) =>
       labels.map((label) =>
         Array.from(label.querySelectorAll("tspan"))
@@ -1542,6 +1557,10 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
         ).toBe(false);
       }
     }
+    const guidesByTop = [...landmarkBoxes].sort((left, right) => left.top - right.top);
+    for (let index = 1; index < guidesByTop.length; index++) {
+      expect(guidesByTop[index].top).toBeGreaterThanOrEqual(guidesByTop[index - 1].bottom);
+    }
     if (width === 320) {
       await page.getByTestId("mountain-rhythm-panel").screenshot({
         path: "/tmp/discipleos-mountain-4-of-7-320.png",
@@ -1580,28 +1599,60 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
   await openMountainRhythm(page);
   await expect(page.getByTestId("mountain-rhythm-current-status"))
     .toContainText("Current elevation: Basecamp · 14.3%");
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  await expect(chart.getByTestId("mountain-rhythm-day-point-1"))
+    .toHaveAttribute("fill", "none");
+  await expect(chart.getByTestId("mountain-rhythm-current-elevation-marker"))
+    .toHaveAttribute("fill", "#F4D77A");
   const markerTransform = await page.locator('g[aria-label^="Today"]').getAttribute("transform");
   expect(Number(markerTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
-    .toBeCloseTo(222.832, 0);
+    .toBeCloseTo(222.26, 1);
   await expect(page.getByTestId("mountain-rhythm-elevation-label-25"))
     .toHaveAttribute("aria-label", "Next milestone: On the Trail, 25% threshold");
-  await page.setViewportSize({ width: 320, height: 667 });
-  const mobileGuides = page.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible");
-  await expect(mobileGuides).toHaveCount(2);
-  const mobileGuideText = await mobileGuides.evaluateAll((labels) =>
-    labels.map((label) =>
-      Array.from(label.querySelectorAll("tspan"))
-        .filter((span) => getComputedStyle(span).display !== "none")
-        .map((span) => span.textContent)
-        .join(""),
-    ),
-  );
-  expect(mobileGuideText).toEqual(["Basecamp 0%", "Next 25%"]);
-  await expect(page.getByTestId("mountain-rhythm-current-status-mobile"))
-    .toContainText("Basecamp · 14.3% · Day 1");
-  await page.getByTestId("mountain-rhythm-panel").screenshot({
-    path: "/tmp/discipleos-mountain-1-of-7-320.png",
-  });
+  for (const width of [320, 375, 1280]) {
+    await page.setViewportSize({ width, height: width === 375 ? 667 : 844 });
+    const guideLabels = page.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible");
+    const flagLabel = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
+    const guideBoxes = await guideLabels.evaluateAll((labels) =>
+      labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+      }),
+    );
+    expect(flagLabel).not.toBeNull();
+    for (const guide of guideBoxes) {
+      const overlaps = flagLabel!.x < guide.right &&
+        flagLabel!.x + flagLabel!.width > guide.left &&
+        flagLabel!.y < guide.bottom &&
+        flagLabel!.y + flagLabel!.height > guide.top;
+      expect(overlaps, `Today flag label overlaps a guide at ${width}px`).toBe(false);
+    }
+    await expect(guideLabels).toHaveCount(width < 640 ? 2 : 5);
+    const guideText = await guideLabels.evaluateAll((labels) =>
+      labels.map((label) =>
+        Array.from(label.querySelectorAll("tspan"))
+          .filter((span) => getComputedStyle(span).display !== "none")
+          .map((span) => span.textContent)
+          .join(""),
+      ),
+    );
+    if (width < 640) {
+      expect(guideText).toEqual(["Basecamp 0%", "Next 25%"]);
+      await expect(page.getByTestId("mountain-rhythm-current-status-mobile"))
+        .toContainText("Basecamp · 14.3% · Day 1");
+    } else {
+      expect(guideText).toEqual([
+        "Basecamp 0%",
+        "On the Trail 25%",
+        "Gaining Elevation 50%",
+        "Ridgeline 70%",
+        "Summit 85%",
+      ]);
+    }
+    await page.getByTestId("mountain-rhythm-panel").screenshot({
+      path: `/tmp/discipleos-mountain-1-of-7-${width}.png`,
+    });
+  }
 });
 
 test("keeps a near-Summit Today flag, guides, and day labels inside the reframed chart", async ({ page }) => {
