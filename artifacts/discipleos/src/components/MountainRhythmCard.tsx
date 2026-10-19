@@ -225,7 +225,7 @@ export default function MountainRhythmCard({
             <svg
               data-testid="mountain-rhythm-mountain"
                className="absolute inset-0 h-full w-full"
-              viewBox="0 0 360 280"
+              viewBox="0 40 360 240"
               preserveAspectRatio="none"
               role="img"
                 aria-label={`${score.journeyLabel} recent seven-day reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
@@ -294,11 +294,11 @@ export default function MountainRhythmCard({
                     />
                     <text
                       x={level.min === 0 ? 352 : 8}
-                      y={level.y - 4}
+                      y={level.y - (level.min === 25 ? 24 : 4)}
                       textAnchor={level.min === 0 ? "end" : "start"}
                       fill={level.current ? "#F4D77A" : "#D4DDCD"}
                       fillOpacity={level.current ? "0.96" : "0.8"}
-                      fontSize="10"
+                      fontSize="12"
                       fontWeight={level.current ? "650" : "500"}
                       stroke="#0B1418"
                       strokeWidth="3.5"
@@ -315,30 +315,6 @@ export default function MountainRhythmCard({
                     </text>
                   </g>
                 ))}
-              </g>
-               <g
-                 transform="translate(8 214)"
-                opacity="0.42"
-                aria-label="Basecamp cabin"
-              >
-                <path
-                  d="M1 10L11 2L21 10V22H1Z"
-                  fill="#0D181A"
-                  stroke="#53645A"
-                  strokeLinejoin="round"
-                  strokeWidth="1.25"
-                />
-                <path
-                  d="M0 10L11 1L22 10"
-                  fill="none"
-                  stroke="#6B704C"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.75"
-                />
-                <rect x="8.5" y="15" width="5" height="7" rx="0.75" fill="#53604D" />
-                <rect x="3.75" y="14.25" width="3.25" height="3.25" rx="0.5" fill="#9B8747" />
-                <rect x="15" y="14.25" width="3.25" height="3.25" rx="0.5" fill="#9B8747" />
               </g>
               <path
                 data-testid="mountain-rhythm-day-path"
@@ -372,7 +348,7 @@ export default function MountainRhythmCard({
                     data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
                     cy={point.y}
-                    r={isToday ? 6 : isFuture ? 4.5 : rhythmStatus === "missed" ? 5 : 5.5}
+                    r={isToday ? 7 : isFuture ? 5 : rhythmStatus === "missed" ? 6 : 6.5}
                     fill={
                       isFuture
                         ? "#14201C"
@@ -404,7 +380,7 @@ export default function MountainRhythmCard({
                       x={point.x}
                       y="272"
                       fill="#C9CDD3"
-                      fontSize="12"
+                      fontSize="14"
                       textAnchor="middle"
                     >
                       {index + 1}
@@ -436,7 +412,7 @@ export default function MountainRhythmCard({
                   data-testid="mountain-rhythm-current-elevation-marker"
                   cx="5"
                   cy="22"
-                  r="4.5"
+                  r="6"
                   fill="#F4D77A"
                   stroke="#0B1418"
                   strokeWidth="1.5"
@@ -448,7 +424,7 @@ export default function MountainRhythmCard({
                   y="8"
                   textAnchor={flagX > 300 ? "end" : "start"}
                   fill="#F4D77A"
-                  fontSize="11"
+                  fontSize="13"
                   fontWeight="600"
                   stroke="#0B1418"
                   strokeWidth="2"
@@ -471,14 +447,14 @@ export default function MountainRhythmCard({
           </div>
 
           <p
-            className="discipleos-safe-text mt-2 text-[12px] leading-4 text-[#F4D77A] sm:hidden"
+            className="discipleos-safe-text mt-2 break-words text-[13px] leading-5 text-[#F4D77A] sm:hidden"
             data-testid="mountain-rhythm-current-status-mobile"
           >
             {mobileStatus}
             <span className="sr-only"> · {currentDateContext}</span>
           </p>
           <p
-            className="discipleos-safe-text mt-2 hidden text-[13px] leading-5 text-[#F4D77A] sm:block"
+            className="discipleos-safe-text mt-2 hidden text-[14px] leading-5 text-[#F4D77A] sm:block"
             data-testid="mountain-rhythm-current-status"
           >
             Current elevation: {currentLevel} · {score.currentElevationPercent}% · {currentDateContext}

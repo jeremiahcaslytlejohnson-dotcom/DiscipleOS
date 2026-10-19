@@ -1377,6 +1377,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   await openMountainRhythm(page);
 
   const chart = page.getByTestId("mountain-rhythm-mountain");
+  await expect(chart.locator('[aria-label="Basecamp cabin"]')).toHaveCount(0);
   const pointY = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]').evaluateAll(
     (points) => points.map((point) => Number(point.getAttribute("cy"))),
   );
@@ -1601,6 +1602,55 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
   await page.getByTestId("mountain-rhythm-panel").screenshot({
     path: "/tmp/discipleos-mountain-1-of-7-320.png",
   });
+});
+
+test("keeps a near-Summit Today flag, guides, and day labels inside the reframed chart", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const ownerId = "near-summit-visual-owner";
+  const plan = makePlan({
+    id: "near-summit-visual",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -6,
+    completedIndexes: [0, 1, 2, 3, 4, 5],
+  });
+  await stubApi(page, { success: true, userId: ownerId, authenticated: false, established: false });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("mountain-rhythm-current-status"))
+    .toContainText("Current elevation: Summit");
+
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  for (const width of [320, 375, 1280]) {
+    await page.setViewportSize({ width, height: width === 375 ? 667 : 844 });
+    const chartBox = await chart.boundingBox();
+    const flagLabelBox = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
+    const dayLabelBoxes = await chart.getByTestId("mountain-rhythm-day-labels")
+      .locator("text")
+      .evaluateAll((labels) => labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+      }));
+    expect(chartBox).not.toBeNull();
+    expect(flagLabelBox).not.toBeNull();
+    expect(flagLabelBox!.x).toBeGreaterThanOrEqual(chartBox!.x);
+    expect(flagLabelBox!.x + flagLabelBox!.width)
+      .toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
+    expect(dayLabelBoxes).toHaveLength(7);
+    for (const label of dayLabelBoxes) {
+      expect(label.left).toBeGreaterThanOrEqual(chartBox!.x);
+      expect(label.right).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
+      expect(label.bottom).toBeLessThanOrEqual(chartBox!.y + chartBox!.height + 1);
+    }
+    await expect(chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible"))
+      .toHaveCount(width < 640 ? 1 : 5);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(width + 1);
+    await page.getByTestId("mountain-rhythm-panel").screenshot({
+      path: `/tmp/discipleos-mountain-near-summit-${width}.png`,
+    });
+  }
 });
 
 test("keeps Today on its calendar date when Day 4 is only the latest completed day", async ({ page }) => {
