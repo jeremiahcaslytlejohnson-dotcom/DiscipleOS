@@ -1444,7 +1444,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   await expect(page.getByTestId("mountain-rhythm-current-status"))
     .toContainText("Current elevation: Gaining Elevation · 57.1%");
   await expect(chart.getByTestId("mountain-rhythm-elevation-label-50"))
-    .toHaveText("Gaining Elevation 50%");
+    .toHaveAttribute("aria-label", "Current stage: Gaining Elevation, 50% threshold");
   for (const width of [320, 360, 375, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: width === 375 ? 667 : 844 });
     const chartBox = await chart.boundingBox();
@@ -1456,7 +1456,36 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
     const guideLabels = chart.getByTestId("mountain-rhythm-elevation-guides").locator("text");
     await expect(guideLabels).toHaveCount(5);
-    const landmarkBoxes = await guideLabels.evaluateAll((labels) =>
+    const visibleGuideLabels = chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible");
+    await expect(visibleGuideLabels).toHaveCount(width < 640 ? 2 : 5);
+    const activeGuideText = await visibleGuideLabels.evaluateAll((labels) =>
+      labels.map((label) =>
+        Array.from(label.querySelectorAll("tspan"))
+          .filter((span) => getComputedStyle(span).display !== "none")
+          .map((span) => span.textContent)
+          .join(""),
+      ),
+    );
+    if (width < 640) {
+      expect(activeGuideText).toEqual(["Gaining 50%", "Next 70%"]);
+      await expect(page.getByTestId("mountain-rhythm-current-status-mobile"))
+        .toContainText("Gaining Elevation · 57.1% · Day 4");
+      const metricOverflow = await page.getByTestId("mountain-rhythm-panel")
+        .locator('[data-testid^="mountain-rhythm-metric-"]')
+        .evaluateAll((metrics) => metrics.some((metric) => metric.scrollWidth > metric.clientWidth + 1));
+      expect(metricOverflow).toBe(false);
+    } else {
+      expect(activeGuideText).toEqual([
+        "Basecamp 0%",
+        "On the Trail 25%",
+        "Gaining Elevation 50%",
+        "Ridgeline 70%",
+        "Summit 85%",
+      ]);
+    }
+    await expect(page.getByTestId("mountain-rhythm-accessible-milestones").locator("li"))
+      .toHaveCount(5);
+    const landmarkBoxes = await visibleGuideLabels.evaluateAll((labels) =>
       labels.map((label) => {
         const box = label.getBoundingClientRect();
         return {
@@ -1512,6 +1541,19 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
         ).toBe(false);
       }
     }
+    if (width === 320) {
+      await page.getByTestId("mountain-rhythm-panel").screenshot({
+        path: "/tmp/discipleos-mountain-4-of-7-320.png",
+      });
+    } else if (width === 375) {
+      await page.getByTestId("mountain-rhythm-panel").screenshot({
+        path: "/tmp/discipleos-mountain-4-of-7-375.png",
+      });
+    } else if (width === 1280) {
+      await page.getByTestId("mountain-rhythm-panel").screenshot({
+        path: "/tmp/discipleos-mountain-4-of-7-desktop.png",
+      });
+    }
   }
   const plannedPathBeforeReload = await plannedPath.getAttribute("d");
   await page.reload();
@@ -1541,7 +1583,24 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
   expect(Number(markerTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
     .toBeCloseTo(222.832, 0);
   await expect(page.getByTestId("mountain-rhythm-elevation-label-25"))
-    .toHaveAttribute("aria-label", "On the Trail 25%");
+    .toHaveAttribute("aria-label", "Next milestone: On the Trail, 25% threshold");
+  await page.setViewportSize({ width: 320, height: 667 });
+  const mobileGuides = page.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible");
+  await expect(mobileGuides).toHaveCount(2);
+  const mobileGuideText = await mobileGuides.evaluateAll((labels) =>
+    labels.map((label) =>
+      Array.from(label.querySelectorAll("tspan"))
+        .filter((span) => getComputedStyle(span).display !== "none")
+        .map((span) => span.textContent)
+        .join(""),
+    ),
+  );
+  expect(mobileGuideText).toEqual(["Basecamp 0%", "Next 25%"]);
+  await expect(page.getByTestId("mountain-rhythm-current-status-mobile"))
+    .toContainText("Basecamp · 14.3% · Day 1");
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-1-of-7-320.png",
+  });
 });
 
 test("keeps Today on its calendar date when Day 4 is only the latest completed day", async ({ page }) => {
@@ -1594,6 +1653,12 @@ test("distinguishes Today from Latest and Next when a scheduled date is skipped"
     .toContainText("Next: Day 4");
   await expect(page.getByTestId("mountain-rhythm-day-point-2"))
     .toHaveAttribute("aria-label", /Day 2, missed/);
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect(page.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible"))
+    .toHaveCount(2);
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-missed-375.png",
+  });
 });
 
 test("keeps the Day 1 route entirely planned when no reading is complete", async ({ page }) => {

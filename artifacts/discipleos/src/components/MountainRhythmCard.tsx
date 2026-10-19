@@ -71,6 +71,15 @@ function formatDate(date: string) {
   );
 }
 
+function compactLevelName(name: string) {
+  const shortNames: Record<string, string> = {
+    "On the Trail": "Trail",
+    "Gaining Elevation": "Gaining",
+    Ridgeline: "Ridge",
+  };
+  return shortNames[name] || name;
+}
+
 function todayLabel(score: any) {
   if (!score?.todayPlanned) return "Nothing scheduled";
   if (score.todayPercentage >= 100) return "Complete";
@@ -128,7 +137,17 @@ export default function MountainRhythmCard({
     ...level,
     y: elevationY(level.min),
     current: level.name === currentLevel,
+    next: level.name === nextLevel?.name,
   }));
+  const mobileStatus = todayPointIndex >= 0
+    ? `${currentLevel} · ${score.currentElevationPercent}% · Day ${todayPointIndex + 1}`
+    : geometry.todayX !== null
+      ? `${currentLevel} · ${score.currentElevationPercent}% · Today · no assignment${geometry.current ? ` · Latest D${geometry.points.indexOf(geometry.current) + 1}` : ""}${geometry.next ? ` · Next D${geometry.points.indexOf(geometry.next) + 1}` : ""}`
+      : geometry.current
+        ? `${currentLevel} · ${score.currentElevationPercent}% · Latest D${geometry.points.indexOf(geometry.current) + 1}`
+        : geometry.next
+          ? `${currentLevel} · ${score.currentElevationPercent}% · Next D${geometry.points.indexOf(geometry.next) + 1}`
+          : `${currentLevel} · ${score.currentElevationPercent}%`;
   const mountainRidgePath =
     "M0 248 L35 239 L68 226 Q96 212 125 204 Q146 205 165 215 L190 200 Q202 192 215 187 L238 169 Q250 157 260 149 L274 125 L283 105 Q288 96 293 97 L307 115 L326 142 L344 157 L360 167";
 
@@ -157,30 +176,34 @@ export default function MountainRhythmCard({
         </div>
       ) : (
         <>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div data-testid="mountain-rhythm-metric-today" className="min-w-0 border-l border-white/10 px-3 py-1 first:border-l-0">
-              <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Today’s reading</div>
-              <div className="mt-1 text-lg font-semibold leading-6 text-white">{todayLabel(score)}</div>
-              <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">
+          <div className={`mt-4 grid ${showRhythmMetric ? "grid-cols-3" : "grid-cols-2"} gap-1 sm:mt-5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3`}>
+            <div data-testid="mountain-rhythm-metric-today" className="min-w-0 border-l border-white/10 px-1.5 py-1 first:border-l-0 sm:px-3">
+              <div className="discipleos-field-label text-[10px] font-semibold uppercase leading-3 tracking-[0.04em] sm:text-xs sm:leading-4 sm:tracking-[0.12em]">Today’s reading</div>
+              <div className="mt-1 break-words text-[14px] font-semibold leading-5 text-white sm:text-lg sm:leading-6">{todayLabel(score)}</div>
+              <div className="discipleos-meta-copy mt-1 text-[10px] leading-4 sm:text-[13px] sm:leading-5">
                 {score.todayPlanned
-                   ? `${score.todayPercentage}% of today’s reading`
+                   ? <><span className="sm:hidden">{score.todayPercentage}% read</span><span className="hidden sm:inline">{score.todayPercentage}% of today’s reading</span></>
                    : "No reading assigned today"}
               </div>
             </div>
-            <div data-testid="mountain-rhythm-metric-journey" className="min-w-0 border-l border-white/10 px-3 py-1">
-              <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Journey progress</div>
-              <div className="mt-1 text-lg font-semibold leading-6 text-emerald-200">
+            <div data-testid="mountain-rhythm-metric-journey" className="min-w-0 border-l border-white/10 px-1.5 py-1 sm:px-3">
+              <div className="discipleos-field-label text-[10px] font-semibold uppercase leading-3 tracking-[0.04em] sm:text-xs sm:leading-4 sm:tracking-[0.12em]">Journey progress</div>
+              <div className="mt-1 text-[14px] font-semibold leading-5 text-emerald-200 sm:text-lg sm:leading-6">
                 {score.journeyProgress}%
               </div>
-              <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">
-                {score.completedDays} of {score.journeyDays} planned days
+              <div className="discipleos-meta-copy mt-1 text-[10px] leading-4 sm:text-[13px] sm:leading-5">
+                <span className="sm:hidden">{score.completedDays}/{score.journeyDays} days</span>
+                <span className="hidden sm:inline">{score.completedDays} of {score.journeyDays} planned days</span>
               </div>
             </div>
             {showRhythmMetric ? (
-              <div data-testid="mountain-rhythm-metric-rhythm" className="min-w-0 border-l border-white/10 px-3 py-1">
-                <div className="discipleos-field-label text-xs font-semibold uppercase tracking-[0.12em]">Consistency</div>
-                <div className="mt-1 text-lg font-semibold leading-6 text-white">{score.rhythmProgress}%</div>
-                <div className="discipleos-meta-copy mt-1 text-[13px] leading-5">{score.currentTrend} consistency</div>
+              <div data-testid="mountain-rhythm-metric-rhythm" className="min-w-0 border-l border-white/10 px-1.5 py-1 sm:px-3">
+                <div className="discipleos-field-label text-[10px] font-semibold uppercase leading-3 tracking-[0.04em] sm:text-xs sm:leading-4 sm:tracking-[0.12em]">Consistency</div>
+                <div className="mt-1 text-[14px] font-semibold leading-5 text-white sm:text-lg sm:leading-6">{score.rhythmProgress}%</div>
+                <div className="discipleos-meta-copy mt-1 text-[10px] leading-4 sm:text-[13px] sm:leading-5">
+                  <span className="sm:hidden">{score.currentTrend}</span>
+                  <span className="hidden sm:inline">{score.currentTrend} consistency</span>
+                </div>
               </div>
             ) : null}
           </div>
@@ -216,6 +239,7 @@ export default function MountainRhythmCard({
               </defs>
               <g
                 data-testid="mountain-rhythm-distant-ridges"
+                className="opacity-60 sm:opacity-100"
                 strokeLinejoin="round"
                 strokeWidth="1.1"
               >
@@ -239,6 +263,7 @@ export default function MountainRhythmCard({
               <path
                 d={`${mountainRidgePath} V280 H0 Z`}
                 fill="url(#mountain-fill)"
+                className="opacity-80 sm:opacity-100"
               />
               <path
                 data-testid="mountain-rhythm-main-ridge"
@@ -252,7 +277,11 @@ export default function MountainRhythmCard({
               />
               <g data-testid="mountain-rhythm-elevation-guides" aria-label="Elevation levels">
                 {levelGuides.map((level) => (
-                  <g key={level.name} data-testid={`mountain-rhythm-elevation-guide-${level.min}`}>
+                  <g
+                    key={level.name}
+                    data-testid={`mountain-rhythm-elevation-guide-${level.min}`}
+                    className={level.current || level.next ? undefined : "hidden sm:inline"}
+                  >
                     <line
                       x1="0"
                       x2="360"
@@ -275,9 +304,14 @@ export default function MountainRhythmCard({
                       strokeWidth="3.5"
                       paintOrder="stroke"
                       data-testid={`mountain-rhythm-elevation-label-${level.min}`}
-                      aria-label={`${level.name} ${level.min}%${level.current ? ", current level" : ""}`}
+                      aria-label={`${level.current ? "Current stage" : level.next ? "Next milestone" : "Milestone"}: ${level.name}, ${level.min}% threshold`}
                     >
-                      {level.name} {level.min}%
+                      <tspan className="sm:hidden">
+                        {level.current
+                          ? `${compactLevelName(level.name)} ${level.min}%`
+                          : `Next ${level.min}%`}
+                      </tspan>
+                      <tspan className="hidden sm:inline">{level.name} {level.min}%</tspan>
                     </text>
                   </g>
                 ))}
@@ -424,11 +458,27 @@ export default function MountainRhythmCard({
                 </text>
               </g>
             </svg>
+            <ul
+              className="sr-only"
+              data-testid="mountain-rhythm-accessible-milestones"
+              aria-label="Elevation milestones"
+            >
+              {RHYTHM_LEVELS.map((level) => (
+                <li key={level.name}>{level.name}: {level.min}%</li>
+              ))}
+            </ul>
 
           </div>
 
           <p
-            className="discipleos-safe-text mt-2 text-[13px] leading-5 text-[#F4D77A]"
+            className="discipleos-safe-text mt-2 text-[12px] leading-4 text-[#F4D77A] sm:hidden"
+            data-testid="mountain-rhythm-current-status-mobile"
+          >
+            {mobileStatus}
+            <span className="sr-only"> · {currentDateContext}</span>
+          </p>
+          <p
+            className="discipleos-safe-text mt-2 hidden text-[13px] leading-5 text-[#F4D77A] sm:block"
             data-testid="mountain-rhythm-current-status"
           >
             Current elevation: {currentLevel} · {score.currentElevationPercent}% · {currentDateContext}
@@ -438,7 +488,9 @@ export default function MountainRhythmCard({
               <summary data-testid="mountain-rhythm-help-toggle" className="discipleos-secondary-copy cursor-pointer text-xs font-medium leading-5 marker:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C542]">
                 How Mountain Rhythm works
               </summary>
-              <p data-testid="mountain-rhythm-help-copy" className="discipleos-secondary-copy mt-2 text-sm leading-6">{RHYTHM_COPY}</p>
+              <p data-testid="mountain-rhythm-help-copy" className="discipleos-secondary-copy mt-2 text-sm leading-6">
+                {RHYTHM_COPY} Elevation milestones: {RHYTHM_LEVELS.map((level) => `${level.name} ${level.min}%`).join(" · ")}.
+              </p>
             </details>
           </div>
             </>
