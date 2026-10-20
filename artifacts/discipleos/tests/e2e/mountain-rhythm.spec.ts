@@ -1392,7 +1392,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
   expect(mainRidgeData).toContain("L28 258");
-  expect(mainRidgeData).toContain("L291 105");
+  expect(mainRidgeData).toContain("L291 61");
   expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(15);
   expect(mainRidgeData?.match(/L/g)?.length).toBeLessThan(24);
   await expect(chart.getByTestId("mountain-rhythm-far-range")).toBeVisible();
@@ -1429,18 +1429,22 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   const labelXs = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
     (labels) => labels.map((label) => Number(label.getAttribute("x"))),
   );
-    expect(labelXs).toEqual(dayPoints.map((point) => point.x));
-    const chartBox = await chart.boundingBox();
-    expect(chartBox).not.toBeNull();
-    expect(chartBox!.height).toBeGreaterThanOrEqual(width < 640 ? 330 : 390);
-    const labelBoxes = await chart.getByTestId("mountain-rhythm-day-labels").locator("text")
-      .evaluateAll((labels) => labels.map((label) => {
-        const box = label.getBoundingClientRect();
-        return { height: box.height, bottom: box.bottom };
-      }));
-    expect(labelBoxes.every((box) => box.height >= 7 && box.bottom <= chartBox!.y + chartBox!.height + 1))
-      .toBe(true);
-  await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(7);
+  expect(labelXs).toHaveLength(3);
+  expect(labelXs[0]).toBe(dayPoints[0].x);
+  expect(labelXs.at(-1)).toBe(dayPoints[6].x);
+  expect(labelXs).toContain(dayPoints[3].x);
+  expect(labelXs.every((x, index) => index === 0 || x > labelXs[index - 1])).toBe(true);
+  const chartBox = await chart.boundingBox();
+  expect(chartBox).not.toBeNull();
+  expect(chartBox!.height).toBeGreaterThanOrEqual(390);
+  const labelBoxes = await chart.getByTestId("mountain-rhythm-day-labels").locator("text")
+    .evaluateAll((labels) => labels.map((label) => {
+      const box = label.getBoundingClientRect();
+      return { height: box.height, bottom: box.bottom };
+    }));
+  expect(labelBoxes.every((box) => box.height >= 7 && box.bottom <= chartBox!.y + chartBox!.height + 1))
+    .toBe(true);
+  await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(3);
   await expect(chart.getByTestId("mountain-rhythm-current-flag-label")).toHaveText("Today");
   const plannedTodayPoint = chart.getByTestId("mountain-rhythm-day-point-4");
   await expect(plannedTodayPoint).toHaveAttribute("fill", "#F4D77A");
@@ -1557,6 +1561,9 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
         };
       }),
     );
+    expect(dayNumberBoxes.every((label, index) =>
+      index === 0 || label.left >= dayNumberBoxes[index - 1].right - 1
+    )).toBe(true);
     const flagRect = {
       left: flagBox!.x,
       right: flagBox!.x + flagBox!.width,
@@ -1634,7 +1641,7 @@ test("keeps the 20-day climb axis sparse while pinning Today to its real schedul
     "fill",
     "#F4D77A",
   );
-  await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(7);
+  await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(4);
   await expect(chart.getByTestId("mountain-rhythm-current-flag-label")).toHaveText("Today");
 
   for (const width of [320, 390, 1280]) {
@@ -1646,9 +1653,12 @@ test("keeps the 20-day climb axis sparse while pinning Today to its real schedul
         return { text: node.textContent, left: box.left, right: box.right };
       }));
     expect(chartBox).not.toBeNull();
-    expect(labels).toHaveLength(7);
+    expect(labels.length).toBeLessThanOrEqual(5);
     expect(labels.every((label) =>
       label.left >= chartBox!.x && label.right <= chartBox!.x + chartBox!.width
+    )).toBe(true);
+    expect(labels.every((label, index) =>
+      index === 0 || label.left >= labels[index - 1].right - 1
     )).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth))
       .toBeLessThanOrEqual(width + 1);
