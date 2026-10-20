@@ -38,8 +38,9 @@ export default function MountainClimbSetup({
       setStep(1);
       setKind(activeKind);
       setBudget(dailyBudget);
+      setShowCancelConfirm(false);
     }
-  }, [open, activeKind, dailyBudget]);
+  }, [open]);
 
   if (!activeKind && !open) {
     return (

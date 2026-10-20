@@ -959,14 +959,14 @@ export default function MountainRhythm() {
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="replace-active-climb-title"
-                  data-testid="legacy-dialog-replace-active-climb"
+                  data-testid="dialog-replace-active-climb"
                   className="mt-4 rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/[0.06] p-4"
                 >
                   <div id="replace-active-climb-title" className="text-sm font-semibold text-white">
                     Start over with a new {MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === pendingReplacement.kind)?.label || "climb"}?
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/70">
-                    The active climb will be kept in Past climbs and its progress will not transfer. Your other plans, activities, and pending changes remain unchanged.
+                    Your current climb will be kept in Past climbs. Its progress will not transfer. Ordinary reading plans, activities, and pending changes stay as they are.
                   </p>
                   {replacementError ? <p className="mt-3 text-sm text-amber-100" role="alert" data-testid="status-replacement-error">{replacementError}</p> : null}
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1039,7 +1039,7 @@ export default function MountainRhythm() {
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="replace-active-climb-title"
-                  data-testid="dialog-replace-active-climb"
+                  data-testid="legacy-dialog-replace-active-climb"
                   className="mt-4 rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/[0.06] p-4"
                 >
                   <div

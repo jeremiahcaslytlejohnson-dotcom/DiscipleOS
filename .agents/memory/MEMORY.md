@@ -5,6 +5,7 @@
 - [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
 - [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.
 - [Mountain Rhythm](mountain-rhythm.md) — Keep planned terrain separate from score data; only completed segments highlight, and visual tests must not write to a non-isolated database.
+- [Mountain climb setup](mountain-climb-setup.md) — Preserve route and review state while setup remains open; signed-in browser fixtures must align session and auth identity.
 - [Guided Climb boundaries](guided-climb-boundaries.md) — Each curated set stands alone; Set 1 ends after Day 27 and offers optional Mountain Rhythm or Free Climb paths.
 - [Hydration-gated onboarding](hydration-gated-onboarding.md) — automatic starter flows must wait for session identity before deciding whether a user is anonymous.
 - [First-launch path chooser](first-launch-path-chooser.md) — fit contextual path cards, header, and sign-in without scrolling on standard phones; allow scroll only on exceptionally small screens.

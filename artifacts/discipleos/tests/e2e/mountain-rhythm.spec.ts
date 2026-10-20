@@ -149,6 +149,24 @@ async function stubAuthenticatedApi(
       return;
     }
 
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          user: {
+            id: "authenticated-mountain-user",
+            email: "mountain-test@example.com",
+            firstName: "Mountain",
+            lastName: "Test",
+            profileImageUrl: null,
+          },
+        }),
+      });
+      return;
+    }
+
     if (pathname.endsWith("/account/claim")) {
       await route.fulfill({
         status: 200,
@@ -405,6 +423,10 @@ test("first-time users confirm the 7-Day setup before it is saved", async ({ pag
   expect(Math.max(...savedPlan.assignments.map((day: any) => day.estimatedMinutes))).toBeLessThanOrEqual(
     savedPlan.dailyMinutes,
   );
+  await page.reload();
+  await openMountainRhythm(page);
+  await expect(page.getByTestId("button-manage-climb")).toBeVisible();
+  await expect(page.getByTestId("button-choose-7-day-climb")).toHaveCount(0);
 });
 
 test("fasting suggestions honor inclusive climb dates, cadence and date-only boundaries", () => {
@@ -788,6 +810,10 @@ test("requires confirmation to replace a hidden active climb and keeps unrelated
   });
 
   await openMountainRhythm(page);
+  await page.getByTestId("button-choose-7-day-climb").click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByTestId("button-confirm-climb-setup").click();
   const dialog = page.getByTestId("dialog-replace-active-climb");
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Its progress will not transfer");
@@ -804,7 +830,7 @@ test("requires confirmation to replace a hidden active climb and keeps unrelated
   await expect(dialog).toHaveCount(0);
   expect(replacementCalls).toBe(0);
 
-  await completeClimbSetup(page);
+  await page.getByTestId("button-confirm-climb-setup").click();
   await expect(dialog).toBeVisible();
   await dialog.getByTestId("button-confirm-climb-replacement").click();
   await expect(dialog).toHaveCount(0);
