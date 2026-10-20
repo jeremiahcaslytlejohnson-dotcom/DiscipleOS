@@ -1388,16 +1388,16 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[3]).toBeGreaterThan(pointY[4]);
   expect(pointY[4]).toBeGreaterThan(pointY[5]);
   expect(pointY[5]).toBeGreaterThan(pointY[6]);
-  expect(pointY.every((y) => y >= 58 && y <= 238)).toBe(true);
+  expect(pointY.every((y) => y >= 72 && y <= 302)).toBe(true);
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
-  expect(mainRidgeData).toContain("Q96 212 125 204");
-  expect(mainRidgeData).toContain("Q146 205 165 215");
-  expect(mainRidgeData).not.toContain("C");
-  expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(8);
-  expect(mainRidgeData?.match(/L/g)?.length).toBeLessThan(15);
+  expect(mainRidgeData).toContain("L28 258");
+  expect(mainRidgeData).toContain("L291 105");
+  expect(mainRidgeData?.match(/L/g)?.length).toBeGreaterThan(15);
+  expect(mainRidgeData?.match(/L/g)?.length).toBeLessThan(24);
   await expect(chart.getByTestId("mountain-rhythm-far-range")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-mid-range")).toBeVisible();
+  await expect(chart.getByTestId("mountain-rhythm-forest-depth")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-distant-ridges").locator("path")).toHaveCount(2);
   await expect(chart.getByTestId("mountain-rhythm-foreground-facets")).toHaveCount(0);
   const farRangeData = await chart.getByTestId("mountain-rhythm-far-range").getAttribute("d");
@@ -1421,11 +1421,25 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       })),
   );
   expect(earnedRouteData).toContain(`${dayPoints[3].x}`);
-  expect(dayPoints[3].y).toBeCloseTo(135.2, 0);
+  const recordedElevation = Number(
+    (await chart.getByTestId("mountain-rhythm-day-point-4").getAttribute("aria-label"))
+      ?.match(/([\d.]+)% rhythm elevation/)?.[1],
+  );
+  expect(dayPoints[3].y).toBeCloseTo(302 - (recordedElevation / 100) * 230, 1);
   const labelXs = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
     (labels) => labels.map((label) => Number(label.getAttribute("x"))),
   );
-  expect(labelXs).toEqual(dayPoints.map((point) => point.x));
+    expect(labelXs).toEqual(dayPoints.map((point) => point.x));
+    const chartBox = await chart.boundingBox();
+    expect(chartBox).not.toBeNull();
+    expect(chartBox!.height).toBeGreaterThanOrEqual(width < 640 ? 330 : 390);
+    const labelBoxes = await chart.getByTestId("mountain-rhythm-day-labels").locator("text")
+      .evaluateAll((labels) => labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return { height: box.height, bottom: box.bottom };
+      }));
+    expect(labelBoxes.every((box) => box.height >= 7 && box.bottom <= chartBox!.y + chartBox!.height + 1))
+      .toBe(true);
   await expect(chart.getByTestId("mountain-rhythm-day-labels").locator("text")).toHaveCount(7);
   await expect(chart.getByTestId("mountain-rhythm-current-flag-label")).toHaveText("Today");
   const plannedTodayPoint = chart.getByTestId("mountain-rhythm-day-point-4");
@@ -1710,8 +1724,12 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
   await expect(chart.getByTestId("mountain-rhythm-day-point-1"))
     .toHaveAttribute("fill", "#F4D77A");
   const markerTransform = await page.locator('g[aria-label^="Today"]').getAttribute("transform");
-  expect(Number(markerTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
-    .toBeCloseTo(212.26, 1);
+  const markerY = Number(markerTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22;
+  const markerElevation = Number(
+    (await chart.getByTestId("mountain-rhythm-day-point-1").getAttribute("aria-label"))
+      ?.match(/([\d.]+)% rhythm elevation/)?.[1],
+  );
+  expect(markerY).toBeCloseTo(302 - (markerElevation / 100) * 230, 1);
   await expect(page.getByTestId("mountain-rhythm-elevation-label-25"))
     .toHaveAttribute("aria-label", "Next milestone: On the Trail, 25% threshold");
   for (const width of [320, 375, 1280]) {
