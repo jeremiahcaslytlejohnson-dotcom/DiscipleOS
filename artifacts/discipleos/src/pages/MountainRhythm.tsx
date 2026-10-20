@@ -908,9 +908,21 @@ export default function MountainRhythm() {
               <Compass className="h-4 w-4" />
               My Ascent
             </div>
-            <h1 className="discipleos-page-title">
-              Mountain Rhythm
-            </h1>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="discipleos-page-title" data-testid="mountain-rhythm-page-heading">
+                Mountain Rhythm
+              </h1>
+              {activeClimb ? (
+                <Button
+                  type="button"
+                  data-testid="button-manage-climb"
+                  onClick={() => setSetupOpen(true)}
+                  className="min-h-10 self-start border border-white/15 bg-white/[0.03] px-3 text-sm text-white/70 hover:bg-white/10 sm:self-auto"
+                >
+                  Manage climb
+                </Button>
+              ) : null}
+            </div>
               <p className={`discipleos-secondary-copy discipleos-safe-text mt-3 max-w-2xl ${selectedPlan ? "text-sm leading-6" : "text-base leading-7 sm:text-lg"}`}>
               One clear route for Scripture consistency. Choose a structured climb, then take the next faithful step.
             </p>
@@ -922,14 +934,12 @@ export default function MountainRhythm() {
 
           <section
             data-testid="mountain-rhythm-overview-grid"
-            className="mt-6 grid min-w-0 gap-5 lg:grid-cols-2 lg:items-start"
+            className="mt-6 min-w-0 space-y-5"
           >
 
             <section
               data-testid="mountain-rhythm-choose"
-              className={`min-w-0 lg:col-start-1 lg:row-start-1 ${
-                activeClimb ? "order-3" : "order-2"
-              }`}
+              className="min-w-0"
             >
               <MountainClimbSetup
                 routes={MOUNTAIN_RHYTHM_ROUTES}
@@ -1198,35 +1208,18 @@ export default function MountainRhythm() {
               </div>
             </section>
 
-            <div
-              data-testid="mountain-rhythm-commitments-layout"
-              className={`min-w-0 lg:col-start-2 lg:row-start-1 ${
-                activeClimb ? "order-2" : "order-3"
-              }`}
-            >
-              <MountainRhythmDisciplines
-                plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
-                events={events}
-                completions={eventCompletions}
-                today={today}
-                ownerId={ownerId}
-                onSavePlan={saveDisciplinePlan}
-                onSaveEvent={saveDisciplineEvent}
-                onToggleCompletion={toggleDisciplineCompletion}
-              />
-            </div>
           </section>
 
           {selectedPlan ? (
             <>
                <section
                  data-testid="mountain-rhythm-details-grid"
-                 className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
+                 className="mt-5 min-w-0 space-y-5"
                >
                  <div data-testid="mountain-rhythm-route" className="min-w-0">
                      <div className="flex min-w-0 items-center justify-between gap-3">
                      <div className="min-w-0">
-                          <div className="discipleos-section-heading"><RouteIcon className="discipleos-section-heading__icon" /> Route to date</div>
+                           <div className="discipleos-section-heading"><RouteIcon className="discipleos-section-heading__icon" /> Route to today</div>
                          <p className="discipleos-secondary-copy discipleos-safe-text mt-1 text-[15px] leading-6">
                           {selectedPlan.name}
                           {selectedPlanAverageMinutes > 0 ? ` · about ${selectedPlanAverageMinutes} min/day` : ""}
@@ -1235,6 +1228,13 @@ export default function MountainRhythm() {
                     </div>
                      <span className="rounded-full border border-[#D4A017]/30 bg-[#D4A017]/10 px-3 py-1 text-[13px] font-medium text-[#F4D77A]">{score.completedDays}/{score.journeyDays} days</span>
                   </div>
+                   <section data-testid="mountain-rhythm-status" className="mt-5 min-w-0">
+                     <div className="discipleos-meta-copy text-xs font-semibold uppercase tracking-[0.12em]">Today’s next step</div>
+                     <div className="mt-2 border-l-2 border-[#D4A017]/35 pl-3">
+                       <div className="flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
+                       <div className="discipleos-secondary-copy mt-1 text-sm leading-6">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
+                     </div>
+                   </section>
                   <div className="mt-5 space-y-3" data-testid="mountain-rhythm-route-days">
                     {currentRoute.map(({ day, dayNumber }: any, index: number) => {
                       const point = trailByDate.get(day.date);
@@ -1346,17 +1346,6 @@ export default function MountainRhythm() {
                     })}
                   </div>
                 </div>
-
-                 <div className="min-w-0 space-y-5">
-                    <section data-testid="mountain-rhythm-status" className="min-w-0">
-                      <div className="discipleos-meta-copy text-xs font-semibold uppercase tracking-[0.12em]">Today’s next step</div>
-                      <div className="mt-2 border-l-2 border-[#D4A017]/35 pl-3">
-                        <div className="flex items-center gap-2 text-base font-semibold text-[#F4D77A]"><StatusMark status={score.todayPercentage >= 100 ? "complete" : score.todayPercentage > 0 ? "partial" : "future"} />{currentStatus}</div>
-                        <div className="discipleos-secondary-copy mt-1 text-sm leading-6">{score.todayPlanned ? `${score.todayPercentage}% of today's reading complete` : "Your next assigned reading will appear here."}</div>
-                      </div>
-                  </section>
-
-                </div>
               </section>
             </>
           ) : (
@@ -1364,6 +1353,27 @@ export default function MountainRhythm() {
               Choose a route above to see the full ascent, daily readings, milestones, and today's next step.
             </section>
           )}
+
+          <details
+            className="mt-6 border-t border-white/10 pt-4"
+            data-testid="mountain-rhythm-commitments-layout"
+          >
+            <summary className="cursor-pointer text-sm font-semibold text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A017]/60">
+              Optional commitments · Prayer and fasting
+            </summary>
+            <div className="mt-4">
+              <MountainRhythmDisciplines
+                plan={activeClimb && selectedPlan?.id === activeClimb.id ? selectedPlan : null}
+                events={events}
+                completions={eventCompletions}
+                today={today}
+                ownerId={ownerId}
+                onSavePlan={saveDisciplinePlan}
+                onSaveEvent={saveDisciplineEvent}
+                onToggleCompletion={toggleDisciplineCompletion}
+              />
+            </div>
+          </details>
 
           {completedClimbs.length > 0 || pastClimbs.length > 0 ? (
             <details
@@ -1439,7 +1449,6 @@ export default function MountainRhythm() {
                             {" · "}{earnedDays} of {plan.journeyDays || plan.durationDays || assignments.length} days earned
                             {" · "}{completedReadings} of {totalReadings} readings complete
                           </div>
-                          <div className="mt-1 break-all text-[11px] text-white/35">Plan ID: {plan.id}</div>
                         </div>
                       );
                     })}

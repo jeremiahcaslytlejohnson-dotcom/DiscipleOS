@@ -55,18 +55,7 @@ export default function MountainClimbSetup({
   const selected = routes.find((route) => route.kind === kind);
   const switching = Boolean(activeKind && kind && kind !== activeKind);
 
-  if (activeKind && !open) {
-    return (
-      <button
-        type="button"
-        data-testid="button-manage-climb"
-        onClick={() => onOpenChange(true)}
-        className="min-h-10 border border-white/15 bg-white/[0.03] px-3 text-sm text-white/70 hover:bg-white/10"
-      >
-        Manage climb
-      </button>
-    );
-  }
+  if (activeKind && !open) return null;
 
   return (
     <section data-testid="mountain-climb-setup" className="space-y-4">
@@ -195,7 +184,7 @@ export default function MountainClimbSetup({
             }}
             className="min-h-11 bg-[#C8921D] px-5 font-semibold text-black"
           >
-            {switching ? "Confirm switch" : activeKind ? "Keep current climb" : "Start climb"}
+            {switching ? "Confirm switch" : activeKind ? "Keep current climb" : "Finish setup and start climb"}
           </button>
         )}
       </div>

@@ -5,6 +5,12 @@ description: Approved product semantics for the Mountain Rhythm elevation score 
 
 Mountain Rhythm follows one explicitly selected structured reading climb: the 7-Day Climb, 20-Day Reset, or 40-Day Climb. Ordinary reading plans, custom-duration plans, and legacy 30-day resets keep their progress but never control ascent. It is never a spiritual-worth score.
 
+The current Mountain Rhythm chart, including its background and mountain artwork, trails, lines, milestones, flags, and colors, is under separate review. Do not modify, restore, regenerate, or redesign it during setup or page-organization work.
+
+**Why:** The user explicitly separated chart review from setup and layout work.
+
+**How to apply:** Keep changes to the surrounding page structure and controls unless the user explicitly reopens the chart scope.
+
 Canonical journey progress is exactly completed assigned days divided by the selected climb's planned days, with one-decimal percentage precision for proportional routes. Earned plan days are permanent and monotonic once every reading for that planned day has been completed. Reopening readings must not remove the earned day. Consistency is the on-schedule completion count divided by elapsed scheduled days; future days are excluded, and late catch-up advances journey progress without crediting the missed scheduled day. Trail elevation reflects completion timing: a first miss holds flat, consecutive misses regress, and later catch-up rises on its actual completion date.
 
 If a plan has an explicit completion map and no reading is currently true, treat any stale earned-day metadata as reset state so a visibly untouched climb remains at Basecamp.
