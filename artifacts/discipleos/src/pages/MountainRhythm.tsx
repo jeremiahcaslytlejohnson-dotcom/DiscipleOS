@@ -944,17 +944,18 @@ export default function MountainRhythm() {
             </p>
           </section>
 
+          <div className="mt-8 min-w-0" data-testid="mountain-rhythm-full-width-chart">
+            <MountainRhythmCard score={score} loading={isLoading} />
+          </div>
+
           <section
             data-testid="mountain-rhythm-overview-grid"
-            className="mt-8 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start"
+            className="mt-6 grid min-w-0 gap-5 lg:grid-cols-2 lg:items-start"
           >
-            <div className="order-1 min-w-0 lg:col-start-1 lg:row-start-1">
-              <MountainRhythmCard score={score} loading={isLoading} />
-            </div>
 
             <section
               data-testid="mountain-rhythm-choose"
-              className={`min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 ${
+              className={`min-w-0 lg:col-start-1 lg:row-start-1 ${
                 activeClimb ? "order-3" : "order-2"
               }`}
             >
@@ -1176,7 +1177,7 @@ export default function MountainRhythm() {
 
             <div
               data-testid="mountain-rhythm-commitments-layout"
-              className={`min-w-0 lg:col-start-1 lg:row-start-2 ${
+              className={`min-w-0 lg:col-start-2 lg:row-start-1 ${
                 activeClimb ? "order-2" : "order-3"
               }`}
             >

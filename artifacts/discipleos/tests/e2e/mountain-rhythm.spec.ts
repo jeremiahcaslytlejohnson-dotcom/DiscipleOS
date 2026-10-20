@@ -1238,12 +1238,12 @@ test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async (
     expect(layout.details).toHaveLength(2);
 
     if (width >= 1024) {
-      expect(Math.abs(layout.card!.x - layout.choose!.x)).toBeGreaterThan(1);
-      expect(Math.abs(layout.card!.y - layout.choose!.y)).toBeLessThanOrEqual(1);
-      expect(Math.abs(layout.card!.x - layout.details[0].x)).toBeLessThanOrEqual(1);
-      expect(Math.abs(layout.choose!.x - layout.details[1].x)).toBeLessThanOrEqual(1);
-      expect(layout.commitments!.y).toBeGreaterThan(layout.card!.y);
-      await expect(page.getByTestId("mountain-rhythm-elevation-label-0")).toHaveText("Basecamp 0%");
+      expect(Math.abs(layout.card!.x - layout.choose!.x)).toBeLessThanOrEqual(1);
+      expect(layout.card!.width).toBeGreaterThan(layout.choose!.width);
+      expect(layout.choose!.y).toBeGreaterThanOrEqual(layout.card!.y + layout.card!.height - 1);
+      expect(Math.abs(layout.choose!.y - layout.commitments!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(layout.choose!.x - layout.commitments!.x)).toBeGreaterThan(1);
+      await expect(page.getByTestId("mountain-rhythm-elevation-label-0")).toHaveText("Basecamp");
     } else {
       expect(layout.commitments!.y).toBeGreaterThanOrEqual(layout.card!.y + layout.card!.height - 1);
       expect(layout.choose!.y).toBeGreaterThanOrEqual(layout.commitments!.y + layout.commitments!.height - 1);
@@ -1475,7 +1475,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       labels.map((label) => label.textContent?.trim()),
     );
     if (width < 640) {
-      expect(activeGuideText).toEqual(["Gaining Elevation 50%", "Ridgeline 70%"]);
+      expect(activeGuideText).toEqual(["GainingElevation", "Ridgeline"]);
       await expect(page.getByTestId("mountain-rhythm-current-status"))
         .toContainText("Current elevation: Gaining Elevation · 57.1%");
       const metricOverflow = await page.getByTestId("mountain-rhythm-panel")
@@ -1484,11 +1484,11 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       expect(metricOverflow).toBe(false);
     } else {
       expect(activeGuideText).toEqual([
-        "Basecamp 0%",
-        "On the Trail 25%",
-        "Gaining Elevation 50%",
-        "Ridgeline 70%",
-        "Summit 85%",
+        "Basecamp",
+        "On the Trail",
+        "GainingElevation",
+        "Ridgeline",
+        "Summit",
       ]);
     }
     await expect(page.getByTestId("mountain-rhythm-accessible-milestones").locator("li"))
@@ -1576,6 +1576,47 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   );
 });
 
+test("shows a full-width 20-day chart with a continuous earned and projected route", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const ownerId = "mountain-rhythm-twenty-day-visual-owner";
+  const plan = makePlan({
+    id: "twenty-day-wide-chart",
+    days: 20,
+    name: "20-Day Climb",
+    today,
+    startOffset: -6,
+    completedIndexes: [0, 1, 2, 3, 4, 5, 6],
+  });
+  await stubApi(page, { success: true, userId: ownerId, authenticated: false, established: false });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await openMountainRhythm(page);
+
+  const card = page.getByTestId("mountain-rhythm-panel");
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  const earned = chart.getByTestId("mountain-rhythm-earned-route");
+  const projected = chart.getByTestId("mountain-rhythm-projected-route");
+  const cardBox = await card.boundingBox();
+  const chooseBox = await page.getByTestId("mountain-rhythm-choose").boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(chooseBox).not.toBeNull();
+  expect(cardBox!.width).toBeGreaterThan(chooseBox!.width);
+  expect(cardBox!.y).toBeLessThan(chooseBox!.y);
+
+  await expect(earned).toBeVisible();
+  await expect(projected).toBeVisible();
+  await expect(chart.locator('[data-chart-line="earned"]')).toHaveCount(1);
+  await expect(chart.locator('[data-chart-line="projected"]')).toHaveCount(1);
+  await expect(projected).toHaveAttribute("stroke-dasharray", "4 5");
+  await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("7 of 20 planned days");
+  await expect(page.getByTestId("mountain-rhythm-current-status")).toContainText("Current: On the Trail · Next: Gaining Elevation");
+  const dayLabels = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").allTextContents();
+  expect(dayLabels).toEqual(["1", "4", "7", "10", "13", "16", "20"]);
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-20-day-desktop.png",
+  });
+});
+
 test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
@@ -1624,16 +1665,16 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
       labels.map((label) => label.textContent?.trim()),
     );
     if (width < 640) {
-      expect(guideText).toEqual(["Basecamp 0%", "On the Trail 25%"]);
+      expect(guideText).toEqual(["Basecamp", "On the Trail"]);
       await expect(page.getByTestId("mountain-rhythm-current-status"))
         .toContainText("Current elevation: Basecamp · 14.3% · Today,");
     } else {
       expect(guideText).toEqual([
-        "Basecamp 0%",
-        "On the Trail 25%",
-        "Gaining Elevation 50%",
-        "Ridgeline 70%",
-        "Summit 85%",
+        "Basecamp",
+        "On the Trail",
+        "GainingElevation",
+        "Ridgeline",
+        "Summit",
       ]);
     }
     await page.getByTestId("mountain-rhythm-panel").screenshot({
@@ -2485,7 +2526,7 @@ test("keeps the three summary cards readable across target widths", async ({ pag
   await expect(page.getByTestId("mountain-rhythm-elevation-guides").locator("g")).toHaveCount(5);
   await expect(page.getByTestId("mountain-rhythm-milestones")).toHaveCount(0);
   await expect(page.getByTestId("mountain-rhythm-status")).toContainText("Today’s next step");
-  await expect(page.getByTestId("mountain-rhythm-elevation-label-50")).toHaveText("Gaining Elevation 50%");
+  await expect(page.getByTestId("mountain-rhythm-elevation-label-50")).toHaveText("GainingElevation");
   const dayLabels = page.getByTestId("mountain-rhythm-day-labels").locator("text");
   await expect(dayLabels.first()).toHaveAttribute("font-size", "12");
   const helpToggle = page.getByTestId("mountain-rhythm-help-toggle");
