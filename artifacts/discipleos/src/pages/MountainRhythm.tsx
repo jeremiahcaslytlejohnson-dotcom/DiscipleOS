@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import MountainRhythmCard from "../components/MountainRhythmCard";
 import MountainRhythmDisciplines from "../components/MountainRhythmDisciplines";
+import MountainClimbSetup from "../components/MountainClimbSetup";
 import EstimatedReadingTime from "../components/EstimatedReadingTime";
 import {
   VERSE_COUNTS,
@@ -200,6 +201,7 @@ export default function MountainRhythm() {
   const [saveError, setSaveError] = useState("");
   const [isPastClimbsExpanded, setIsPastClimbsExpanded] = useState(false);
   const [pendingStartKind, setPendingStartKind] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [pendingReplacement, setPendingReplacement] = useState<any>(null);
   const [isReplacingClimb, setIsReplacingClimb] = useState(false);
   const [replacementError, setReplacementError] = useState("");
@@ -210,7 +212,6 @@ export default function MountainRhythm() {
   const [routeDayExpandedOverrides, setRouteDayExpandedOverrides] = useState<
     Record<string, boolean>
   >({});
-  const autoStartedEntryRef = useRef(false);
 
   useEffect(() => {
     const refreshToday = () => setToday(todayISO());
@@ -555,7 +556,7 @@ export default function MountainRhythm() {
     });
   }, [queuePending]);
 
-  const startClimb = useCallback(async (kind: string) => {
+  const startClimb = useCallback(async (kind: string, dailyBudget = readingDefaults.dailyReadingBudget) => {
     setSaveError("");
     const route = MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === kind);
     if (!route || route.comingLater || route.locked) return;
@@ -577,13 +578,14 @@ export default function MountainRhythm() {
           }),
           timeZone: getLocalPlanTimeZone(),
         }
-      : makeJourneyPlan(kind, readingDefaults);
+      : makeJourneyPlan(kind, { ...readingDefaults, dailyReadingBudget: dailyBudget });
     setPlans((current) => [plan, ...current]);
     setSelectedPlanId(plan.id);
     setFeedback(`Starting ${plan.name}.`);
     try {
       await savePlan(plan);
       setFeedback("");
+      setSetupOpen(false);
     } catch (error: any) {
       setFeedback("");
       if (error?.status === 403) {
@@ -605,21 +607,22 @@ export default function MountainRhythm() {
           setSaveError("An active climb exists, but it could not be identified safely. Refresh and try again.");
         }
       } else {
+        setSetupOpen(false);
         setSaveError("Saved on this device. We will sync this climb when the connection returns.");
         queuePending({ type: "upsert-plan", payload: plan, ts: Date.now() });
       }
     }
   }, [activeClimb, queuePending, readingDefaults, savePlan]);
 
-  const replaceActiveClimb = useCallback(async () => {
-    if (!pendingReplacement || isReplacingClimb) return;
+  const replaceActiveClimb = useCallback(async (replacement = pendingReplacement) => {
+    if (!replacement || isReplacingClimb) return;
     const route = MOUNTAIN_RHYTHM_ROUTES.find(
-      (choice) => choice.kind === pendingReplacement.kind,
+      (choice) => choice.kind === replacement.kind,
     );
     if (!route || route.comingLater || route.locked) return;
     const plan =
-      pendingReplacement.plan ||
-      makeJourneyPlan(pendingReplacement.kind, readingDefaults);
+      replacement.plan ||
+      makeJourneyPlan(replacement.kind, readingDefaults);
     setIsReplacingClimb(true);
     setReplacementError("");
     try {
@@ -627,7 +630,7 @@ export default function MountainRhythm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          expectedActivePlanId: pendingReplacement.expectedActivePlanId,
+          expectedActivePlanId: replacement.expectedActivePlanId,
           plan,
         }),
       });
@@ -649,6 +652,7 @@ export default function MountainRhythm() {
       setSelectedPlanId(body.plan.id);
       setFeedback(`${route.label} started from the beginning. Previous progress remains in Past climbs.`);
       setPendingReplacement(null);
+      setSetupOpen(false);
     } catch (error: any) {
       setReplacementError(
         error?.status === 409
@@ -661,30 +665,15 @@ export default function MountainRhythm() {
   }, [isReplacingClimb, pendingReplacement, readingDefaults]);
 
   const requestStartClimb = useCallback((kind: string) => {
-    setSaveError("");
-    if (activeClimb) {
-      const activeKind = planKind(activeClimb);
-      const route = MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === kind);
-      setSelectedPlanId(activeClimb.id);
-      setFeedback(
-        activeKind === kind
-          ? `${route?.label || activeClimb.name} · In Progress`
-          : `${route?.label || "This route"} is Available after this climb.`,
-      );
-      return;
-    }
     const route = MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === kind);
-    if (route?.locked) return;
-    if (kind === "20-day-reset") {
-      setPendingStartKind(kind);
-      return;
-    }
-    void startClimb(kind);
-  }, [activeClimb, startClimb]);
+    if (!route || route.locked || route.comingLater) return;
+    setSaveError("");
+    setSetupOpen(true);
+  }, []);
 
-  const cancelActiveClimb = useCallback(async () => {
+  const cancelActiveClimb = useCallback(async (expectedPlanId = pendingCancelClimbPlanId) => {
     const plan = activeClimb;
-    if (!plan || plan.id !== pendingCancelClimbPlanId) {
+    if (!plan || !expectedPlanId || plan.id !== expectedPlanId) {
       setPendingCancelClimbPlanId(null);
       return;
     }
@@ -728,26 +717,9 @@ export default function MountainRhythm() {
   }, [activeClimb, pendingCancelClimbPlanId, queuePending, savePlan]);
 
   useEffect(() => {
-    if (
-      isLoading ||
-      !sessionChecked ||
-      !canShowPlanState ||
-      autoStartedEntryRef.current ||
-      structuredPlans.length > 0 ||
-      isSignedIn ||
-      hasAuthenticatedSession
-    ) return;
-    autoStartedEntryRef.current = true;
-    void startClimb("7-day-climb");
-  }, [
-    hasAuthenticatedSession,
-    isLoading,
-    canShowPlanState,
-    isSignedIn,
-    sessionChecked,
-    startClimb,
-    structuredPlans.length,
-  ]);
+    if (isLoading || !sessionChecked || !canShowPlanState || activeClimb) return;
+    setSetupOpen(true);
+  }, [activeClimb, canShowPlanState, isLoading, sessionChecked]);
 
   const toggleReading = useCallback((planId: string, key: string) => {
     let nextValue = false;
@@ -959,6 +931,56 @@ export default function MountainRhythm() {
                 activeClimb ? "order-3" : "order-2"
               }`}
             >
+              <MountainClimbSetup
+                routes={MOUNTAIN_RHYTHM_ROUTES}
+                open={setupOpen}
+                onOpenChange={setSetupOpen}
+                activeKind={activeClimb ? planKind(activeClimb) : null}
+                dailyBudget={readingDefaults.dailyReadingBudget}
+                onCancel={() => {
+                  if (activeClimb) void cancelActiveClimb(activeClimb.id);
+                }}
+                onStart={(kind, budget) => void startClimb(kind, budget)}
+                onSwitch={(kind, budget) => {
+                  if (!activeClimb) return;
+                  const plan = makeJourneyPlan(kind, {
+                    ...readingDefaults,
+                    dailyReadingBudget: budget,
+                  });
+                  void replaceActiveClimb({
+                    kind,
+                    expectedActivePlanId: activeClimb.id,
+                    plan,
+                  });
+                }}
+              />
+              {pendingReplacement ? (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="replace-active-climb-title"
+                  data-testid="legacy-dialog-replace-active-climb"
+                  className="mt-4 rounded-xl border border-[#D4A017]/35 bg-[#D4A017]/[0.06] p-4"
+                >
+                  <div id="replace-active-climb-title" className="text-sm font-semibold text-white">
+                    Start over with a new {MOUNTAIN_RHYTHM_ROUTES.find((choice) => choice.kind === pendingReplacement.kind)?.label || "climb"}?
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/70">
+                    The active climb will be kept in Past climbs and its progress will not transfer. Your other plans, activities, and pending changes remain unchanged.
+                  </p>
+                  {replacementError ? <p className="mt-3 text-sm text-amber-100" role="alert" data-testid="status-replacement-error">{replacementError}</p> : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" data-testid="button-decline-climb-replacement" disabled={isReplacingClimb} onClick={() => { setPendingReplacement(null); setReplacementError(""); }} className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10">
+                      Keep current climb
+                    </Button>
+                    <Button type="button" data-testid="button-confirm-climb-replacement" disabled={isReplacingClimb} onClick={() => void replaceActiveClimb()} className="min-h-11 bg-[#D4A017] text-[#16130C] hover:bg-[#E6B92A]">
+                      {isReplacingClimb ? "Starting new climb…" : "Cancel old climb and start over"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {saveError ? <div className="mt-3 text-sm text-amber-100" role="status" data-testid="status-mountain-save">{saveError}</div> : null}
+              <div className="hidden" aria-hidden="true">
               <div className="discipleos-section-heading">
                 <Mountain className="discipleos-section-heading__icon" />
                 Choose your climb
@@ -979,7 +1001,7 @@ export default function MountainRhythm() {
                       onClick={() => !later && !locked && !unavailable && requestStartClimb(choice.kind)}
                       disabled={later || locked || unavailable}
                       className={`discipleos-item-surface w-full text-left ${unavailable ? "p-3" : "p-4"} ${active ? "border-[#D4A017] bg-[#D4A017]/15" : choice.kind === "7-day-climb" ? "border-sky-300/25 bg-sky-300/[0.06]" : choice.kind === "20-day-reset" ? "border-[#D4A017]/35 bg-[#D4A017]/[0.08]" : "border-white/10 bg-white/[0.03]"} ${later || locked || unavailable ? "cursor-not-allowed opacity-75" : "hover:border-[#D4A017]/60 hover:bg-[#D4A017]/10"}`}
-                      data-testid={`button-choose-${choice.kind}`}
+                      data-testid={`legacy-button-choose-${choice.kind}`}
                     >
                       <div className="flex min-w-0 items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -1002,7 +1024,7 @@ export default function MountainRhythm() {
                   <Button
                     type="button"
                     variant="outline"
-                    data-testid="button-request-cancel-active-climb"
+                    data-testid="legacy-button-request-cancel-active-climb"
                     onClick={() => setPendingCancelClimbPlanId(activeClimb.id)}
                     className="min-h-11 border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
                   >
@@ -1038,7 +1060,7 @@ export default function MountainRhythm() {
                     <Button
                       type="button"
                       variant="outline"
-                      data-testid="button-decline-climb-replacement"
+                      data-testid="legacy-button-decline-climb-replacement"
                       disabled={isReplacingClimb}
                       onClick={() => {
                         setPendingReplacement(null);
@@ -1050,7 +1072,7 @@ export default function MountainRhythm() {
                     </Button>
                     <Button
                       type="button"
-                      data-testid="button-confirm-climb-replacement"
+                      data-testid="legacy-button-confirm-climb-replacement"
                       disabled={isReplacingClimb}
                       onClick={() => void replaceActiveClimb()}
                       className="min-h-11 bg-[#D4A017] text-[#16130C] hover:bg-[#E6B92A]"
@@ -1065,7 +1087,7 @@ export default function MountainRhythm() {
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="cancel-active-climb-title"
-                  data-testid="dialog-cancel-active-climb"
+                  data-testid="legacy-dialog-cancel-active-climb"
                   className="mt-4 border-l-2 border-[#D4A017]/45 pl-4"
                 >
                   <div
@@ -1091,7 +1113,7 @@ export default function MountainRhythm() {
                     </Button>
                     <Button
                       type="button"
-                      data-testid="button-confirm-cancel-active-climb"
+                      data-testid="legacy-button-confirm-cancel-active-climb"
                       onClick={() => void cancelActiveClimb()}
                       className="min-h-11 bg-[#D4A017] text-[#16130C] hover:bg-[#E6B92A]"
                     >
@@ -1172,7 +1194,8 @@ export default function MountainRhythm() {
                   </div>
                 </div>
               ) : null}
-              {saveError ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100" data-testid="status-mountain-save">{saveError}</div> : null}
+              {saveError ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100" data-testid="legacy-status-mountain-save">{saveError}</div> : null}
+              </div>
             </section>
 
             <div
