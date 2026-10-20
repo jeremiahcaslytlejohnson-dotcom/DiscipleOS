@@ -117,12 +117,20 @@ export default function MountainRhythmCard({
     ? `${earnedLine} L${earnedPoints[earnedPoints.length - 1].x} ${PLOT_BOTTOM} L${earnedPoints[0].x} ${PLOT_BOTTOM} Z`
     : "";
   const futurePoints = geometry.points.filter((point) => point.date > score?.windowEnd);
+  const plannedFuturePoints = futurePoints.map((point, index) => ({
+    ...point,
+    y: elevationY(
+      currentElevation +
+        ((index + 1) / futurePoints.length) * (100 - currentElevation),
+    ),
+  }));
   const futureLine = futurePoints.length
-    ? smoothPath([...(earnedPoints.length ? [todayPosition] : []), ...futurePoints])
+    ? smoothPath([todayPosition, ...plannedFuturePoints])
     : "";
   const flagX = todayPointIndex >= 0 ? geometry.points[todayPointIndex].x : todayX;
   const flagY = todayPosition.y;
-  const flagLabel = "Today";
+  const flagLabel =
+    geometry.todayX !== null ? "Today" : geometry.current ? "Latest" : "Next";
   const labelInterval = Math.max(1, Math.ceil(geometry.points.length / 7));
   const todayMarkerIsScheduled = todayPointIndex >= 0;
   const currentDateContext =
@@ -141,15 +149,11 @@ export default function MountainRhythmCard({
     current: level.name === currentLevel,
     next: level.name === nextLevel?.name,
   }));
-  const mobileStatus = todayPointIndex >= 0
-    ? `${currentLevel} · ${score.currentElevationPercent}% · Day ${todayPointIndex + 1}`
-    : geometry.todayX !== null
-      ? `${currentLevel} · ${score.currentElevationPercent}% · Today · no assignment${geometry.current ? ` · Latest D${geometry.points.indexOf(geometry.current) + 1}` : ""}${geometry.next ? ` · Next D${geometry.points.indexOf(geometry.next) + 1}` : ""}`
-      : geometry.current
-        ? `${currentLevel} · ${score.currentElevationPercent}% · Latest D${geometry.points.indexOf(geometry.current) + 1}`
-        : geometry.next
-          ? `${currentLevel} · ${score.currentElevationPercent}% · Next D${geometry.points.indexOf(geometry.next) + 1}`
-          : `${currentLevel} · ${score.currentElevationPercent}%`;
+  const milestoneStatus = score.journeyComplete
+    ? `Current: ${currentLevel} · Summit reached`
+    : nextLevel
+      ? `Current: ${currentLevel} · Next: ${nextLevel.name}`
+      : `Current: ${currentLevel} · Final milestone`;
   const mountainRidgePath =
     "M0 248 L35 239 L68 226 Q96 212 125 204 Q146 205 165 215 L190 200 Q202 192 215 187 L238 169 Q250 157 260 149 L274 125 L283 105 Q288 96 293 97 L307 115 L326 142 L344 157 L360 167";
 
@@ -314,6 +318,7 @@ export default function MountainRhythmCard({
                   strokeDasharray="3 5"
                   strokeLinecap="round"
                   strokeWidth="1.8"
+                  aria-label="Planned route after today; future elevation is not earned"
                 />
               ) : null}
               <g data-testid="mountain-rhythm-elevation-guides" aria-label="Elevation level labels">
@@ -337,7 +342,12 @@ export default function MountainRhythmCard({
                       data-testid={`mountain-rhythm-elevation-label-${level.min}`}
                       aria-label={`${level.current ? "Current stage" : level.next ? "Next milestone" : "Milestone"}: ${level.name}, ${level.min}% threshold`}
                     >
-                      {compactLevelName(level.name)} {level.min}%
+                      <tspan className="sm:hidden">
+                        {compactLevelName(level.name)} {level.min}%
+                      </tspan>
+                      <tspan className="hidden sm:inline">
+                        {level.name} {level.min}%
+                      </tspan>
                     </text>
                   </g>
                 ))}
@@ -353,7 +363,13 @@ export default function MountainRhythmCard({
                     key={point.date}
                     data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
-                    cy={isToday ? todayPosition.y : elevationY(Number(point.elevationPercent || 0))}
+                    cy={
+                      isToday
+                        ? todayPosition.y
+                        : isFuture
+                          ? plannedFuturePoints.find((futurePoint) => futurePoint.date === point.date)?.y
+                          : elevationY(Number(point.elevationPercent || 0))
+                    }
                     r={geometry.points.length > 100 ? (isToday ? 3.4 : 1.4) : geometry.points.length > 40 ? (isToday ? 4.2 : 2) : (isToday ? 5.5 : 3.6)}
                     fill={
                       isToday
@@ -391,7 +407,11 @@ export default function MountainRhythmCard({
                   const showLabel =
                     index === 0 ||
                     index === geometry.points.length - 1 ||
-                    (index + 1) % labelInterval === 0 ||
+                    (
+                      (index + 1) % labelInterval === 0 &&
+                      (todayPointIndex < 0 ||
+                        Math.abs(index - todayPointIndex) >= labelInterval)
+                    ) ||
                     point.date === score?.windowEnd;
                   return showLabel ? (
                     <text
@@ -400,9 +420,15 @@ export default function MountainRhythmCard({
                       y="270"
                       fill={point.date === score?.windowEnd ? "#F4D77A" : "#AAB8BA"}
                       fontSize={geometry.points.length > 40 ? "8.5" : "9.5"}
-                      textAnchor="middle"
+                      textAnchor={
+                        index === 0
+                          ? "start"
+                          : index === geometry.points.length - 1
+                            ? "end"
+                            : "middle"
+                      }
                     >
-                      {formatDate(point.date)}
+                      Day {index + 1}
                     </text>
                   ) : null;
                 })}
@@ -460,15 +486,15 @@ export default function MountainRhythmCard({
             className="discipleos-safe-text mt-2 break-words text-[13px] leading-5 text-[#F4D77A] sm:hidden"
             data-testid="mountain-rhythm-current-status-mobile"
           >
-            {mobileStatus}{nextLevel ? ` · Next: ${nextLevel.name}` : score.journeyComplete ? " · Summit reached" : ""}
+            {milestoneStatus}
             <span className="sr-only"> · {currentDateContext}</span>
           </p>
           <p
             className="discipleos-safe-text mt-2 hidden text-[14px] leading-5 text-[#F4D77A] sm:block"
             data-testid="mountain-rhythm-current-status"
           >
-            Current: {currentLevel} · {score.currentElevationPercent}% · {currentDateContext}
-            {nextLevel ? ` · Next: ${nextLevel.name} at ${nextLevel.min}%` : score.journeyComplete ? " · Summit reached" : ""}
+            {milestoneStatus}
+            <span className="sr-only"> · {score.currentElevationPercent}% elevation · {currentDateContext}</span>
           </p>
           <div className="mt-2 border-t border-white/10 pt-2">
             <details className="group">
@@ -476,7 +502,7 @@ export default function MountainRhythmCard({
                 How Mountain Rhythm works
               </summary>
               <p data-testid="mountain-rhythm-help-copy" className="discipleos-secondary-copy mt-2 text-sm leading-6">
-                {RHYTHM_COPY} Elevation milestones: {RHYTHM_LEVELS.map((level) => `${level.name} ${level.min}%`).join(" · ")}.
+                The solid line and shaded area show recorded elevation through today. The dashed line is the planned route; future days are not earned. {RHYTHM_COPY} Elevation milestones: {RHYTHM_LEVELS.map((level) => `${level.name} ${level.min}%`).join(" · ")}.
               </p>
             </details>
           </div>
