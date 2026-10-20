@@ -2,7 +2,7 @@ import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
 const PLANNED_TRAVERSE_Y = [240, 231, 235, 219, 223, 201, 190];
-const PLOT_LEFT = 24;
+const PLOT_LEFT = 132;
 const PLOT_RIGHT = 336;
 const PLOT_TOP = 68;
 const PLOT_BOTTOM = 248;
@@ -30,7 +30,6 @@ function plannedTraverseY(index: number, pointCount: number) {
 function trailGeometry(trail: any[], today: string) {
   if (!Array.isArray(trail) || trail.length === 0) {
     return {
-      path: "M24 236L336 78",
       points: [],
       current: null,
       next: null,
@@ -50,13 +49,15 @@ function trailGeometry(trail: any[], today: string) {
   const points = sortedTrail.map((point, index) => ({
     ...point,
     x: xForDate(point.date) ?? PLOT_LEFT,
-    y: plannedTraverseY(index, sortedTrail.length),
+    y:
+      point.date <= today
+        ? elevationY(Number(point.elevationPercent || 0))
+        : plannedTraverseY(index, sortedTrail.length),
   }));
   const current = [...points].reverse().find((point) => point.date <= today) || null;
   const next = points.find((point) => point.date > today) || null;
 
   return {
-    path: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(""),
     points,
     current,
     next,
@@ -69,15 +70,6 @@ function formatDate(date: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
     new Date(`${date}T12:00:00`),
   );
-}
-
-function compactLevelName(name: string) {
-  const shortNames: Record<string, string> = {
-    "On the Trail": "Trail",
-    "Gaining Elevation": "Gaining",
-    Ridgeline: "Ridge",
-  };
-  return shortNames[name] || name;
 }
 
 function todayLabel(score: any) {
@@ -139,15 +131,6 @@ export default function MountainRhythmCard({
     current: level.name === currentLevel,
     next: level.name === nextLevel?.name,
   }));
-  const mobileStatus = todayPointIndex >= 0
-    ? `${currentLevel} · ${score.currentElevationPercent}% · Day ${todayPointIndex + 1}`
-    : geometry.todayX !== null
-      ? `${currentLevel} · ${score.currentElevationPercent}% · Today · no assignment${geometry.current ? ` · Latest D${geometry.points.indexOf(geometry.current) + 1}` : ""}${geometry.next ? ` · Next D${geometry.points.indexOf(geometry.next) + 1}` : ""}`
-      : geometry.current
-        ? `${currentLevel} · ${score.currentElevationPercent}% · Latest D${geometry.points.indexOf(geometry.current) + 1}`
-        : geometry.next
-          ? `${currentLevel} · ${score.currentElevationPercent}% · Next D${geometry.points.indexOf(geometry.next) + 1}`
-          : `${currentLevel} · ${score.currentElevationPercent}%`;
   const mountainRidgePath =
     "M0 248 L35 239 L68 226 Q96 212 125 204 Q146 205 165 215 L190 200 Q202 192 215 187 L238 169 Q250 157 260 149 L274 125 L283 105 Q288 96 293 97 L307 115 L326 142 L344 157 L360 167";
 
@@ -228,7 +211,7 @@ export default function MountainRhythmCard({
               viewBox="0 44 360 236"
               preserveAspectRatio="none"
               role="img"
-                aria-label={`${score.journeyLabel} recent seven-day reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
+                aria-label={`${score.journeyLabel} reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
             >
               <defs>
                 <linearGradient id="mountain-fill" x1="0" x2="0.15" y1="0" y2="1">
@@ -275,6 +258,15 @@ export default function MountainRhythmCard({
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
+              <g
+                data-testid="mountain-rhythm-forest-depth"
+                transform="translate(0 -37)"
+                fill="#0A1A17"
+                fillOpacity="0.72"
+                aria-hidden="true"
+              >
+                <path d="M8 302l7-19 7 19h-4l6 15H6l6-15zm26-8 6-17 7 17h-4l5 13H29l5-13zm23 8 7-20 7 20h-4l6 15H53l6-15zm23-12 6-17 7 17h-4l5 13H75l5-13zm27 17 7-21 7 21h-4l6 14h-18l6-14zm29-8 6-18 6 18h-4l5 14h-17l5-14zm30 12 7-19 7 19h-4l5 14h-18l5-14zm26-19 6-17 6 17h-4l5 13h-16l5-13zm29 18 7-20 7 20h-4l6 14h-18l6-14zm29-15 6-18 7 18h-4l5 14h-17l5-14zm28 16 7-21 7 21h-4l6 15h-18l6-15zm28-10 6-18 7 18h-4l5 14h-17l5-14zm28 15 7-20 7 20h-4l6 14h-18l6-14z" />
+              </g>
               <g data-testid="mountain-rhythm-elevation-guide-lines" aria-label="Elevation guide lines">
                 {levelGuides.map((level) => (
                   <g
@@ -294,19 +286,10 @@ export default function MountainRhythmCard({
                   </g>
                 ))}
               </g>
-              <path
-                data-testid="mountain-rhythm-day-path"
-                d={geometry.path}
-                fill="none"
-                stroke="#A9C0AE"
-                strokeOpacity="0.36"
-                strokeDasharray="3.5 5"
-                strokeLinecap="round"
-                strokeWidth="2.7"
-              />
               {earnedRoute ? (
                 <path
                   data-testid="mountain-rhythm-earned-route"
+                  data-chart-line="earned"
                   d={earnedRoute}
                   fill="none"
                   stroke="#8BE3A0"
@@ -337,18 +320,7 @@ export default function MountainRhythmCard({
                       data-testid={`mountain-rhythm-elevation-label-${level.min}`}
                       aria-label={`${level.current ? "Current stage" : level.next ? "Next milestone" : "Milestone"}: ${level.name}, ${level.min}% threshold`}
                     >
-                      <tspan className="sm:hidden">
-                        {level.current
-                          ? `${compactLevelName(level.name)} ${level.min}%`
-                          : `Next ${level.min}%`}
-                      </tspan>
-                      <tspan
-                        className="hidden sm:inline"
-                        textLength={level.min === 0 ? 48 : level.min === 25 ? 78 : undefined}
-                        lengthAdjust={level.min === 0 || level.min === 25 ? "spacingAndGlyphs" : undefined}
-                      >
-                        {level.name} {level.min}%
-                      </tspan>
+                      {level.name} {level.min}%
                     </text>
                   </g>
                 ))}
@@ -439,7 +411,7 @@ export default function MountainRhythmCard({
                 <text
                   data-testid="mountain-rhythm-current-flag-label"
                   x={flagX > 300 ? -3 : 18}
-                  y={flagY > 180 ? "2" : "12"}
+                  y="12"
                   textAnchor={flagX > 300 ? "end" : "start"}
                   fill="#F4D77A"
                   fontSize="13"
@@ -465,14 +437,7 @@ export default function MountainRhythmCard({
           </div>
 
           <p
-            className="discipleos-safe-text mt-2 break-words text-[13px] leading-5 text-[#F4D77A] sm:hidden"
-            data-testid="mountain-rhythm-current-status-mobile"
-          >
-            {mobileStatus}
-            <span className="sr-only"> · {currentDateContext}</span>
-          </p>
-          <p
-            className="discipleos-safe-text mt-2 hidden text-[14px] leading-5 text-[#F4D77A] sm:block"
+            className="discipleos-safe-text mt-2 break-words text-[13px] leading-5 text-[#F4D77A] sm:text-[14px]"
             data-testid="mountain-rhythm-current-status"
           >
             Current elevation: {currentLevel} · {score.currentElevationPercent}% · {currentDateContext}
