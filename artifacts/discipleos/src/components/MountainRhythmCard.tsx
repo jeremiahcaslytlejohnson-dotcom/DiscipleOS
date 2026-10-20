@@ -54,7 +54,7 @@ function trailGeometry(trail: any[], today: string, currentElevationPercent = 0)
     0,
     Number(currentElevationPercent || sortedTrail[currentIndex]?.elevationPercent || 0),
   );
-  const projectedEnd = Math.min(68, Math.max(58, projectedStart + 18));
+  const projectedEnd = Math.min(70, Math.max(65, projectedStart + 22));
   const points = sortedTrail.map((point, index) => ({
     ...point,
     x: xForDate(point.date) ?? plotLeft,
@@ -209,7 +209,7 @@ export default function MountainRhythmCard({
             <div data-testid="mountain-rhythm-metric-journey" className="min-w-0 border-l border-white/10 px-1.5 py-1 sm:px-3">
               <div className="discipleos-field-label text-[10px] font-semibold uppercase leading-3 tracking-[0.04em] sm:text-xs sm:leading-4 sm:tracking-[0.12em]">Journey progress</div>
               <div className="mt-1 text-[14px] font-semibold leading-5 text-emerald-200 sm:text-lg sm:leading-6">
-                  {Number(score.journeyProgress).toFixed(1)}%
+                  {summaryOnly ? score.journeyProgress : Number(score.journeyProgress).toFixed(1)}%
               </div>
               <div className="discipleos-meta-copy mt-1 text-[10px] leading-4 sm:text-[13px] sm:leading-5">
                 <span className="sm:hidden">{score.completedDays}/{score.journeyDays} days</span>

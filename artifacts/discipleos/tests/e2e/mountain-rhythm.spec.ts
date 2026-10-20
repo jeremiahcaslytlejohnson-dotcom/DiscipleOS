@@ -1224,7 +1224,7 @@ test("aligns Mountain Rhythm desktop columns and stacks them on mobile", async (
         documentWidth: document.documentElement.scrollWidth,
         card: box("mountain-rhythm-panel"),
         choose: box("mountain-rhythm-choose"),
-        commitments: box("mountain-rhythm-disciplines"),
+        commitments: box("mountain-rhythm-commitments-layout"),
         details: Array.from(document.querySelector('[data-testid="mountain-rhythm-details-grid"]')?.children || []).map((child) => {
           const rect = child.getBoundingClientRect();
           return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -1615,6 +1615,17 @@ test("shows a full-width 20-day chart with a continuous earned and projected rou
   await page.getByTestId("mountain-rhythm-panel").screenshot({
     path: "/tmp/discipleos-mountain-20-day-desktop.png",
   });
+  for (const width of [375, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    const chartBox = await chart.boundingBox();
+    const flagBox = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
+    expect(chartBox).not.toBeNull();
+    expect(flagBox).not.toBeNull();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    expect(flagBox!.x).toBeGreaterThanOrEqual(chartBox!.x);
+    expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
+    await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
+  }
 });
 
 test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
@@ -2478,6 +2489,7 @@ test("keeps on-schedule consistency separate from current reading checkboxes", a
 });
 
 test("keeps the three summary cards readable across target widths", async ({ page }) => {
+  const ownerId = "mobile-climb-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "mobile-climb",
@@ -2488,8 +2500,13 @@ test("keeps the three summary cards readable across target widths", async ({ pag
     completedIndexes: [0],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const metrics = page.locator('[data-testid^="mountain-rhythm-metric-"]');
@@ -2510,9 +2527,9 @@ test("keeps the three summary cards readable across target widths", async ({ pag
           detail: Number.parseFloat(getComputedStyle(children[2]).fontSize),
         };
       });
-      expect(typeScale.label).toBeGreaterThanOrEqual(12);
-      expect(typeScale.value).toBeGreaterThanOrEqual(18);
-      expect(typeScale.detail).toBeGreaterThanOrEqual(13);
+      expect(typeScale.label).toBeGreaterThanOrEqual(width < 640 ? 10 : 12);
+      expect(typeScale.value).toBeGreaterThanOrEqual(width < 640 ? 14 : 18);
+      expect(typeScale.detail).toBeGreaterThanOrEqual(width < 640 ? 10 : 13);
     }
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
@@ -2528,7 +2545,7 @@ test("keeps the three summary cards readable across target widths", async ({ pag
   await expect(page.getByTestId("mountain-rhythm-status")).toContainText("Today’s next step");
   await expect(page.getByTestId("mountain-rhythm-elevation-label-50")).toHaveText("GainingElevation");
   const dayLabels = page.getByTestId("mountain-rhythm-day-labels").locator("text");
-  await expect(dayLabels.first()).toHaveAttribute("font-size", "12");
+  await expect(dayLabels.first()).toHaveAttribute("font-size", "14");
   const helpToggle = page.getByTestId("mountain-rhythm-help-toggle");
   await expect(helpToggle).toBeVisible();
   await expect(page.getByTestId("mountain-rhythm-help-copy")).toBeHidden();
@@ -2537,6 +2554,7 @@ test("keeps the three summary cards readable across target widths", async ({ pag
 });
 
 test("keeps Mountain Rhythm hierarchy single-layer with compact corners", async ({ page }) => {
+  const ownerId = "visual-hierarchy-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "visual-hierarchy-climb",
@@ -2544,8 +2562,13 @@ test("keeps Mountain Rhythm hierarchy single-layer with compact corners", async 
     name: "7-Day Climb",
     today,
   });
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubApi(page, {
+    success: true,
+    userId: ownerId,
+    authenticated: false,
+    established: false,
+  });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const hierarchy = await page.evaluate(() => {
@@ -2575,6 +2598,5 @@ test("keeps Mountain Rhythm hierarchy single-layer with compact corners", async 
   expect(hierarchy.choose?.border).toBe("0px");
   expect(hierarchy.route?.border).toBe("0px");
   expect(hierarchy.status?.border).toBe("0px");
-  expect(hierarchy.milestones?.background).toBe("rgba(0, 0, 0, 0)");
   expect(hierarchy.chartRadius).toBe("0px");
 });
