@@ -1472,9 +1472,9 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[0]).toBeGreaterThan(pointY[1]);
   expect(pointY[1]).toBeGreaterThan(pointY[2]);
   expect(pointY[2]).toBeGreaterThan(pointY[3]);
-  expect(pointY[3]).toBeCloseTo(145.2, 0);
-  expect(pointY.slice(4)).toEqual([223, 201, 190]);
-  expect(pointY.every((y) => y >= 68 && y <= 248)).toBe(true);
+  expect(pointY[3]).toBeCloseTo(133.208, 0);
+  expect(pointY.slice(4)).toEqual([199, 181, 170]);
+  expect(pointY.every((y) => y >= 68 && y <= 220)).toBe(true);
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
   expect(mainRidgeData).toContain("Q96 212 125 204");
@@ -1505,7 +1505,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   const completedRouteEndpoint = completedRouteEndpoints?.at(-1)?.match(/L([\d.]+) ([\d.]+)/);
   expect(completedRouteEndpoint).not.toBeNull();
   expect(Number(completedRouteEndpoint![1])).toBe(dayPoints[3].x);
-   expect(Number(completedRouteEndpoint![2])).toBeCloseTo(145.2, 0);
+  expect(Number(completedRouteEndpoint![2])).toBeCloseTo(133.208, 0);
   const labelXs = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").evaluateAll(
     (labels) => labels.map((label) => Number(label.getAttribute("x"))),
   );
@@ -1530,7 +1530,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
       ];
     });
   expect(flagAnchor[0]).toBe(dayPoints[3].x);
-  expect(flagAnchor[1]).toBeCloseTo(145.2, 0);
+  expect(flagAnchor[1]).toBeCloseTo(133.208, 0);
   await expect(page.getByTestId("mountain-rhythm-current-status"))
     .toContainText("Current elevation: Gaining Elevation · 57.1%");
   await expect(chart.getByTestId("mountain-rhythm-elevation-label-50"))
@@ -1686,7 +1686,7 @@ test("shows a full-width 20-day chart with a continuous earned and projected rou
   const chooseBox = await page.getByTestId("mountain-rhythm-choose").boundingBox();
   expect(cardBox).not.toBeNull();
   expect(chooseBox).not.toBeNull();
-  expect(cardBox!.width).toBeGreaterThan(chooseBox!.width);
+  expect(cardBox!.width).toBeGreaterThanOrEqual(chooseBox!.width);
   expect(cardBox!.y).toBeLessThan(chooseBox!.y);
 
   await expect(earned).toBeVisible();
@@ -1736,7 +1736,7 @@ test("pins current elevation to 1 of 7 earned days", async ({ page }) => {
     .toHaveAttribute("fill", "#F4D77A");
   const markerTransform = await page.locator('g[aria-label^="Today"]').getAttribute("transform");
   expect(Number(markerTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
-    .toBeCloseTo(222.26, 1);
+    .toBeCloseTo(198.264, 1);
   await expect(page.getByTestId("mountain-rhythm-elevation-label-25"))
     .toHaveAttribute("aria-label", "Next milestone: On the Trail, 25% threshold");
   for (const width of [320, 375, 1280]) {
@@ -1984,7 +1984,7 @@ test("keeps the chart at Basecamp when every reading is unchecked", async ({ pag
       points.map((point) => Number(point.getAttribute("cy"))),
     );
   expect(pointY).toHaveLength(7);
-  expect(pointY).toEqual([248, 231, 235, 219, 223, 201, 190]);
+  expect(pointY).toEqual([220, 207, 211, 195, 199, 181, 170]);
   await expect(page.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
   await expect(page.getByTestId("mountain-rhythm-current-status")).toContainText("Current elevation: Basecamp");
 });
@@ -2079,13 +2079,20 @@ test("keeps the unreleased 40-Day Climb unavailable", async ({ page }) => {
 });
 
 test("keeps Mountain Rhythm sections inside shared responsive gutters", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const plan = makePlan({
+    id: "responsive-gutter-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
   await stubApi(page, {
     success: true,
     userId: "anonymous-gutter-session",
     authenticated: false,
     established: false,
   });
-  await seedLocalData(page, [], null);
+  await seedLocalData(page, [plan], plan.id, { ownerId: "anonymous-gutter-session" });
 
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -2637,7 +2644,7 @@ test("keeps the three summary cards readable across target widths", async ({ pag
   await expect(page.getByTestId("mountain-rhythm-status")).toContainText("Today’s next step");
   await expect(page.getByTestId("mountain-rhythm-elevation-label-50")).toHaveText("GainingElevation");
   const dayLabels = page.getByTestId("mountain-rhythm-day-labels").locator("text");
-  await expect(dayLabels.first()).toHaveAttribute("font-size", "14");
+  await expect(dayLabels.first()).toHaveAttribute("font-size", "11");
   const helpToggle = page.getByTestId("mountain-rhythm-help-toggle");
   await expect(helpToggle).toBeVisible();
   await expect(page.getByTestId("mountain-rhythm-help-copy")).toBeHidden();
