@@ -121,11 +121,11 @@ The October 20, 2026 reference screenshot is the canonical Mountain Rhythm chart
 
 Stage 2 discipline accents are explicitly deferred until the owner separately approves implementation. If approved, completed prayer and fasting may strengthen a day's visual trail accent only when Scripture is also complete; discipline activity alone must never advance ascent. This must not change Scripture completion percentages, consistency, milestones, or earned days.
 
-Keep the decorative forest integrated into the foothills, not an evenly spaced row of outlined tree icons.
+Keep the dense, layered evergreen forest as static scenery across the chart's lower foreground, with varied heights, irregular spacing, and muted green depth layers. Keep it below the chart labels; it must never represent or move with reading progress.
 
-**Why:** The owner rejected the outlined geometric trees as looking wrong.
+**Why:** The owner explicitly asked to restore the previously implemented forest after it was thinned to sparse triangles, and wants it separated from chart data.
 
-**How to apply:** Use narrow, filled pine silhouettes with varied heights and clustering along the rising slope near the chart lines, rather than keeping the forest as a low border. Account for the chart's nonuniform SVG scaling so trees do not become wide, blocky shapes at desktop widths.
+**How to apply:** Reuse the historical narrow, filled pine silhouettes in layered green tones. Keep them in the lower band beneath the day-axis labels and behind the dynamic overlay; do not alter chart labels, markers, or progress lines while restoring the forest.
 
 **Why:** The owner requested a staged rollout and explicitly authorized only the current visual terrain refinement.
 

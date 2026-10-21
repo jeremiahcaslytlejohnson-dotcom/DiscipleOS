@@ -1,9 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
-const PLANNED_TRAVERSE_Y = [216, 207, 211, 195, 199, 181, 170];
 const PLOT_LEFT_SHORT = 132;
-const PLOT_LEFT_LONG = 52;
+const PLOT_LEFT_LONG = 120;
 const PLOT_RIGHT = 336;
 const PLOT_TOP = 68;
 const PLOT_BOTTOM = 220;
@@ -11,21 +11,6 @@ const PLOT_BOTTOM = 220;
 function elevationY(percent: number) {
   const clampedPercent = Math.max(0, Math.min(100, percent));
   return PLOT_BOTTOM - (clampedPercent / 100) * (PLOT_BOTTOM - PLOT_TOP);
-}
-
-function plannedTraverseY(index: number, pointCount: number) {
-  if (pointCount <= 1) return PLANNED_TRAVERSE_Y[0];
-
-  const anchorPosition =
-    (index / (pointCount - 1)) * (PLANNED_TRAVERSE_Y.length - 1);
-  const start = Math.floor(anchorPosition);
-  const end = Math.min(start + 1, PLANNED_TRAVERSE_Y.length - 1);
-  const progress = anchorPosition - start;
-
-  return (
-    PLANNED_TRAVERSE_Y[start] +
-    (PLANNED_TRAVERSE_Y[end] - PLANNED_TRAVERSE_Y[start]) * progress
-  );
 }
 
 function trailGeometry(trail: any[], today: string, currentElevationPercent = 0) {
@@ -50,11 +35,6 @@ function trailGeometry(trail: any[], today: string, currentElevationPercent = 0)
     return plotLeft + ((dateTime - startDate) / (endDate - startDate)) * (PLOT_RIGHT - plotLeft);
   };
   const currentIndex = sortedTrail.findLastIndex((point) => point.date <= today);
-  const projectedStart = Math.max(
-    0,
-    Number(currentElevationPercent || sortedTrail[currentIndex]?.elevationPercent || 0),
-  );
-  const projectedEnd = Math.min(70, Math.max(65, projectedStart + 22));
   const points = sortedTrail.map((point, index) => ({
     ...point,
     x: xForDate(point.date) ?? plotLeft,
@@ -62,16 +42,10 @@ function trailGeometry(trail: any[], today: string, currentElevationPercent = 0)
       point.date <= today
         ? elevationY(
             point.date === sortedTrail[currentIndex]?.date
-              ? projectedStart
+              ? currentElevationPercent
               : Number(point.elevationPercent || 0),
           )
-        : sortedTrail.length >= 20 && currentIndex >= 0
-          ? elevationY(
-              projectedStart +
-                (projectedEnd - projectedStart) *
-                  ((index - currentIndex) / Math.max(1, sortedTrail.length - 1 - currentIndex)),
-            )
-        : plannedTraverseY(index, sortedTrail.length),
+        : elevationY(currentElevationPercent),
   }));
   const current = [...points].reverse().find((point) => point.date <= today) || null;
   const next = points.find((point) => point.date > today) || null;
@@ -92,6 +66,10 @@ function formatDate(date: string) {
   );
 }
 
+function textScaleTransform(x: number, scaleX: number) {
+  return `translate(${x} 0) scale(${scaleX} 1) translate(${-x} 0)`;
+}
+
 function todayLabel(score: any) {
   if (!score?.todayPlanned) return "Nothing scheduled";
   if (score.todayPercentage >= 100) return "Complete";
@@ -106,6 +84,27 @@ export default function MountainRhythmCard({
   title = "Mountain Rhythm",
   showRhythmMetric = true,
 }: any) {
+  const chartRef = useRef<SVGSVGElement | null>(null);
+  const [svgTextScaleX, setSvgTextScaleX] = useState(1);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const updateTextScale = () => {
+      const { width, height } = chart.getBoundingClientRect();
+      if (!width || !height) return;
+      const scaleX = Math.min(1, (height * 360) / (width * 250));
+      setSvgTextScaleX((current) => (
+        Math.abs(current - scaleX) < 0.01 ? current : scaleX
+      ));
+    };
+
+    const observer = new ResizeObserver(updateTextScale);
+    observer.observe(chart);
+    updateTextScale();
+    return () => observer.disconnect();
+  }, []);
+
   const hasJourney = Number(score?.journeyDays || 0) > 0;
   const currentLevel = hasJourney ? score?.level || "Basecamp" : "No active journey";
   const currentIndex = hasJourney
@@ -130,9 +129,6 @@ export default function MountainRhythmCard({
       return `${index === 0 ? "M" : "L"}${point.x} ${elevationY(elevationPercent)}`;
     })
     .join("") : "";
-  const earnedArea = hasEarnedProgress && elapsedPoints.length
-    ? `${earnedRoute}L${elapsedPoints.at(-1)!.x} ${PLOT_BOTTOM}L${elapsedPoints[0].x} ${PLOT_BOTTOM}Z`
-    : "";
   const projectedPoints =
     hasEarnedProgress && geometry.current && geometry.next && geometry.points.length >= 20
       ? [geometry.current, ...geometry.points.filter((point) => point.date > geometry.current.date)]
@@ -244,6 +240,7 @@ export default function MountainRhythmCard({
               <div className="relative mt-4 h-[240px] overflow-hidden px-2 py-3 sm:h-[290px] sm:px-4 sm:py-3 lg:h-[360px]">
             <svg
               data-testid="mountain-rhythm-mountain"
+              ref={chartRef}
                className="absolute inset-0 h-full w-full"
               viewBox="0 44 360 250"
               preserveAspectRatio="none"
@@ -251,72 +248,82 @@ export default function MountainRhythmCard({
                 aria-label={`${score.journeyLabel} reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
             >
               <defs>
-                <linearGradient id="mountain-fill" x1="0" x2="0.15" y1="0" y2="1">
-                  <stop offset="0" stopColor="#456B50" stopOpacity="0.66" />
-                  <stop offset="0.6" stopColor="#284833" stopOpacity="0.58" />
-                  <stop offset="1" stopColor="#0B1712" stopOpacity="0.34" />
-                </linearGradient>
-                <linearGradient id="earned-area-fill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stopColor="#52D98B" stopOpacity="0.36" />
-                  <stop offset="1" stopColor="#1A7650" stopOpacity="0.05" />
-                </linearGradient>
+                <clipPath id="rhythm-forest-clip">
+                  <rect x="0" y="246" width="360" height="48" />
+                </clipPath>
+                <path
+                  id="rhythm-pine"
+                  d="M0 0L-1.1 5L-.5 4.7L-2.4 10L-1.4 9.5L-3.6 16L-2.4 15L-4.8 23L-3.1 22L-5.8 30L-.7 29L-.7 34L.7 34L.7 29L5.8 30L3.1 22L4.8 23L2.4 15L3.6 16L1.4 9.5L2.4 10L.5 4.7L1.1 5Z"
+                />
               </defs>
               <g
+                data-chart-layer="scenery"
+                data-testid="mountain-rhythm-scenery"
+                aria-hidden="true"
+              >
+              <g
                 data-testid="mountain-rhythm-distant-ridges"
-                className="opacity-60 sm:opacity-100"
                 strokeLinejoin="round"
                 strokeWidth="1.1"
               >
                 <path
                   data-testid="mountain-rhythm-far-range"
-                  d="M0 210 L28 196 L50 202 L82 177 L106 185 L132 194 L163 170 L188 182 L214 191 L246 164 L270 176 L304 148 L331 165 L360 158 V280 H0 Z"
-                  fill="#34483A"
-                  fillOpacity="0.15"
-                  stroke="#526B55"
-                  strokeOpacity="0.1"
+                  d="M0 222 L28 204 L50 212 L82 180 L106 191 L132 202 L163 169 L188 184 L214 196 L246 163 L270 177 L304 146 L331 166 L360 154 V340 H0 Z"
+                  fill="#263E3D"
+                  fillOpacity="0.38"
+                  stroke="#78938A"
+                  strokeOpacity="0.2"
                 />
                 <path
                   data-testid="mountain-rhythm-mid-range"
-                  d="M0 224 L32 213 L56 219 L88 196 L111 205 L139 216 L170 191 L194 202 L218 214 L248 188 L273 198 L306 175 L334 190 L360 185 V280 H0 Z"
-                  fill="#3E5943"
-                  fillOpacity="0.11"
-                  stroke="#5D765F"
-                  strokeOpacity="0.08"
+                  d="M0 247 L32 226 L56 235 L88 205 L111 214 L139 229 L170 196 L194 211 L218 228 L248 194 L273 208 L306 179 L334 197 L360 189 V340 H0 Z"
+                  fill="#1C3433"
+                  fillOpacity="0.56"
+                  stroke="#6B877B"
+                  strokeOpacity="0.19"
                 />
               </g>
               <path
-                d={`${mountainRidgePath} V280 H0 Z`}
-                fill="url(#mountain-fill)"
-                className="opacity-80 sm:opacity-100"
+                d={`${mountainRidgePath} V340 H0 Z`}
+                fill="#102923"
+                fillOpacity="0.88"
               />
               <path
                 data-testid="mountain-rhythm-main-ridge"
                 d={mountainRidgePath}
                 fill="none"
-                stroke="none"
+                stroke="#809786"
+                strokeOpacity="0.26"
+                strokeWidth="0.9"
                 strokeLinejoin="round"
                 strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
               />
               <g
                 data-testid="mountain-rhythm-forest-depth"
-                aria-hidden="true"
                 clipPath="url(#rhythm-forest-clip)"
               >
-                <defs>
-                  <clipPath id="rhythm-forest-clip"><rect x="0" y="100" width="360" height="180" /></clipPath>
-                  <path id="rhythm-pine" d="M0 0L-1.1 5L-.5 4.7L-2.4 10L-1.4 9.5L-3.6 16L-2.4 15L-4.8 23L-3.1 22L-5.8 30L-.7 29L-.7 34L.7 34L.7 29L5.8 30L3.1 22L4.8 23L2.4 15L3.6 16L1.4 9.5L2.4 10L.5 4.7L1.1 5Z" />
-                </defs>
                 <g fill="#3B5946" fillOpacity="0.48">
                   {[3, 16, 24, 39, 53, 61, 78, 93, 105, 124, 136, 143, 161, 178, 187, 204, 219, 231, 249, 257, 276, 291, 307, 316, 338, 351].map((x, index) => (
-                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${242 - x * 0.21 + (index % 4) * 2}) scale(${0.48 + (index % 3) * 0.09} ${0.65 + (index % 5) * 0.06})`} />
+                    <use
+                      key={x}
+                      href="#rhythm-pine"
+                      transform={`translate(${x} ${266 - x * 0.045 + (index % 4) * 2}) scale(${0.48 + (index % 3) * 0.09} ${0.65 + (index % 5) * 0.06})`}
+                    />
                   ))}
                 </g>
                 <g fill="#203C2E" fillOpacity="0.88">
                   {[7, 20, 34, 48, 69, 85, 99, 117, 132, 152, 168, 181, 199, 214, 238, 253, 269, 285, 301, 327, 345, 358].map((x, index) => (
-                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${246 - x * 0.21 + (index % 3) * 2}) scale(${0.54 + (index % 4) * 0.08} ${0.8 + (index % 3) * 0.1})`} />
+                    <use
+                      key={x}
+                      href="#rhythm-pine"
+                      transform={`translate(${x} ${271 - x * 0.045 + (index % 3) * 2}) scale(${0.54 + (index % 4) * 0.08} ${0.8 + (index % 3) * 0.1})`}
+                    />
                   ))}
                 </g>
               </g>
+              </g>
+              <g data-chart-layer="chart-overlay">
               <g data-testid="mountain-rhythm-elevation-guide-lines" aria-label="Elevation guide lines">
                 {levelGuides.map((level) => (
                   <g
@@ -328,10 +335,11 @@ export default function MountainRhythmCard({
                       x2="360"
                       y1={level.y}
                       y2={level.y}
-                      stroke={level.current ? "#F4D77A" : "#D4DDCD"}
-                      strokeOpacity={level.current ? "0.46" : "0.2"}
-                      strokeWidth={level.current ? "1.35" : "0.9"}
-                      strokeDasharray={level.current ? "4 5" : "2 6"}
+                      stroke={level.current ? "#E1C66F" : "#C5D0CB"}
+                      strokeOpacity={level.current ? "0.3" : "0.19"}
+                      strokeWidth={level.current ? "1.1" : "0.8"}
+                      strokeDasharray="3 5"
+                      vectorEffect="non-scaling-stroke"
                     />
                   </g>
                 ))}
@@ -343,27 +351,22 @@ export default function MountainRhythmCard({
                 y1={PLOT_BOTTOM}
                 y2={PLOT_BOTTOM}
                 stroke="#AAB6BC"
-                strokeOpacity="0.46"
+                strokeOpacity="0.34"
                 strokeWidth="0.8"
+                vectorEffect="non-scaling-stroke"
               />
-              {earnedArea ? (
-                <path
-                  data-testid="mountain-rhythm-earned-area"
-                  d={earnedArea}
-                  fill="url(#earned-area-fill)"
-                />
-              ) : null}
               {earnedRoute ? (
                 <path
                   data-testid="mountain-rhythm-earned-route"
                   data-chart-line="earned"
                   d={earnedRoute}
                   fill="none"
-                  stroke="#8BE3A0"
+                  stroke="#78E2A1"
                   strokeOpacity="0.96"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth="3.8"
+                  strokeWidth="2.7"
+                  vectorEffect="non-scaling-stroke"
                 />
               ) : null}
               {projectedRoute ? (
@@ -373,11 +376,12 @@ export default function MountainRhythmCard({
                   d={projectedRoute}
                   fill="none"
                   stroke="#B7C4C7"
-                  strokeOpacity="0.58"
-                  strokeWidth="2.2"
-                  strokeDasharray="4 5"
+                  strokeOpacity="0.42"
+                  strokeWidth="1.3"
+                  strokeDasharray="3 5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
                 />
               ) : null}
               <g data-testid="mountain-rhythm-elevation-guides" aria-label="Elevation level labels">
@@ -385,29 +389,28 @@ export default function MountainRhythmCard({
                   <g
                     key={level.name}
                     data-testid={`mountain-rhythm-elevation-guide-${level.min}`}
-                    className={level.current || level.next ? undefined : "hidden sm:inline"}
+                    data-chart-layer="typography"
                   >
+                    <g transform={textScaleTransform(8, svgTextScaleX)}>
                     <text
-                      x={geometry.plotLeft === PLOT_LEFT_LONG ? 6 : 8}
-                      y={level.y + 4}
+                      x="8"
+                      y={level.y + 3.5}
                       textAnchor="start"
-                      fill={level.current ? "#E8EEF0" : "#C9D3D7"}
-                      fillOpacity={level.current ? "0.94" : "0.78"}
-                      fontSize={geometry.plotLeft === PLOT_LEFT_LONG ? "7.5" : "9.5"}
-                      fontWeight={level.current ? "650" : "500"}
+                      fill="#C2CDD1"
+                      fillOpacity={level.current ? "0.9" : "0.78"}
+                      fontSize="9.5"
+                      fontFamily="DM Sans, sans-serif"
+                      fontWeight="500"
+                      letterSpacing="0.1"
                       stroke="#0B1418"
-                      strokeWidth="3.5"
+                      strokeWidth="2.2"
                       paintOrder="stroke"
                       data-testid={`mountain-rhythm-elevation-label-${level.min}`}
                       aria-label={`${level.current ? "Current stage" : level.next ? "Next milestone" : "Milestone"}: ${level.name}, ${level.min}% threshold`}
                     >
-                      {level.name === "Gaining Elevation" ? (
-                        <>
-                          <tspan x={geometry.plotLeft === PLOT_LEFT_LONG ? 6 : 8} dy="-5">Gaining</tspan>
-                          <tspan x={geometry.plotLeft === PLOT_LEFT_LONG ? 6 : 8} dy="10">Elevation</tspan>
-                        </>
-                      ) : level.name}
+                      {level.name}
                     </text>
+                    </g>
                   </g>
                 ))}
               </g>
@@ -416,20 +419,24 @@ export default function MountainRhythmCard({
                 const isToday = point.date === score?.windowEnd;
                 const isFuture = rhythmStatus === "future";
                 const isLongJourney = geometry.points.length >= 20;
-                const projectedTickEvery = Math.max(1, Math.round((geometry.points.length - 1) / 6));
+                const projectedTickEvery = Math.max(1, Math.ceil((geometry.points.length - 1) / 6));
                 const isProjectedTick =
                   index === geometry.points.length - 1 || index % projectedTickEvery === 0;
-                if (isLongJourney && (!isFuture || !isProjectedTick)) return null;
+                if (isLongJourney && !isToday && !isProjectedTick) return null;
                 return (
                   <circle
                     key={point.date}
                     data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
                     cy={point.y}
-                    r={isToday ? 6 : isFuture ? 5 : rhythmStatus === "missed" ? 6 : 6.5}
+                    r={isToday ? 6.2 : isFuture ? 4.2 : 4.8}
                     fill={
                       isToday
-                        ? "none"
+                        ? point.status === "partial"
+                          ? "#D4A017"
+                          : point.status === "complete"
+                            ? "#86EFAC"
+                            : "none"
                         : isFuture
                         ? "#14201C"
                         : rhythmStatus === "complete"
@@ -440,16 +447,24 @@ export default function MountainRhythmCard({
                               ? "#94A3B8"
                               : "#14201C"
                     }
-                    stroke={isToday ? "#A9C0AE" : isFuture ? "#82968A" : "rgba(8,16,18,0.9)"}
-                    strokeOpacity={isToday ? "0.55" : "1"}
-                    strokeWidth={isToday ? 1.4 : isFuture ? 1.25 : 1}
+                    stroke={isToday
+                      ? point.status === "partial"
+                        ? "#F4D77A"
+                        : point.status === "complete"
+                          ? "#B8F0C9"
+                          : "#A9C0AE"
+                      : isFuture ? "#82968A" : "rgba(8,16,18,0.9)"}
+                    strokeOpacity={isToday ? "0.9" : "1"}
+                    strokeWidth={isToday ? 1.15 : isFuture ? 0.9 : 0.8}
+                    vectorEffect="non-scaling-stroke"
+                    transform={`translate(${point.x} 0) scale(${svgTextScaleX} 1) translate(${-point.x} 0)`}
                     aria-label={`Day ${index + 1}, ${rhythmStatus}, readings ${point.status}, ${point.elevationPercent}% current elevation, ${point.earnedPercent}% earned ascent`}
                   />
                 );
               })}
               <g data-testid="mountain-rhythm-day-labels" aria-hidden="true">
                 {geometry.points.map((point, index) => {
-                  const tickEvery = Math.max(1, Math.round((geometry.points.length - 1) / 6));
+                  const tickEvery = Math.max(1, Math.ceil((geometry.points.length - 1) / 6));
                   const showLabel =
                     geometry.points.length <= 10 ||
                     index === 0 ||
@@ -471,12 +486,16 @@ export default function MountainRhythmCard({
                       key={`day-label-${point.date}`}
                       x={point.x}
                       y={PLOT_BOTTOM + 18}
-                      fill="#C9CDD3"
-                      fontSize={geometry.points.length >= 20 ? "8.5" : "11"}
+                      fill={point.date === score?.windowEnd ? "#E7C968" : "#9FAEB5"}
+                      fontSize={geometry.points.length >= 20 ? "8" : "9.5"}
+                      fontFamily="DM Sans, sans-serif"
+                      fontWeight={point.date === score?.windowEnd ? "600" : "500"}
                       textAnchor="middle"
                       stroke="#0B1418"
-                      strokeWidth="2.5"
+                      strokeWidth="1.8"
                       paintOrder="stroke"
+                      data-chart-layer="typography"
+                      transform={textScaleTransform(point.x, svgTextScaleX)}
                     >
                       {index + 1}
                     </text>
@@ -488,6 +507,7 @@ export default function MountainRhythmCard({
                 transform={`translate(${flagX - 5} ${flagY - 22})`}
                  aria-label={`${flagLabel}'s position at ${currentLevel}`}
               >
+                <g transform={`translate(5 0) scale(${svgTextScaleX} 1) translate(-5 0)`}>
                 <line
                   x1="5"
                   y1="22"
@@ -495,39 +515,52 @@ export default function MountainRhythmCard({
                   y2="3"
                   stroke="#F4D77A"
                   strokeLinecap="round"
-                  strokeWidth="1.4"
+                  strokeWidth="1.15"
+                  vectorEffect="non-scaling-stroke"
                 />
                 <path
                   d="M6 4L15 7L6 10Z"
                   fill="#D4A017"
                   stroke="#F4D77A"
                   strokeLinejoin="round"
-                  strokeWidth="0.65"
+                  strokeWidth="0.6"
+                  vectorEffect="non-scaling-stroke"
                 />
                 <circle
                   data-testid="mountain-rhythm-current-elevation-marker"
                   cx="5"
                   cy="22"
-                  r="6"
+                  r="4.4"
                   fill="#F4D77A"
                   stroke="#0B1418"
-                  strokeWidth="1.5"
+                  strokeWidth="1.2"
+                  vectorEffect="non-scaling-stroke"
                   aria-label={`Current elevation ${score.currentElevationPercent}%`}
                 />
+                </g>
+                <g
+                  data-chart-layer="typography"
+                  transform={textScaleTransform(flagX > 300 ? -3 : 14, svgTextScaleX)}
+                >
                 <text
                   data-testid="mountain-rhythm-current-flag-label"
-                  x={flagX > 300 ? -3 : 18}
+                  x={flagX > 300 ? -3 : 14}
                   y="12"
                   textAnchor={flagX > 300 ? "end" : "start"}
                   fill="#F4D77A"
-                  fontSize="10.5"
+                  fontSize="8.5"
+                  fontFamily="DM Sans, sans-serif"
                   fontWeight="600"
+                  letterSpacing="0.1"
                   stroke="#0B1418"
-                  strokeWidth="2"
+                  strokeWidth="1.8"
                   paintOrder="stroke"
+                  vectorEffect="non-scaling-stroke"
                 >
                   {flagLabel}
                 </text>
+                </g>
+              </g>
               </g>
             </svg>
             <ul
