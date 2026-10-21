@@ -1504,7 +1504,9 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[1]).toBeGreaterThan(pointY[2]);
   expect(pointY[2]).toBeGreaterThan(pointY[3]);
   expect(pointY[3]).toBeCloseTo(133.208, 0);
-  expect(pointY.slice(4)).toEqual([pointY[3], pointY[3], pointY[3]]);
+  expect(pointY[4]).toBeLessThan(pointY[3]);
+  expect(pointY[5]).toBeLessThan(pointY[4]);
+  expect(pointY[6]).toBeLessThan(pointY[5]);
   expect(pointY.every((y) => y >= 68 && y <= 220)).toBe(true);
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
@@ -2013,7 +2015,11 @@ test("keeps scenery fixed while the real trail changes across partial and longer
       label: point.getAttribute("aria-label"),
     })));
   expect(dayOnePoints).toHaveLength(7);
-  expect(dayOnePoints.every((point) => point.y === 220)).toBe(true);
+  expect(dayOnePoints[0].y).toBe(220);
+  expect(dayOnePoints.slice(1).every((point, index, futurePoints) =>
+    point.y < (index === 0 ? dayOnePoints[0].y : futurePoints[index - 1].y),
+  )).toBe(true);
+  expect(dayOnePoints.slice(1).every((point) => point.fill === "#14201C")).toBe(true);
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7");
   await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("50%");
   await expect(chart.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
@@ -2025,6 +2031,8 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   const dayOneFlagTransform = await chart.locator('g[aria-label^="Today"]').getAttribute("transform");
   const dayOneFlagX = Number(dayOneFlagTransform?.match(/translate\(([\d.-]+)/)?.[1]) + 5;
   expect(dayOneFlagX).toBeCloseTo(dayOnePoints[0].x, 3);
+  const dayOneFlagY = Number(dayOneFlagTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22;
+  expect(dayOneFlagY).toBeCloseTo(dayOnePoints[0].y, 3);
   await page.getByTestId("mountain-rhythm-panel").screenshot({
     path: "/tmp/discipleos-mountain-day-one-partial.png",
   });
@@ -2063,7 +2071,9 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   const dayFour = progressedPoints[3];
   const futurePoints = progressedPoints.filter((point) => point.label.includes(", future,"));
   expect(futurePoints).toHaveLength(3);
-  expect(futurePoints.every((point) => point.y === dayFour.y)).toBe(true);
+  expect(futurePoints.every((point, index) =>
+    point.y < (index === 0 ? dayFour.y : futurePoints[index - 1].y),
+  )).toBe(true);
   const earnedData = await chart.getByTestId("mountain-rhythm-earned-route").getAttribute("d") || "";
   const earnedCoordinates = Array.from(earnedData.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g));
   expect(Number(earnedCoordinates.at(-1)?.[1])).toBe(dayFour.x);
@@ -2098,7 +2108,9 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   const longPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
     .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
   expect(longPoints.length).toBeLessThanOrEqual(7);
-  expect(longPoints.every((y) => y === 220)).toBe(true);
+  expect(longPoints[0]).toBe(220);
+  expect(longPoints.every((y, index) => index === 0 || y < longPoints[index - 1])).toBe(true);
+  expect(longPoints.at(-1)).toBeLessThan(100);
   await expect(chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible"))
     .toHaveCount(5);
 });
@@ -2174,9 +2186,21 @@ test("keeps the chart at Basecamp when every reading is unchecked", async ({ pag
       points.map((point) => Number(point.getAttribute("cy"))),
     );
   expect(pointY).toHaveLength(7);
-  expect(pointY).toEqual([220, 207, 211, 195, 199, 181, 170]);
+  expect(pointY[0]).toBe(220);
+  expect(pointY.every((y, index) => index === 0 || y < pointY[index - 1])).toBe(true);
+  expect(pointY.at(-1)).toBeLessThan(100);
   await expect(page.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
   await expect(page.getByTestId("mountain-rhythm-current-status")).toContainText("Current elevation: Basecamp");
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  const desktopPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
+  const flagTransform = await chart.locator('g[aria-label^="Today"]').getAttribute("transform");
+  expect(Number(flagTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
+    .toBeCloseTo(pointY[0], 3);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
+  expect(mobilePoints).toEqual(desktopPoints);
 });
 
 test("repairs an oversized saved 7-Day Climb schedule", async ({ page }) => {

@@ -13,6 +13,23 @@ function elevationY(percent: number) {
   return PLOT_BOTTOM - (clampedPercent / 100) * (PLOT_BOTTOM - PLOT_TOP);
 }
 
+function plannedWaypointY(
+  index: number,
+  pointCount: number,
+  currentIndex: number,
+  currentElevationPercent: number,
+) {
+  const anchorIndex = currentIndex >= 0 ? currentIndex : 0;
+  const remainingDays = pointCount - 1 - anchorIndex;
+  if (remainingDays <= 0) return elevationY(currentElevationPercent);
+
+  const progress = Math.max(0, Math.min(1, (index - anchorIndex) / remainingDays));
+  const easedProgress = 0.7 * progress + 0.3 * progress * progress;
+  const startElevation = Math.max(0, Math.min(100, currentElevationPercent));
+  const targetElevation = Math.max(startElevation, 94);
+  return elevationY(startElevation + (targetElevation - startElevation) * easedProgress);
+}
+
 function trailGeometry(trail: any[], today: string, currentElevationPercent = 0) {
   if (!Array.isArray(trail) || trail.length === 0) {
     return {
@@ -116,6 +133,7 @@ export default function MountainRhythmCard({
     score?.windowEnd || "",
     Number(score?.currentElevationPercent || 0),
   );
+  const currentPointIndex = geometry.current ? geometry.points.indexOf(geometry.current) : -1;
   const elapsedPoints = geometry.points.filter((point) => point.date <= score?.windowEnd);
   const hasEarnedProgress = elapsedPoints.some(
     (point) => Number(point.elevationPercent || 0) > 0,
@@ -418,6 +436,14 @@ export default function MountainRhythmCard({
                 const rhythmStatus = point.rhythmStatus || point.status;
                 const isToday = point.date === score?.windowEnd;
                 const isFuture = rhythmStatus === "future";
+                const markerY = isFuture
+                  ? plannedWaypointY(
+                      index,
+                      geometry.points.length,
+                      currentPointIndex,
+                      Number(score?.currentElevationPercent || 0),
+                    )
+                  : point.y;
                 const isLongJourney = geometry.points.length >= 20;
                 const projectedTickEvery = Math.max(1, Math.ceil((geometry.points.length - 1) / 6));
                 const isProjectedTick =
@@ -428,7 +454,7 @@ export default function MountainRhythmCard({
                     key={point.date}
                     data-testid={`mountain-rhythm-day-point-${index + 1}`}
                     cx={point.x}
-                    cy={point.y}
+                    cy={markerY}
                     r={isToday ? 6.2 : isFuture ? 4.2 : 4.8}
                     fill={
                       isToday
