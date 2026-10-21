@@ -1,0 +1,42 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
+.mr-preview {
+  min-height: 100vh;
+  padding: 24px;
+  color: #f5f6f8;
+  font-family: "DM Sans", sans-serif;
+  background:
+    linear-gradient(180deg, rgba(9, 13, 18, 0.58), #090d12 90%),
+    url("/__mockup/images/discipline-that-moves-mountains.png") center top / cover no-repeat,
+    #090d12;
+}
+
+.mr-preview__frame {
+  width: 100%;
+  max-width: 880px;
+  margin-inline: auto;
+}
+
+.discipleos-functional-surface {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  background: rgba(7, 12, 16, 0.82);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.discipleos-secondary-copy,
+.discipleos-meta-copy,
+.discipleos-field-label {
+  color: #c9cdd3;
+}
+
+.discipleos-safe-text {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .mr-preview {
+    padding: 12px;
+  }
+}

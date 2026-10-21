@@ -1,12 +1,12 @@
 import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
 
-const PLANNED_TRAVERSE_Y = [240, 231, 235, 219, 223, 201, 190];
+const PLANNED_TRAVERSE_Y = [216, 207, 211, 195, 199, 181, 170];
 const PLOT_LEFT_SHORT = 132;
 const PLOT_LEFT_LONG = 52;
 const PLOT_RIGHT = 336;
 const PLOT_TOP = 68;
-const PLOT_BOTTOM = 248;
+const PLOT_BOTTOM = 220;
 
 function elevationY(percent: number) {
   const clampedPercent = Math.max(0, Math.min(100, percent));
@@ -172,18 +172,18 @@ export default function MountainRhythmCard({
     "M0 248 L35 239 L68 226 Q96 212 125 204 Q146 205 165 215 L190 200 Q202 192 215 187 L238 169 Q250 157 260 149 L274 125 L283 105 Q288 96 293 97 L307 115 L326 142 L344 157 L360 167";
 
   return (
-    <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden border-[#33424B] bg-[linear-gradient(145deg,rgba(5,13,19,0.98),rgba(8,18,23,0.97),rgba(10,22,23,0.96))] p-4 shadow-[0_18px_42px_rgba(0,0,0,0.32)] sm:p-6 lg:p-7">
+    <section data-testid="mountain-rhythm-panel" className="discipleos-functional-surface overflow-hidden p-4 sm:p-5 lg:p-6">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xl font-semibold text-white sm:text-2xl">
-            <Mountain className="h-6 w-6 text-[#D4A017]" />
+          <div className="flex items-center gap-2 text-lg font-semibold text-white">
+            <Mountain className="h-5 w-5 text-[#D4A017]" />
             {title}
           </div>
-          <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-base leading-6 sm:text-lg">
+          <div className="discipleos-secondary-copy discipleos-safe-text mt-1 text-sm leading-5">
             {hasJourney ? `${score.journeyLabel} · active reading climb` : "Choose a 7-, 20-, or 40-day reading climb"}
           </div>
         </div>
-        <TrendingUp className="h-5 w-5 text-emerald-300/80" />
+        <TrendingUp className="h-4 w-4 text-emerald-300/80" />
       </div>
 
       {loading ? (
@@ -196,7 +196,7 @@ export default function MountainRhythmCard({
         </div>
       ) : (
         <>
-          <div className={`mt-5 grid ${showRhythmMetric ? "grid-cols-3" : "grid-cols-2"} gap-1 sm:gap-3`}>
+           <div className={`mt-4 grid ${showRhythmMetric ? "grid-cols-3" : "grid-cols-2"} gap-1 sm:gap-3`}>
             <div data-testid="mountain-rhythm-metric-today" className="min-w-0 border-l border-white/10 px-1.5 py-1 first:border-l-0 sm:px-3">
               <div className="discipleos-field-label text-[10px] font-semibold uppercase leading-3 tracking-[0.04em] sm:text-xs sm:leading-4 sm:tracking-[0.12em]">Today’s reading</div>
               <div className="mt-1 break-words text-[14px] font-semibold leading-5 text-white sm:text-lg sm:leading-6">{todayLabel(score)}</div>
@@ -241,11 +241,11 @@ export default function MountainRhythmCard({
 
           {!summaryOnly ? (
             <>
-             <div className="relative mt-5 h-[250px] overflow-hidden px-2 py-3 sm:h-[310px] sm:px-4 sm:py-3 lg:h-[420px]">
+              <div className="relative mt-4 h-[240px] overflow-hidden px-2 py-3 sm:h-[290px] sm:px-4 sm:py-3 lg:h-[360px]">
             <svg
               data-testid="mountain-rhythm-mountain"
                className="absolute inset-0 h-full w-full"
-              viewBox="0 44 360 236"
+              viewBox="0 44 360 250"
               preserveAspectRatio="none"
               role="img"
                 aria-label={`${score.journeyLabel} reading-rhythm trail; current elevation ${score.currentElevationPercent}%, journey progress ${score.journeyProgress}%`}
@@ -300,8 +300,11 @@ export default function MountainRhythmCard({
               <g
                 data-testid="mountain-rhythm-forest-depth"
                 transform="translate(0 -37)"
-                fill="#0A1A17"
-                fillOpacity="0.72"
+                fill="#14271F"
+                fillOpacity="0.96"
+                stroke="#456B50"
+                strokeOpacity="0.5"
+                strokeWidth="0.8"
                 aria-hidden="true"
               >
                 <path d="M8 302l7-19 7 19h-4l6 15H6l6-15zm26-8 6-17 7 17h-4l5 13H29l5-13zm23 8 7-20 7 20h-4l6 15H53l6-15zm23-12 6-17 7 17h-4l5 13H75l5-13zm27 17 7-21 7 21h-4l6 14h-18l6-14zm29-8 6-18 6 18h-4l5 14h-17l5-14zm30 12 7-19 7 19h-4l5 14h-18l5-14zm26-19 6-17 6 17h-4l5 13h-16l5-13zm29 18 7-20 7 20h-4l6 14h-18l6-14zm29-15 6-18 7 18h-4l5 14h-17l5-14zm28 16 7-21 7 21h-4l6 15h-18l6-15zm28-10 6-18 7 18h-4l5 14h-17l5-14zm28 15 7-20 7 20h-4l6 14h-18l6-14z" />
@@ -382,7 +385,7 @@ export default function MountainRhythmCard({
                       textAnchor="start"
                       fill={level.current ? "#E8EEF0" : "#C9D3D7"}
                       fillOpacity={level.current ? "0.94" : "0.78"}
-                      fontSize={geometry.plotLeft === PLOT_LEFT_LONG ? "8.5" : "11"}
+                      fontSize={geometry.plotLeft === PLOT_LEFT_LONG ? "7.5" : "9.5"}
                       fontWeight={level.current ? "650" : "500"}
                       stroke="#0B1418"
                       strokeWidth="3.5"
@@ -459,10 +462,13 @@ export default function MountainRhythmCard({
                     <text
                       key={`day-label-${point.date}`}
                       x={point.x}
-                      y="272"
+                      y={PLOT_BOTTOM + 18}
                       fill="#C9CDD3"
-                      fontSize={geometry.points.length >= 20 ? "10" : "14"}
+                      fontSize={geometry.points.length >= 20 ? "8.5" : "11"}
                       textAnchor="middle"
+                      stroke="#0B1418"
+                      strokeWidth="2.5"
+                      paintOrder="stroke"
                     >
                       {index + 1}
                     </text>
@@ -506,7 +512,7 @@ export default function MountainRhythmCard({
                   y="12"
                   textAnchor={flagX > 300 ? "end" : "start"}
                   fill="#F4D77A"
-                  fontSize="13"
+                  fontSize="10.5"
                   fontWeight="600"
                   stroke="#0B1418"
                   strokeWidth="2"
@@ -529,7 +535,7 @@ export default function MountainRhythmCard({
           </div>
 
           <p
-            className="discipleos-safe-text mt-3 break-words border-y border-white/15 py-3 text-sm font-medium leading-5 text-[#F4D77A] sm:text-base"
+            className="discipleos-safe-text mt-2 break-words border-t border-white/10 pt-2 text-sm font-medium leading-5 text-[#F4D77A]"
             data-testid="mountain-rhythm-current-status"
           >
             <span>{currentDateContext}</span>
@@ -537,7 +543,7 @@ export default function MountainRhythmCard({
               Current elevation: {currentLevel} · {score.currentElevationPercent}% · {detailedDateContext}
             </span>
           </p>
-          <div className="mt-2 border-t border-white/10 pt-2">
+          <div className="mt-1 border-t border-white/10 pt-2">
             <details className="group">
               <summary data-testid="mountain-rhythm-help-toggle" className="discipleos-secondary-copy cursor-pointer text-xs font-medium leading-5 marker:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C542]">
                 How Mountain Rhythm works
