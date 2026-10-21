@@ -273,7 +273,7 @@ export default function MountainRhythmCard({
 
           {!summaryOnly ? (
             <>
-              <div className="relative mt-4 h-[240px] overflow-hidden px-2 py-3 sm:h-[290px] sm:px-4 sm:py-3 lg:h-[360px]">
+              <div className="relative -mt-8 h-[240px] overflow-hidden px-2 py-3 sm:h-[290px] sm:px-4 sm:py-3 lg:h-[360px]">
             <svg
               data-testid="mountain-rhythm-mountain"
               ref={chartRef}

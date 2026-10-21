@@ -2217,7 +2217,7 @@ test("highlights only the first completed day on Day 2 of a 1-of-7 climb", async
   );
 });
 
-test("keeps the chart at Basecamp when every reading is unchecked", async ({ page }) => {
+test("keeps the chart at Basecamp and trims only the metrics-to-chart gap", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   const ownerId = "mountain-rhythm-visual-owner";
   const plan = makePlan({
@@ -2240,28 +2240,39 @@ test("keeps the chart at Basecamp when every reading is unchecked", async ({ pag
   await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
-  const pointY = await page
-    .getByTestId("mountain-rhythm-mountain")
-    .locator('[data-testid^="mountain-rhythm-day-point-"]')
-    .evaluateAll((points) =>
-      points.map((point) => Number(point.getAttribute("cy"))),
-    );
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  const pointY = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
   expect(pointY).toHaveLength(7);
   expect(pointY[0]).toBe(220);
   expect(pointY.every((y, index) => index === 0 || y < pointY[index - 1])).toBe(true);
   expect(pointY.at(-1)).toBeLessThan(100);
   await expect(page.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
   await expect(page.getByTestId("mountain-rhythm-current-status")).toContainText("Current elevation: Basecamp");
-  const chart = page.getByTestId("mountain-rhythm-mountain");
-  const desktopPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
-    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
   const flagTransform = await chart.locator('g[aria-label^="Today"]').getAttribute("transform");
   expect(Number(flagTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
     .toBeCloseTo(pointY[0], 3);
-  await page.setViewportSize({ width: 390, height: 844 });
-  const mobilePoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
-    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
-  expect(mobilePoints).toEqual(desktopPoints);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
+    const metricsBottom = await page.getByTestId("mountain-rhythm-metric-rhythm")
+      .evaluate((metric) => metric.parentElement!.getBoundingClientRect().bottom);
+    const summitLabel = await chart.getByTestId("mountain-rhythm-elevation-label-85").boundingBox();
+    const chartBox = await chart.boundingBox();
+    expect(summitLabel).not.toBeNull();
+    expect(chartBox).not.toBeNull();
+    expect(summitLabel!.y - metricsBottom).toBeGreaterThanOrEqual(4);
+    expect(summitLabel!.y - metricsBottom).toBeLessThan(32);
+    expect(chartBox!.height).toBeCloseTo(width < 640 ? 240 : 360, 0);
+    expect(await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+      .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy")))))
+      .toEqual(pointY);
+    await page.getByTestId("mountain-rhythm-panel").screenshot({
+      path: `/tmp/discipleos-mountain-gap-${width}.png`,
+    });
+  }
 });
 
 test("repairs an oversized saved 7-Day Climb schedule", async ({ page }) => {
