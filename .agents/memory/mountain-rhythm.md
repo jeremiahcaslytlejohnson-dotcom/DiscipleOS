@@ -125,7 +125,7 @@ Keep the decorative forest integrated into the foothills, not an evenly spaced r
 
 **Why:** The owner rejected the outlined geometric trees as looking wrong.
 
-**How to apply:** Use narrow, filled pine silhouettes with varied heights and clustering. Account for the chart's nonuniform SVG scaling so trees do not become wide, blocky shapes at desktop widths.
+**How to apply:** Use narrow, filled pine silhouettes with varied heights and clustering along the rising slope near the chart lines, rather than keeping the forest as a low border. Account for the chart's nonuniform SVG scaling so trees do not become wide, blocky shapes at desktop widths.
 
 **Why:** The owner requested a staged rollout and explicitly authorized only the current visual terrain refinement.
 

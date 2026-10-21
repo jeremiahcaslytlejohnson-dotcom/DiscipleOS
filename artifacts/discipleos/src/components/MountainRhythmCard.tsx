@@ -303,20 +303,19 @@ export default function MountainRhythmCard({
                 clipPath="url(#rhythm-forest-clip)"
               >
                 <defs>
-                  <clipPath id="rhythm-forest-clip"><rect x="0" y="240" width="360" height="40" /></clipPath>
+                  <clipPath id="rhythm-forest-clip"><rect x="0" y="100" width="360" height="180" /></clipPath>
                   <path id="rhythm-pine" d="M0 0L-1.1 5L-.5 4.7L-2.4 10L-1.4 9.5L-3.6 16L-2.4 15L-4.8 23L-3.1 22L-5.8 30L-.7 29L-.7 34L.7 34L.7 29L5.8 30L3.1 22L4.8 23L2.4 15L3.6 16L1.4 9.5L2.4 10L.5 4.7L1.1 5Z" />
                 </defs>
                 <g fill="#3B5946" fillOpacity="0.48">
                   {[3, 16, 24, 39, 53, 61, 78, 93, 105, 124, 136, 143, 161, 178, 187, 204, 219, 231, 249, 257, 276, 291, 307, 316, 338, 351].map((x, index) => (
-                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${250 + (index % 4) * 3}) scale(${0.48 + (index % 3) * 0.09} ${0.65 + (index % 5) * 0.06})`} />
+                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${242 - x * 0.21 + (index % 4) * 2}) scale(${0.48 + (index % 3) * 0.09} ${0.65 + (index % 5) * 0.06})`} />
                   ))}
                 </g>
                 <g fill="#203C2E" fillOpacity="0.88">
                   {[7, 20, 34, 48, 69, 85, 99, 117, 132, 152, 168, 181, 199, 214, 238, 253, 269, 285, 301, 327, 345, 358].map((x, index) => (
-                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${245 + (index % 5) * 3}) scale(${0.54 + (index % 4) * 0.08} ${0.8 + (index % 3) * 0.1})`} />
+                    <use key={x} href="#rhythm-pine" transform={`translate(${x} ${246 - x * 0.21 + (index % 3) * 2}) scale(${0.54 + (index % 4) * 0.08} ${0.8 + (index % 3) * 0.1})`} />
                   ))}
                 </g>
-                <path d="M0 280L0 276Q90 271 176 278T360 275V280H0Z" fill="#14291F" />
               </g>
               <g data-testid="mountain-rhythm-elevation-guide-lines" aria-label="Elevation guide lines">
                 {levelGuides.map((level) => (

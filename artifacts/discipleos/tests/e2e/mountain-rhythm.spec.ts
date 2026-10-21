@@ -1484,6 +1484,12 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(mainRidgeData?.match(/L/g)?.length).toBeLessThan(15);
   await expect(chart.getByTestId("mountain-rhythm-far-range")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-mid-range")).toBeVisible();
+  const forestBounds = await chart.getByTestId("mountain-rhythm-forest-depth").evaluate((forest) => {
+    const { y, height } = (forest as SVGGElement).getBBox();
+    return { y, height };
+  });
+  expect(forestBounds.y).toBeLessThan(180);
+  expect(forestBounds.height).toBeGreaterThan(100);
   await expect(chart.getByTestId("mountain-rhythm-distant-ridges").locator("path")).toHaveCount(2);
   await expect(chart.getByTestId("mountain-rhythm-foreground-facets")).toHaveCount(0);
   const farRangeData = await chart.getByTestId("mountain-rhythm-far-range").getAttribute("d");
