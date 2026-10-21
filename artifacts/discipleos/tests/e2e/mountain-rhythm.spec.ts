@@ -1734,7 +1734,7 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   );
 });
 
-test("shows a full-width 20-day chart with a continuous earned and projected route", async ({ page }) => {
+test("shows a full-width 20-day chart with separate earned and planned routes", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   const ownerId = "mountain-rhythm-twenty-day-visual-owner";
   const plan = makePlan({
@@ -1769,8 +1769,30 @@ test("shows a full-width 20-day chart with a continuous earned and projected rou
   const projectedData = await projected.getAttribute("d") || "";
   const projectedCoordinates = Array.from(projectedData.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g));
   const projectedY = projectedCoordinates.map((point) => Number(point[2]));
-  expect(projectedY.length).toBeGreaterThan(1);
-  expect(new Set(projectedY).size).toBe(1);
+  expect(projectedCoordinates).toHaveLength(14);
+  expect(projectedY.every((y, index) => index === 0 || y < projectedY[index - 1])).toBe(true);
+  const visiblePoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => ({
+      x: Number(point.getAttribute("cx")),
+      y: Number(point.getAttribute("cy")),
+      label: point.getAttribute("aria-label") || "",
+    })));
+  const currentPoint = visiblePoints.find((point) => point.label.startsWith("Day 7,"));
+  const finalPoint = visiblePoints.find((point) => point.label.startsWith("Day 20,"));
+  expect(currentPoint).toBeDefined();
+  expect(finalPoint).toBeDefined();
+  expect(Number(projectedCoordinates[0][1])).toBeCloseTo(currentPoint!.x, 3);
+  expect(Number(projectedCoordinates[0][2])).toBeCloseTo(currentPoint!.y, 3);
+  expect(Number(projectedCoordinates.at(-1)![1])).toBeCloseTo(finalPoint!.x, 3);
+  expect(Number(projectedCoordinates.at(-1)![2])).toBeCloseTo(finalPoint!.y, 3);
+  const visibleFuturePoints = visiblePoints.filter((point) => point.label.includes(", future,"));
+  expect(visibleFuturePoints.length).toBeGreaterThan(1);
+  for (const point of visibleFuturePoints) {
+    expect(projectedCoordinates.some((routePoint) =>
+      Math.abs(Number(routePoint[1]) - point.x) < 0.001 &&
+      Math.abs(Number(routePoint[2]) - point.y) < 0.001,
+    )).toBe(true);
+  }
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("7 of 20 planned days");
   await expect(page.getByTestId("mountain-rhythm-current-status")).toContainText("Current: On the Trail · Next: Gaining Elevation");
   const dayLabels = await chart.getByTestId("mountain-rhythm-day-labels").locator("text").allTextContents();
@@ -1780,6 +1802,9 @@ test("shows a full-width 20-day chart with a continuous earned and projected rou
   });
   for (const width of [375, 768]) {
     await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
     const chartBox = await chart.boundingBox();
     const flagBox = await chart.getByTestId("mountain-rhythm-current-flag-label").boundingBox();
     expect(chartBox).not.toBeNull();
@@ -1788,6 +1813,156 @@ test("shows a full-width 20-day chart with a continuous earned and projected rou
     expect(flagBox!.x).toBeGreaterThanOrEqual(chartBox!.x);
     expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
     await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
+    const resizedRoute = await chart.getByTestId("mountain-rhythm-projected-route").getAttribute("d") || "";
+    const resizedCoordinates = Array.from(resizedRoute.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g));
+    const resizedPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+      .evaluateAll((points) => points.map((point) => ({
+        x: Number(point.getAttribute("cx")),
+        y: Number(point.getAttribute("cy")),
+        label: point.getAttribute("aria-label") || "",
+      })));
+    for (const point of resizedPoints.filter((item) => item.label.includes(", future,"))) {
+      expect(resizedCoordinates.some((routePoint) =>
+        Math.abs(Number(routePoint[1]) - point.x) < 0.001 &&
+        Math.abs(Number(routePoint[2]) - point.y) < 0.001,
+      )).toBe(true);
+    }
+    if (width === 375) {
+      await page.getByTestId("mountain-rhythm-panel").screenshot({
+        path: "/tmp/discipleos-mountain-20-day-mobile-planned-route.png",
+      });
+    }
+  }
+});
+
+test("connects future markers without inventing earned progress at 0/7 or 2/7", async ({ page }) => {
+  test.setTimeout(90_000);
+  const today = new Date().toISOString().slice(0, 10);
+  const ownerId = "mountain-rhythm-planned-route-owner";
+  await stubApi(page, { success: true, userId: ownerId, authenticated: false, established: false });
+
+  const zeroComplete = makePlan({
+    id: "planned-route-zero-of-seven",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
+  await seedLocalData(page, [zeroComplete], zeroComplete.id, { ownerId });
+  await openMountainRhythm(page);
+
+  const chart = page.getByTestId("mountain-rhythm-mountain");
+  const checkPlannedPathMatchesMarkers = async (currentDay: number) => {
+    const path = chart.getByTestId("mountain-rhythm-projected-route");
+    const data = await path.getAttribute("d") || "";
+    const coordinates = Array.from(data.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g))
+      .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+    const points = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+      .evaluateAll((markers) => markers.map((marker) => ({
+        day: Number(marker.getAttribute("data-testid")?.split("-").at(-1)),
+        x: Number(marker.getAttribute("cx")),
+        y: Number(marker.getAttribute("cy")),
+        label: marker.getAttribute("aria-label") || "",
+      })));
+    const futurePoints = points.filter((point) => point.label.includes(", future,"));
+    const expected = [
+      points.find((point) => point.day === currentDay)!,
+      ...futurePoints,
+    ];
+    expect(expected.every(Boolean)).toBe(true);
+    expect(coordinates).toHaveLength(expected.length);
+    expect(coordinates).toEqual(expected.map(({ x, y }) => ({ x, y })));
+    return { path, coordinates };
+  };
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
+    await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7");
+    await expect(chart.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
+    const { path, coordinates } = await checkPlannedPathMatchesMarkers(1);
+    await expect(path).toHaveAttribute("stroke", "#B7C4C7");
+    await expect(path).toHaveAttribute("stroke-opacity", "0.42");
+    await expect(path).toHaveAttribute("stroke-width", "1.3");
+    await expect(path).toHaveAttribute("stroke-dasharray", "3 5");
+    expect(coordinates).toHaveLength(7);
+    await page.getByTestId("mountain-rhythm-panel").screenshot({
+      path: `/tmp/discipleos-mountain-zero-of-seven-${width}.png`,
+    });
+  }
+
+  const twoComplete = makePlan({
+    id: "planned-route-two-of-seven",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    startOffset: -1,
+    completedIndexes: [0, 1],
+  });
+  await replaceLocalPlans(page, [twoComplete], twoComplete.id, ownerId);
+  await openMountainRhythm(page);
+
+  const earned = chart.getByTestId("mountain-rhythm-earned-route");
+  await expect(earned).toHaveAttribute("stroke", "#78E2A1");
+  await expect(earned).toHaveAttribute("stroke-opacity", "0.96");
+  await expect(earned).toHaveAttribute("stroke-width", "2.7");
+  await expect(chart.locator('[data-chart-line="earned"]')).toHaveCount(1);
+  await expect(chart.locator('[data-chart-line="projected"]')).toHaveCount(1);
+  await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("2 of 7");
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    ));
+    const { path, coordinates } = await checkPlannedPathMatchesMarkers(2);
+    expect(coordinates).toHaveLength(6);
+    const dayTwo = await chart.getByTestId("mountain-rhythm-day-point-2").evaluate((marker) => ({
+      x: Number(marker.getAttribute("cx")),
+      y: Number(marker.getAttribute("cy")),
+    }));
+    const earnedCoordinates = Array.from(
+      ((await earned.getAttribute("d")) || "").matchAll(/[ML]([\d.]+)\s+([\d.]+)/g),
+    ).map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+    expect(earnedCoordinates.length).toBeGreaterThan(1);
+    expect(earnedCoordinates.at(-1)!.x).toBe(dayTwo.x);
+    expect(earnedCoordinates.at(-1)!.y).toBeCloseTo(dayTwo.y, 3);
+    expect(coordinates[0]).toEqual(dayTwo);
+    const todayFlag = await chart.locator('g[aria-label^="Today"]').getAttribute("transform");
+    const todayFlagMarker = chart.getByTestId("mountain-rhythm-current-elevation-marker");
+    await expect(todayFlagMarker).toHaveAttribute("fill", "#F4D77A");
+    expect(Number(todayFlag?.match(/translate\(([\d.-]+)/)?.[1]) + 5).toBeCloseTo(dayTwo.x, 3);
+    expect(Number(todayFlag?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
+      .toBeCloseTo(dayTwo.y, 3);
+    await expect(chart.getByTestId("mountain-rhythm-day-point-3")).toHaveAttribute(
+      "aria-label",
+      /Day 3, future/,
+    );
+    await page.getByTestId("mountain-rhythm-panel").screenshot({
+      path: `/tmp/discipleos-mountain-two-of-seven-${width}.png`,
+    });
+  }
+
+  const allComplete = makePlan({
+    id: "planned-route-seven-of-seven",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+    completedIndexes: Array.from({ length: 7 }, (_, index) => index),
+  });
+  await replaceLocalPlans(page, [allComplete], allComplete.id, ownerId);
+  await openMountainRhythm(page);
+  await expandPastClimbs(page);
+  await expect(page.getByTestId("completed-climb-7-day-climb"))
+    .toContainText("100% journey progress");
+  await expect(page.getByTestId("mountain-rhythm-mountain")).toHaveCount(0);
+  await expect(page.getByTestId("mountain-rhythm-projected-route")).toHaveCount(0);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByTestId("completed-climb-7-day-climb").screenshot({
+      path: `/tmp/discipleos-mountain-seven-of-seven-${width}.png`,
+    });
   }
 });
 
@@ -2038,7 +2213,7 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7");
   await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("50%");
   await expect(chart.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
-  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toHaveCount(0);
+  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-day-point-1"))
     .toHaveAttribute("fill", "#D4A017");
   expect(dayOnePoints[0].label).toContain("readings partial");
@@ -2095,7 +2270,7 @@ test("keeps scenery fixed while the real trail changes across partial and longer
     .toBe(sceneryMarkup);
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("3 of 7");
   await expect(chart.getByTestId("mountain-rhythm-earned-route")).toBeVisible();
-  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toHaveCount(0);
+  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
   await expect(chart.getByTestId("mountain-rhythm-day-point-1")).toHaveAttribute("fill", "#86EFAC");
   await expect(chart.getByTestId("mountain-rhythm-day-point-4")).toHaveAttribute("fill", "#D4A017");
   const progressedPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
@@ -2136,7 +2311,7 @@ test("keeps scenery fixed while the real trail changes across partial and longer
     .toBe(sceneryMarkup);
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 40");
   await expect(chart.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
-  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toHaveCount(0);
+  await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
   const longDayLabels = await chart.getByTestId("mountain-rhythm-day-labels")
     .locator("text")
     .allTextContents();

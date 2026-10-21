@@ -165,13 +165,34 @@ export default function MountainRhythmCard({
       return `${index === 0 ? "M" : "L"}${point.x} ${elevationY(elevationPercent)}`;
     })
     .join("") : "";
-  const projectedPoints =
-    hasEarnedProgress && geometry.current && geometry.next && geometry.points.length >= 20
-      ? [geometry.current, ...geometry.points.filter((point) => point.date > geometry.current.date)]
-      : [];
-  const projectedRoute = projectedPoints
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
-    .join("");
+  const futurePointIndexes = geometry.points.flatMap((point, index) =>
+    point.rhythmStatus === "future" ? [index] : [],
+  );
+  const plannedStartIndex = geometry.current
+    ? currentPointIndex
+    : futurePointIndexes[0] ?? -1;
+  const plannedPointIndexes = plannedStartIndex >= 0
+    ? [
+        plannedStartIndex,
+        ...futurePointIndexes.filter((index) => index > plannedStartIndex),
+      ]
+    : [];
+  const projectedRoute = plannedPointIndexes.length > 1
+    ? plannedPointIndexes
+        .map((pointIndex, routeIndex) => {
+          const point = geometry.points[pointIndex];
+          const y = pointIndex === plannedStartIndex && geometry.current
+            ? point.y
+            : plannedWaypointY(
+                pointIndex,
+                geometry.points.length,
+                currentPointIndex,
+                Number(score?.currentElevationPercent || 0),
+              );
+          return `${routeIndex === 0 ? "M" : "L"}${point.x} ${y}`;
+        })
+        .join("")
+    : "";
   const flagX =
     geometry.todayX ??
     geometry.current?.x ??
