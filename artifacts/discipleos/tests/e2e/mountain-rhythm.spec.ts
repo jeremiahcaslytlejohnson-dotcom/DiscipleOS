@@ -1507,7 +1507,17 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
   expect(pointY[4]).toBeLessThan(pointY[3]);
   expect(pointY[5]).toBeLessThan(pointY[4]);
   expect(pointY[6]).toBeLessThan(pointY[5]);
+  const summitGuideY = Number(
+    await chart.getByTestId("mountain-rhythm-elevation-guide-lines")
+      .locator("line")
+      .last()
+      .getAttribute("y1"),
+  );
+  expect(pointY[6]).toBeCloseTo(summitGuideY, 3);
   expect(pointY.every((y) => y >= 68 && y <= 220)).toBe(true);
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-seven-day-summit-waypoint.png",
+  });
   const mainRidge = chart.getByTestId("mountain-rhythm-main-ridge");
   const mainRidgeData = await mainRidge.getAttribute("d");
   expect(mainRidgeData).toContain("Q96 212 125 204");
@@ -2111,6 +2121,19 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   expect(longPoints[0]).toBe(220);
   expect(longPoints.every((y, index) => index === 0 || y < longPoints[index - 1])).toBe(true);
   expect(longPoints.at(-1)).toBeLessThan(100);
+  const longSummitY = Number(
+    await chart.getByTestId("mountain-rhythm-elevation-guide-lines")
+      .locator("line")
+      .last()
+      .getAttribute("y1"),
+  );
+  const finalFortyDayPointY = Number(
+    await chart.getByTestId("mountain-rhythm-day-point-40").getAttribute("cy"),
+  );
+  expect(finalFortyDayPointY).toBeCloseTo(longSummitY, 3);
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-forty-day-summit-waypoint.png",
+  });
   await expect(chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible"))
     .toHaveCount(5);
 });

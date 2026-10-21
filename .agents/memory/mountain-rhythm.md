@@ -123,7 +123,7 @@ When the owner explicitly requests uphill planned waypoints, future day circles 
 
 **Why:** Planned circles should make future itinerary position legible without making unfinished readings appear completed or changing the underlying elevation history.
 
-**How to apply:** Derive only future circle Y coordinates from the current position toward the upper chart, scale by the full schedule length, and keep completed/current points and Today attached to actual elevation. Do not add or restyle connecting paths, fills, or scenery.
+**How to apply:** Derive only future circle Y coordinates from the current position toward the Summit guide's configured elevation threshold, scale by the full schedule length, and keep completed/current points and Today attached to actual elevation. Do not add or restyle connecting paths, fills, or scenery.
 
 Stage 2 discipline accents are explicitly deferred until the owner separately approves implementation. If approved, completed prayer and fasting may strengthen a day's visual trail accent only when Scripture is also complete; discipline activity alone must never advance ascent. This must not change Scripture completion percentages, consistency, milestones, or earned days.
 

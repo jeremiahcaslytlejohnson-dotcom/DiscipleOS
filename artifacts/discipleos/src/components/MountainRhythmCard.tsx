@@ -7,6 +7,8 @@ const PLOT_LEFT_LONG = 120;
 const PLOT_RIGHT = 336;
 const PLOT_TOP = 68;
 const PLOT_BOTTOM = 220;
+const SUMMIT_ELEVATION_PERCENT =
+  RHYTHM_LEVELS.find((level) => level.name === "Summit")?.min ?? 100;
 
 function elevationY(percent: number) {
   const clampedPercent = Math.max(0, Math.min(100, percent));
@@ -26,7 +28,7 @@ function plannedWaypointY(
   const progress = Math.max(0, Math.min(1, (index - anchorIndex) / remainingDays));
   const easedProgress = 0.7 * progress + 0.3 * progress * progress;
   const startElevation = Math.max(0, Math.min(100, currentElevationPercent));
-  const targetElevation = Math.max(startElevation, 94);
+  const targetElevation = Math.max(startElevation, SUMMIT_ELEVATION_PERCENT);
   return elevationY(startElevation + (targetElevation - startElevation) * easedProgress);
 }
 
