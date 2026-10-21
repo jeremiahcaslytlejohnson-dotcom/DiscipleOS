@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "./rhythmConstants";
 
-const PLOT_LEFT_SHORT = 132;
-const PLOT_LEFT_LONG = 120;
+const PLOT_LEFT_SHORT = 100;
+const PLOT_LEFT_LONG = 96;
 const PLOT_RIGHT = 336;
 const PLOT_TOP = 68;
 const PLOT_BOTTOM = 220;
@@ -32,7 +32,12 @@ function plannedWaypointY(
   return elevationY(startElevation + (targetElevation - startElevation) * easedProgress);
 }
 
-function trailGeometry(trail: any[], today: string, currentElevationPercent = 0) {
+function trailGeometry(
+  trail: any[],
+  today: string,
+  currentElevationPercent = 0,
+  measuredPlotLeft = 0,
+) {
   if (!Array.isArray(trail) || trail.length === 0) {
     return {
       points: [],
@@ -44,7 +49,8 @@ function trailGeometry(trail: any[], today: string, currentElevationPercent = 0)
   }
 
   const sortedTrail = [...trail].sort((left, right) => left.date.localeCompare(right.date));
-  const plotLeft = sortedTrail.length >= 20 ? PLOT_LEFT_LONG : PLOT_LEFT_SHORT;
+  const minimumPlotLeft = sortedTrail.length >= 20 ? PLOT_LEFT_LONG : PLOT_LEFT_SHORT;
+  const plotLeft = Math.max(minimumPlotLeft, measuredPlotLeft);
   const startDate = Date.parse(`${sortedTrail[0].date}T12:00:00Z`);
   const endDate = Date.parse(`${sortedTrail.at(-1)!.date}T12:00:00Z`);
   const xForDate = (date: string) => {
@@ -111,6 +117,7 @@ export default function MountainRhythmCard({
 }: any) {
   const chartRef = useRef<SVGSVGElement | null>(null);
   const [svgTextScaleX, setSvgTextScaleX] = useState(1);
+  const [svgPlotLeft, setSvgPlotLeft] = useState(0);
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
@@ -121,6 +128,14 @@ export default function MountainRhythmCard({
       const scaleX = Math.min(1, (height * 360) / (width * 250));
       setSvgTextScaleX((current) => (
         Math.abs(current - scaleX) < 0.01 ? current : scaleX
+      ));
+      const widestLabel = Array.from(
+        chart.querySelectorAll<SVGTextElement>('[data-testid^="mountain-rhythm-elevation-label-"]'),
+      ).reduce((widest, label) => Math.max(widest, label.getComputedTextLength()), 0);
+      const labelRight = 8 + (widestLabel + 1.1) * scaleX;
+      const nextPlotLeft = Math.ceil(labelRight + 14);
+      setSvgPlotLeft((current) => (
+        Math.abs(current - nextPlotLeft) < 1 ? current : nextPlotLeft
       ));
     };
 
@@ -140,6 +155,7 @@ export default function MountainRhythmCard({
     score?.trail || [],
     score?.windowEnd || "",
     Number(score?.currentElevationPercent || 0),
+    svgPlotLeft,
   );
   const currentPointIndex = geometry.current ? geometry.points.indexOf(geometry.current) : -1;
   const elapsedPoints = geometry.points.filter((point) => point.date <= score?.windowEnd);

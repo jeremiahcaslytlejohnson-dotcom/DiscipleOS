@@ -2030,6 +2030,11 @@ test("keeps scenery fixed while the real trail changes across partial and longer
     point.y < (index === 0 ? dayOnePoints[0].y : futurePoints[index - 1].y),
   )).toBe(true);
   expect(dayOnePoints.slice(1).every((point) => point.fill === "#14201C")).toBe(true);
+  const dayOneX = dayOnePoints.map((point) => point.x);
+  const dayOneXStep = dayOneX[1] - dayOneX[0];
+  expect(dayOneX.slice(2).every((x, index) =>
+    Math.abs((x - dayOneX[index + 1]) - dayOneXStep) < 0.01,
+  )).toBe(true);
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7");
   await expect(page.getByTestId("mountain-rhythm-metric-today")).toContainText("50%");
   await expect(chart.getByTestId("mountain-rhythm-earned-route")).toHaveCount(0);
@@ -2043,10 +2048,31 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   expect(dayOneFlagX).toBeCloseTo(dayOnePoints[0].x, 3);
   const dayOneFlagY = Number(dayOneFlagTransform?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22;
   expect(dayOneFlagY).toBeCloseTo(dayOnePoints[0].y, 3);
+  const measureMilestoneGap = async () => {
+    const labelRight = await chart.getByTestId("mountain-rhythm-elevation-guides")
+      .locator("text")
+      .evaluateAll((labels) => Math.max(...labels.map((label) => label.getBoundingClientRect().right)));
+    const firstMarker = await chart.getByTestId("mountain-rhythm-day-point-1").boundingBox();
+    expect(firstMarker).not.toBeNull();
+    return firstMarker!.x - labelRight;
+  };
+  expect(await measureMilestoneGap()).toBeGreaterThanOrEqual(4);
+  expect(await measureMilestoneGap()).toBeLessThan(30);
   await page.getByTestId("mountain-rhythm-panel").screenshot({
     path: "/tmp/discipleos-mountain-day-one-partial.png",
   });
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  ));
+  expect(await measureMilestoneGap()).toBeGreaterThanOrEqual(4);
+  expect(await measureMilestoneGap()).toBeLessThan(30);
+  const mobileDayXs = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cx"))));
+  const mobileStep = mobileDayXs[1] - mobileDayXs[0];
+  expect(mobileDayXs.slice(2).every((x, index) =>
+    Math.abs((x - mobileDayXs[index + 1]) - mobileStep) < 0.01,
+  )).toBe(true);
   await page.getByTestId("mountain-rhythm-panel").screenshot({
     path: "/tmp/discipleos-mountain-day-one-partial-phone.png",
   });
@@ -2117,10 +2143,22 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   expect(longDayLabels).toEqual(["1", "8", "15", "22", "29", "36", "40"]);
   const longPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
     .evaluateAll((points) => points.map((point) => Number(point.getAttribute("cy"))));
+  const longPointX = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
+    .evaluateAll((points) => points.map((point) => ({
+      day: Number(point.getAttribute("data-testid")?.split("-").at(-1)),
+      x: Number(point.getAttribute("cx")),
+    })));
   expect(longPoints.length).toBeLessThanOrEqual(7);
   expect(longPoints[0]).toBe(220);
   expect(longPoints.every((y, index) => index === 0 || y < longPoints[index - 1])).toBe(true);
   expect(longPoints.at(-1)).toBeLessThan(100);
+  const firstLongDayX = longPointX[0].x;
+  for (const point of longPointX) {
+    expect(point.x).toBeCloseTo(firstLongDayX + ((point.day - 1) / 39) * (336 - firstLongDayX), 3);
+  }
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-forty-day-horizontal-spacing.png",
+  });
   const longSummitY = Number(
     await chart.getByTestId("mountain-rhythm-elevation-guide-lines")
       .locator("line")
