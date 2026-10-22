@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Mountain, TrendingUp } from "lucide-react";
 import { RHYTHM_COPY, RHYTHM_LEVELS } from "../lib/mountain-rhythm";
+import {
+  curvedPlannedRoutePath,
+  plannedElevationPercent,
+} from "../lib/mountain-rhythm-planned-route";
 
 const PLOT_LEFT_SHORT = 100;
 const PLOT_LEFT_LONG = 96;
@@ -21,15 +25,15 @@ function plannedWaypointY(
   currentIndex: number,
   currentElevationPercent: number,
 ) {
-  const anchorIndex = currentIndex >= 0 ? currentIndex : 0;
-  const remainingDays = pointCount - 1 - anchorIndex;
-  if (remainingDays <= 0) return elevationY(currentElevationPercent);
-
-  const progress = Math.max(0, Math.min(1, (index - anchorIndex) / remainingDays));
-  const easedProgress = 0.7 * progress + 0.3 * progress * progress;
-  const startElevation = Math.max(0, Math.min(100, currentElevationPercent));
-  const targetElevation = Math.max(startElevation, SUMMIT_ELEVATION_PERCENT);
-  return elevationY(startElevation + (targetElevation - startElevation) * easedProgress);
+  return elevationY(
+    plannedElevationPercent(
+      index,
+      pointCount,
+      currentIndex,
+      currentElevationPercent,
+      SUMMIT_ELEVATION_PERCENT,
+    ),
+  );
 }
 
 function trailGeometry(
@@ -177,22 +181,19 @@ export default function MountainRhythmCard({
         ...futurePointIndexes.filter((index) => index > plannedStartIndex),
       ]
     : [];
-  const projectedRoute = plannedPointIndexes.length > 1
-    ? plannedPointIndexes
-        .map((pointIndex, routeIndex) => {
-          const point = geometry.points[pointIndex];
-          const y = pointIndex === plannedStartIndex && geometry.current
-            ? point.y
-            : plannedWaypointY(
-                pointIndex,
-                geometry.points.length,
-                currentPointIndex,
-                Number(score?.currentElevationPercent || 0),
-              );
-          return `${routeIndex === 0 ? "M" : "L"}${point.x} ${y}`;
-        })
-        .join("")
-    : "";
+  const projectedRoutePoints = plannedPointIndexes.map((pointIndex) => {
+    const point = geometry.points[pointIndex];
+    const y = pointIndex === plannedStartIndex && geometry.current
+      ? point.y
+      : plannedWaypointY(
+          pointIndex,
+          geometry.points.length,
+          currentPointIndex,
+          Number(score?.currentElevationPercent || 0),
+        );
+    return { x: point.x, y };
+  });
+  const projectedRoute = curvedPlannedRoutePath(projectedRoutePoints);
   const flagX =
     geometry.todayX ??
     geometry.current?.x ??

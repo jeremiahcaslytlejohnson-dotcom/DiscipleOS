@@ -1,7 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
 import { climbDatesInRange, fastingDatesForClimb, isFastingDateAllowed } from "../../src/lib/discipline-schedule";
+import {
+  curvedPlannedRoutePath,
+  plannedElevationPercent,
+} from "../../src/lib/mountain-rhythm-planned-route";
 
 const STORAGE_KEY = "discipleos-data";
+
+function projectedRouteAnchors(pathData: string) {
+  const anchors: Array<{ x: number; y: number }> = [];
+  for (const command of pathData.matchAll(/([MC])([^MC]*)/g)) {
+    const values = Array.from(command[2].matchAll(/-?\d+(?:\.\d+)?/g), (value) =>
+      Number(value[0]),
+    );
+    if (command[1] === "M" && values.length >= 2) {
+      anchors.push({ x: values[0], y: values[1] });
+    } else if (command[1] === "C" && values.length >= 6) {
+      anchors.push({ x: values[4], y: values[5] });
+    }
+  }
+  return anchors;
+}
 
 type PlanOptions = {
   id: string;
@@ -1767,10 +1786,12 @@ test("shows a full-width 20-day chart with separate earned and planned routes", 
   await expect(projected).toHaveAttribute("stroke-dasharray", "3 5");
   await expect(projected).toHaveAttribute("stroke-width", "1.3");
   const projectedData = await projected.getAttribute("d") || "";
-  const projectedCoordinates = Array.from(projectedData.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g));
-  const projectedY = projectedCoordinates.map((point) => Number(point[2]));
+  const projectedCoordinates = projectedRouteAnchors(projectedData);
+  const projectedY = projectedCoordinates.map((point) => point.y);
   expect(projectedCoordinates).toHaveLength(14);
   expect(projectedY.every((y, index) => index === 0 || y < projectedY[index - 1])).toBe(true);
+  const twentyDayGains = projectedY.slice(1).map((y, index) => projectedY[index] - y);
+  expect(new Set(twentyDayGains.map((gain) => gain.toFixed(2))).size).toBeGreaterThan(3);
   const visiblePoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
     .evaluateAll((points) => points.map((point) => ({
       x: Number(point.getAttribute("cx")),
@@ -1781,16 +1802,16 @@ test("shows a full-width 20-day chart with separate earned and planned routes", 
   const finalPoint = visiblePoints.find((point) => point.label.startsWith("Day 20,"));
   expect(currentPoint).toBeDefined();
   expect(finalPoint).toBeDefined();
-  expect(Number(projectedCoordinates[0][1])).toBeCloseTo(currentPoint!.x, 3);
-  expect(Number(projectedCoordinates[0][2])).toBeCloseTo(currentPoint!.y, 3);
-  expect(Number(projectedCoordinates.at(-1)![1])).toBeCloseTo(finalPoint!.x, 3);
-  expect(Number(projectedCoordinates.at(-1)![2])).toBeCloseTo(finalPoint!.y, 3);
+    expect(projectedCoordinates[0].x).toBeCloseTo(currentPoint!.x, 3);
+    expect(projectedCoordinates[0].y).toBeCloseTo(currentPoint!.y, 3);
+    expect(projectedCoordinates.at(-1)!.x).toBeCloseTo(finalPoint!.x, 3);
+    expect(projectedCoordinates.at(-1)!.y).toBeCloseTo(finalPoint!.y, 3);
   const visibleFuturePoints = visiblePoints.filter((point) => point.label.includes(", future,"));
   expect(visibleFuturePoints.length).toBeGreaterThan(1);
   for (const point of visibleFuturePoints) {
     expect(projectedCoordinates.some((routePoint) =>
-      Math.abs(Number(routePoint[1]) - point.x) < 0.001 &&
-      Math.abs(Number(routePoint[2]) - point.y) < 0.001,
+      Math.abs(routePoint.x - point.x) < 0.001 &&
+      Math.abs(routePoint.y - point.y) < 0.001,
     )).toBe(true);
   }
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("7 of 20 planned days");
@@ -1814,7 +1835,7 @@ test("shows a full-width 20-day chart with separate earned and planned routes", 
     expect(flagBox!.x + flagBox!.width).toBeLessThanOrEqual(chartBox!.x + chartBox!.width + 1);
     await expect(chart.getByTestId("mountain-rhythm-projected-route")).toBeVisible();
     const resizedRoute = await chart.getByTestId("mountain-rhythm-projected-route").getAttribute("d") || "";
-    const resizedCoordinates = Array.from(resizedRoute.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g));
+    const resizedCoordinates = projectedRouteAnchors(resizedRoute);
     const resizedPoints = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
       .evaluateAll((points) => points.map((point) => ({
         x: Number(point.getAttribute("cx")),
@@ -1823,8 +1844,8 @@ test("shows a full-width 20-day chart with separate earned and planned routes", 
       })));
     for (const point of resizedPoints.filter((item) => item.label.includes(", future,"))) {
       expect(resizedCoordinates.some((routePoint) =>
-        Math.abs(Number(routePoint[1]) - point.x) < 0.001 &&
-        Math.abs(Number(routePoint[2]) - point.y) < 0.001,
+        Math.abs(routePoint.x - point.x) < 0.001 &&
+        Math.abs(routePoint.y - point.y) < 0.001,
       )).toBe(true);
     }
     if (width === 375) {
@@ -1854,8 +1875,7 @@ test("connects future markers without inventing earned progress at 0/7 or 2/7", 
   const checkPlannedPathMatchesMarkers = async (currentDay: number) => {
     const path = chart.getByTestId("mountain-rhythm-projected-route");
     const data = await path.getAttribute("d") || "";
-    const coordinates = Array.from(data.matchAll(/[ML]([\d.]+)\s+([\d.]+)/g))
-      .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
+    const coordinates = projectedRouteAnchors(data);
     const points = await chart.locator('[data-testid^="mountain-rhythm-day-point-"]')
       .evaluateAll((markers) => markers.map((marker) => ({
         day: Number(marker.getAttribute("data-testid")?.split("-").at(-1)),
@@ -1897,7 +1917,7 @@ test("connects future markers without inventing earned progress at 0/7 or 2/7", 
     days: 7,
     name: "7-Day Climb",
     today,
-    startOffset: -1,
+    startOffset: -2,
     completedIndexes: [0, 1],
   });
   await replaceLocalPlans(page, [twoComplete], twoComplete.id, ownerId);
@@ -1916,9 +1936,9 @@ test("connects future markers without inventing earned progress at 0/7 or 2/7", 
     await page.evaluate(() => new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     ));
-    const { path, coordinates } = await checkPlannedPathMatchesMarkers(2);
-    expect(coordinates).toHaveLength(6);
-    const dayTwo = await chart.getByTestId("mountain-rhythm-day-point-2").evaluate((marker) => ({
+    const { path, coordinates } = await checkPlannedPathMatchesMarkers(3);
+    expect(coordinates).toHaveLength(5);
+    const dayThree = await chart.getByTestId("mountain-rhythm-day-point-3").evaluate((marker) => ({
       x: Number(marker.getAttribute("cx")),
       y: Number(marker.getAttribute("cy")),
     }));
@@ -1926,19 +1946,34 @@ test("connects future markers without inventing earned progress at 0/7 or 2/7", 
       ((await earned.getAttribute("d")) || "").matchAll(/[ML]([\d.]+)\s+([\d.]+)/g),
     ).map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
     expect(earnedCoordinates.length).toBeGreaterThan(1);
-    expect(earnedCoordinates.at(-1)!.x).toBe(dayTwo.x);
-    expect(earnedCoordinates.at(-1)!.y).toBeCloseTo(dayTwo.y, 3);
-    expect(coordinates[0]).toEqual(dayTwo);
+    expect(earnedCoordinates.at(-1)!.x).toBeCloseTo(dayThree.x, 3);
+    expect(earnedCoordinates.at(-1)!.y).toBeCloseTo(dayThree.y, 3);
+    expect(coordinates[0]).toEqual(dayThree);
     const todayFlag = await chart.locator('g[aria-label^="Today"]').getAttribute("transform");
     const todayFlagMarker = chart.getByTestId("mountain-rhythm-current-elevation-marker");
     await expect(todayFlagMarker).toHaveAttribute("fill", "#F4D77A");
-    expect(Number(todayFlag?.match(/translate\(([\d.-]+)/)?.[1]) + 5).toBeCloseTo(dayTwo.x, 3);
+    expect(Number(todayFlag?.match(/translate\(([\d.-]+)/)?.[1]) + 5).toBeCloseTo(dayThree.x, 3);
     expect(Number(todayFlag?.match(/translate\([\d.-]+\s+([\d.-]+)/)?.[1]) + 22)
-      .toBeCloseTo(dayTwo.y, 3);
-    await expect(chart.getByTestId("mountain-rhythm-day-point-3")).toHaveAttribute(
+      .toBeCloseTo(dayThree.y, 3);
+    expect(coordinates[0]).toEqual(dayThree);
+    await expect(chart.getByTestId("mountain-rhythm-day-point-4")).toHaveAttribute(
       "aria-label",
-      /Day 3, future/,
+      /Day 4, future/,
     );
+    const futureGains = coordinates.slice(1).map((point, index) =>
+      coordinates[index].y - point.y,
+    );
+    expect(futureGains).toHaveLength(4);
+    expect(futureGains[0]).toBeLessThan(futureGains[2]);
+    expect(futureGains[1]).toBeGreaterThan(futureGains[0]);
+    expect(futureGains[1]).toBeGreaterThan(futureGains[2]);
+    expect(futureGains[3]).toBeGreaterThan(futureGains[2]);
+    expect(coordinates.at(-1)!.y).toBeCloseTo(
+      Number(await chart.getByTestId("mountain-rhythm-elevation-guide-lines")
+        .locator("line").last().getAttribute("y1")),
+      3,
+    );
+    expect((await path.getAttribute("d")) || "").toMatch(/\sC/);
     await page.getByTestId("mountain-rhythm-panel").screenshot({
       path: `/tmp/discipleos-mountain-two-of-seven-${width}.png`,
     });
@@ -2327,6 +2362,13 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   expect(longPoints[0]).toBe(220);
   expect(longPoints.every((y, index) => index === 0 || y < longPoints[index - 1])).toBe(true);
   expect(longPoints.at(-1)).toBeLessThan(100);
+  const fortyDayRoute = projectedRouteAnchors(
+    (await chart.getByTestId("mountain-rhythm-projected-route").getAttribute("d")) || "",
+  );
+  const fortyDayGains = fortyDayRoute.slice(1).map((point, index) =>
+    fortyDayRoute[index].y - point.y,
+  );
+  expect(new Set(fortyDayGains.map((gain) => gain.toFixed(2))).size).toBeGreaterThan(5);
   const firstLongDayX = longPointX[0].x;
   for (const point of longPointX) {
     expect(point.x).toBeCloseTo(firstLongDayX + ((point.day - 1) / 39) * (336 - firstLongDayX), 3);
@@ -2349,6 +2391,53 @@ test("keeps scenery fixed while the real trail changes across partial and longer
   });
   await expect(chart.getByTestId("mountain-rhythm-elevation-guides").locator("text:visible"))
     .toHaveCount(5);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  ));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  expect(await chart.getByTestId("mountain-rhythm-day-labels").locator("text").allTextContents())
+    .toEqual(["1", "8", "15", "22", "29", "36", "40"]);
+  expect(await chart.locator('[data-testid^="mountain-rhythm-day-point-"]').count())
+    .toBeLessThanOrEqual(7);
+  await page.getByTestId("mountain-rhythm-panel").screenshot({
+    path: "/tmp/discipleos-mountain-forty-day-mobile.png",
+  });
+});
+
+test("builds a deterministic rolling 365-day planned profile and smooth route geometry", async () => {
+  const pointCount = 365;
+  const makeProfile = () => Array.from({ length: pointCount }, (_, index) =>
+    plannedElevationPercent(index, pointCount, 2, 28, 85),
+  );
+  const elevations = makeProfile();
+  expect(makeProfile()).toEqual(elevations);
+  expect(elevations).toHaveLength(pointCount);
+  expect(elevations.slice(3).every((elevation, index) => elevation > elevations[index + 2])).toBe(true);
+  expect(elevations.at(-1)).toBe(85);
+
+  const route = curvedPlannedRoutePath(elevations.slice(2).map((elevation, index) => ({
+    scheduleIndex: index + 2,
+    elevation,
+  })).map(({ scheduleIndex, elevation }) => ({
+    x: 96 + (scheduleIndex / (pointCount - 1)) * 240,
+    y: 220 - (elevation / 100) * 152,
+  })));
+  const anchors = projectedRouteAnchors(route);
+  expect(anchors).toHaveLength(pointCount - 2);
+  expect(route.match(/ C/g)).toHaveLength(pointCount - 3);
+  expect(anchors.every((point, index) => index === 0 || point.y < anchors[index - 1].y)).toBe(true);
+  expect(anchors[0].x).toBeCloseTo(96 + (2 / (pointCount - 1)) * 240, 3);
+  expect(anchors.at(-1)!.x).toBeCloseTo(336, 3);
+
+  const dailyGains = anchors.slice(1).map((point, index) => anchors[index].y - point.y);
+  expect(Math.max(...dailyGains)).toBeGreaterThan(Math.min(...dailyGains) * 2);
+  const phaseGains = [0, 1, 2, 3, 4, 5].map((phase) => {
+    const first = Math.floor((phase / 6) * dailyGains.length);
+    const last = Math.floor(((phase + 1) / 6) * dailyGains.length);
+    return dailyGains.slice(first, last).reduce((sum, gain) => sum + gain, 0);
+  });
+  expect(new Set(phaseGains.map((gain) => gain.toFixed(1))).size).toBeGreaterThan(2);
 });
 
 test("highlights only the first completed day on Day 2 of a 1-of-7 climb", async ({ page }) => {
