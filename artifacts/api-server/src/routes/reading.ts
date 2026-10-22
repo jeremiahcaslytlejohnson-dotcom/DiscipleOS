@@ -485,75 +485,76 @@ router.post("/reading/complete", async (req, res) => {
     }
 
     const value = Boolean(completed);
-    const [ownedPlan] = await db
-      .select({ data: readingPlansTable.data })
-      .from(readingPlansTable)
-      .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)))
-      .limit(1);
-    if (!ownedPlan) {
-      res.json({ success: true });
-      return;
-    }
-    const planData =
-      ownedPlan.data &&
-      typeof ownedPlan.data === "object" &&
-      !Array.isArray(ownedPlan.data)
-        ? (ownedPlan.data as Record<string, any>)
-        : {};
+    await db.transaction(async (tx) => {
+      const [ownedPlan] = await tx
+        .select({ data: readingPlansTable.data })
+        .from(readingPlansTable)
+        .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)))
+        .for("update")
+        .limit(1);
+      if (!ownedPlan) return;
 
-    let normalizedEarnedDay =
-      typeof earnedDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(earnedDay)
-        ? earnedDay
-        : null;
-    if (normalizedEarnedDay) {
-      const belongsToEarnedDay = Array.isArray(planData.assignments) && planData.assignments.some(
-        (assignment: { date?: string; readings?: Array<{ key?: string }> }) =>
-          assignment.date === normalizedEarnedDay &&
-          assignment.readings?.some((reading: { key?: string }) => reading.key === key),
-      );
-      if (!belongsToEarnedDay) normalizedEarnedDay = null;
-    }
-    const normalizedCompletionDate =
-      typeof completionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(completionDate)
-        ? completionDate
-        : value && normalizedEarnedDay
-          ? new Date().toISOString().slice(0, 10)
+      const planData =
+        ownedPlan.data &&
+        typeof ownedPlan.data === "object" &&
+        !Array.isArray(ownedPlan.data)
+          ? (ownedPlan.data as Record<string, any>)
+          : {};
+
+      let normalizedEarnedDay =
+        typeof earnedDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(earnedDay)
+          ? earnedDay
           : null;
-
-    const completedMap =
-      planData.completed &&
-      typeof planData.completed === "object" &&
-      !Array.isArray(planData.completed)
-        ? planData.completed
-        : {};
-    const nextPlanData: Record<string, any> = {
-      ...planData,
-      completed: { ...completedMap, [key]: value },
-    };
-    if (normalizedEarnedDay) {
-      if (value && normalizedCompletionDate) {
-        const earnedDayKeys = Array.isArray(planData.earnedDayKeys)
-          ? planData.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
-          : [];
-        const dayCompletionDates =
-          planData.dayCompletionDates &&
-          typeof planData.dayCompletionDates === "object" &&
-          !Array.isArray(planData.dayCompletionDates)
-            ? planData.dayCompletionDates
-            : {};
-        nextPlanData.earnedDayKeys = [
-          ...new Set([...earnedDayKeys, normalizedEarnedDay]),
-        ];
-        nextPlanData.dayCompletionDates = {
-          ...dayCompletionDates,
-          [normalizedEarnedDay]: normalizedCompletionDate,
-        };
+      if (normalizedEarnedDay) {
+        const belongsToEarnedDay = Array.isArray(planData.assignments) && planData.assignments.some(
+          (assignment: { date?: string; readings?: Array<{ key?: string }> }) =>
+            assignment.date === normalizedEarnedDay &&
+            assignment.readings?.some((reading: { key?: string }) => reading.key === key),
+        );
+        if (!belongsToEarnedDay) normalizedEarnedDay = null;
       }
-    }
-    await db
-      .update(readingPlansTable)
-      .set({ data: nextPlanData, updatedAt: new Date() })
-      .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)));
+      const normalizedCompletionDate =
+        typeof completionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(completionDate)
+          ? completionDate
+          : value && normalizedEarnedDay
+            ? new Date().toISOString().slice(0, 10)
+            : null;
+
+      const completedMap =
+        planData.completed &&
+        typeof planData.completed === "object" &&
+        !Array.isArray(planData.completed)
+          ? planData.completed
+          : {};
+      const nextPlanData: Record<string, any> = {
+        ...planData,
+        completed: { ...completedMap, [key]: value },
+      };
+      if (normalizedEarnedDay) {
+        if (value && normalizedCompletionDate) {
+          const earnedDayKeys = Array.isArray(planData.earnedDayKeys)
+            ? planData.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
+            : [];
+          const dayCompletionDates =
+            planData.dayCompletionDates &&
+            typeof planData.dayCompletionDates === "object" &&
+            !Array.isArray(planData.dayCompletionDates)
+              ? planData.dayCompletionDates
+              : {};
+          nextPlanData.earnedDayKeys = [
+            ...new Set([...earnedDayKeys, normalizedEarnedDay]),
+          ];
+          nextPlanData.dayCompletionDates = {
+            ...dayCompletionDates,
+            [normalizedEarnedDay]: normalizedCompletionDate,
+          };
+        }
+      }
+      await tx
+        .update(readingPlansTable)
+        .set({ data: nextPlanData, updatedAt: new Date() })
+        .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)));
+    });
 
     res.json({ success: true });
   } catch (err: any) {
@@ -572,66 +573,73 @@ router.post("/reading/day-complete", async (req, res) => {
       return;
     }
 
-    const [ownedPlan] = await db
-      .select({ data: readingPlansTable.data })
-      .from(readingPlansTable)
-      .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)))
-      .limit(1);
-    const planData = ownedPlan?.data as {
-      assignments?: Array<{ date?: string; readings?: Array<{ key?: string }> }>;
-    } | undefined;
-    const assignment = planData?.assignments?.find((item) => item.date === date);
-    const keys = assignment?.readings
-      ?.map((reading) => reading.key)
-      .filter((key): key is string => typeof key === "string" && key.length > 0) || [];
-    if (!ownedPlan || !assignment || keys.length === 0) {
+    const updated = await db.transaction(async (tx) => {
+      const [ownedPlan] = await tx
+        .select({ data: readingPlansTable.data })
+        .from(readingPlansTable)
+        .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)))
+        .for("update")
+        .limit(1);
+      if (!ownedPlan) return false;
+
+      const planData = ownedPlan.data as {
+        assignments?: Array<{ date?: string; readings?: Array<{ key?: string }> }>;
+      } | undefined;
+      const assignment = planData?.assignments?.find((item) => item.date === date);
+      const keys = assignment?.readings
+        ?.map((reading) => reading.key)
+        .filter((key): key is string => typeof key === "string" && key.length > 0) || [];
+      if (!assignment || keys.length === 0) return false;
+
+      const value = Boolean(completed);
+      const normalizedCompletionDate =
+        typeof completionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(completionDate)
+          ? completionDate
+          : new Date().toISOString().slice(0, 10);
+      const storedData =
+        ownedPlan.data &&
+        typeof ownedPlan.data === "object" &&
+        !Array.isArray(ownedPlan.data)
+          ? (ownedPlan.data as Record<string, any>)
+          : {};
+      const completedMap =
+        storedData.completed &&
+        typeof storedData.completed === "object" &&
+        !Array.isArray(storedData.completed)
+          ? storedData.completed
+          : {};
+      const nextPlanData: Record<string, any> = {
+        ...storedData,
+        completed: Object.fromEntries(keys.map((key) => [key, value])),
+      };
+      nextPlanData.completed = { ...completedMap, ...nextPlanData.completed };
+      if (value) {
+        const earnedDayKeys = Array.isArray(storedData.earnedDayKeys)
+          ? storedData.earnedDayKeys.filter((day: unknown): day is string => typeof day === "string")
+          : [];
+        const dayCompletionDates =
+          storedData.dayCompletionDates &&
+          typeof storedData.dayCompletionDates === "object" &&
+          !Array.isArray(storedData.dayCompletionDates)
+            ? storedData.dayCompletionDates
+            : {};
+        nextPlanData.earnedDayKeys = [...new Set([...earnedDayKeys, date])];
+        nextPlanData.dayCompletionDates = {
+          ...dayCompletionDates,
+          [date]: normalizedCompletionDate,
+        };
+      }
+
+      await tx
+        .update(readingPlansTable)
+        .set({ data: nextPlanData, updatedAt: new Date() })
+        .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)));
+      return true;
+    });
+    if (!updated) {
       res.status(404).json({ success: false, error: "Reading day not found" });
       return;
     }
-
-    const value = Boolean(completed);
-    const normalizedCompletionDate =
-      typeof completionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(completionDate)
-        ? completionDate
-        : new Date().toISOString().slice(0, 10);
-    const storedData =
-      ownedPlan.data &&
-      typeof ownedPlan.data === "object" &&
-      !Array.isArray(ownedPlan.data)
-        ? (ownedPlan.data as Record<string, any>)
-        : {};
-    const completedMap =
-      storedData.completed &&
-      typeof storedData.completed === "object" &&
-      !Array.isArray(storedData.completed)
-        ? storedData.completed
-        : {};
-    const nextPlanData: Record<string, any> = {
-      ...storedData,
-      completed: Object.fromEntries(keys.map((key) => [key, value])),
-    };
-    nextPlanData.completed = { ...completedMap, ...nextPlanData.completed };
-    if (value) {
-      const earnedDayKeys = Array.isArray(storedData.earnedDayKeys)
-        ? storedData.earnedDayKeys.filter((day: unknown): day is string => typeof day === "string")
-        : [];
-      const dayCompletionDates =
-        storedData.dayCompletionDates &&
-        typeof storedData.dayCompletionDates === "object" &&
-        !Array.isArray(storedData.dayCompletionDates)
-          ? storedData.dayCompletionDates
-          : {};
-      nextPlanData.earnedDayKeys = [...new Set([...earnedDayKeys, date])];
-      nextPlanData.dayCompletionDates = {
-        ...dayCompletionDates,
-        [date]: normalizedCompletionDate,
-      };
-    }
-
-    await db
-      .update(readingPlansTable)
-      .set({ data: nextPlanData, updatedAt: new Date() })
-      .where(and(eq(readingPlansTable.id, planId), eq(readingPlansTable.userId, userId)));
     res.json({ success: true });
   } catch (err: any) {
     req.log.error({ err }, "POST /reading/day-complete failed");
