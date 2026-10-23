@@ -546,7 +546,12 @@ router.post("/reading/complete", async (req, res) => {
           ];
           nextPlanData.dayCompletionDates = {
             ...dayCompletionDates,
-            [normalizedEarnedDay]: normalizedCompletionDate,
+            [normalizedEarnedDay]: Object.prototype.hasOwnProperty.call(
+              dayCompletionDates,
+              normalizedEarnedDay,
+            )
+              ? dayCompletionDates[normalizedEarnedDay]
+              : normalizedCompletionDate,
           };
         }
       }
@@ -626,7 +631,9 @@ router.post("/reading/day-complete", async (req, res) => {
         nextPlanData.earnedDayKeys = [...new Set([...earnedDayKeys, date])];
         nextPlanData.dayCompletionDates = {
           ...dayCompletionDates,
-          [date]: normalizedCompletionDate,
+          [date]: Object.prototype.hasOwnProperty.call(dayCompletionDates, date)
+            ? dayCompletionDates[date]
+            : normalizedCompletionDate,
         };
       }
 

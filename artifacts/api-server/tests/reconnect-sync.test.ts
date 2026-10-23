@@ -254,6 +254,85 @@ describe("3 — reconnect with matching state does not duplicate records", () =>
     expect(plan?.earnedDayKeys).toEqual(["2026-09-01"]);
   });
 
+  it("preserves the original completion date on chapter retries and re-completions", async () => {
+    const planId = uid();
+    await request(app)
+      .post("/api/reading/plans")
+      .set("Cookie", cookie)
+      .send({
+        id: planId,
+        name: "Chapter Completion Timing Plan",
+        selectedBooks: [],
+        assignments: [{ date: "2026-09-04", readings: [{ key: "d4-0" }] }],
+        completed: {},
+      });
+
+    const complete = (completionDate: string) =>
+      request(app)
+        .post("/api/reading/complete")
+        .set("Cookie", cookie)
+        .send({
+          planId,
+          key: "d4-0",
+          completed: true,
+          earnedDay: "2026-09-04",
+          completionDate,
+        });
+
+    expect((await complete("2026-09-04")).body).toEqual({ success: true });
+    expect((await complete("2026-09-05")).body).toEqual({ success: true });
+    await request(app).post("/api/reading/complete").set("Cookie", cookie).send({
+      planId,
+      key: "d4-0",
+      completed: false,
+    });
+    expect((await complete("2026-09-06")).body).toEqual({ success: true });
+
+    const plans = await request(app).get("/api/reading/plans").set("Cookie", cookie);
+    const savedPlan = plans.body.plans.find((plan: any) => plan.id === planId);
+    expect(savedPlan?.completed?.["d4-0"]).toBe(true);
+    expect(savedPlan?.dayCompletionDates).toEqual({ "2026-09-04": "2026-09-04" });
+  });
+
+  it("preserves the original completion date on day retries and re-completions", async () => {
+    const planId = uid();
+    await request(app)
+      .post("/api/reading/plans")
+      .set("Cookie", cookie)
+      .send({
+        id: planId,
+        name: "Day Completion Timing Plan",
+        selectedBooks: [],
+        assignments: [{ date: "2026-09-07", readings: [{ key: "d7-0" }, { key: "d7-1" }] }],
+        completed: {},
+      });
+
+    const complete = (completionDate: string) =>
+      request(app)
+        .post("/api/reading/day-complete")
+        .set("Cookie", cookie)
+        .send({
+          planId,
+          date: "2026-09-07",
+          completed: true,
+          completionDate,
+        });
+
+    expect((await complete("2026-09-07")).body).toEqual({ success: true });
+    expect((await complete("2026-09-08")).body).toEqual({ success: true });
+    await request(app).post("/api/reading/day-complete").set("Cookie", cookie).send({
+      planId,
+      date: "2026-09-07",
+      completed: false,
+    });
+    expect((await complete("2026-09-09")).body).toEqual({ success: true });
+
+    const plans = await request(app).get("/api/reading/plans").set("Cookie", cookie);
+    const savedPlan = plans.body.plans.find((plan: any) => plan.id === planId);
+    expect(savedPlan?.completed).toMatchObject({ "d7-0": true, "d7-1": true });
+    expect(savedPlan?.dayCompletionDates).toEqual({ "2026-09-07": "2026-09-07" });
+  });
+
   it("does not let a full plan replay erase late completion history", async () => {
     const planId = uid();
     const plan = {
