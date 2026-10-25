@@ -5,6 +5,10 @@ import {
   eventsTable,
   readingPlansTable,
 } from "@workspace/db";
+import {
+  DEFAULT_PLAN_TIME_ZONE,
+  getPlanDateInTimeZone,
+} from "@workspace/structured-plan-lifecycle";
 import type { RhythmAccessTier } from "../auth/capabilities";
 
 export const RHYTHM_COPY =
@@ -63,6 +67,7 @@ export type RhythmPlan = {
   journeyDays?: number;
   durationDays?: number;
   totalDays?: number;
+  timeZone?: string;
   updatedAt?: Date | string | null;
 };
 
@@ -143,18 +148,35 @@ function getDateWindow(today: string) {
 }
 
 export function getLocalDate(timeZone: string, now = new Date()): string {
+  return getPlanDateInTimeZone(timeZone, now);
+}
+
+function isValidTimeZone(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(now);
-    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    return `${values.year}-${values.month}-${values.day}`;
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
   } catch {
-    return now.toISOString().slice(0, 10);
+    return false;
   }
+}
+
+/**
+ * Scheduled climb dates belong to the plan's calendar, not the device making
+ * the request. Legacy/invalid plan zones use the shared lifecycle default.
+ */
+export function resolveRhythmTimeZone(
+  plan: RhythmPlan | null | undefined,
+  fallbackTimeZone = DEFAULT_PLAN_TIME_ZONE,
+) {
+  if (plan) {
+    return isValidTimeZone(plan.timeZone)
+      ? plan.timeZone
+      : DEFAULT_PLAN_TIME_ZONE;
+  }
+  return isValidTimeZone(fallbackTimeZone)
+    ? fallbackTimeZone
+    : DEFAULT_PLAN_TIME_ZONE;
 }
 
 function normalizeWeekdays(value: unknown) {
@@ -702,13 +724,23 @@ export async function loadMountainRhythm(
   accessTier: RhythmAccessTier,
   selectedPlanId?: string | null,
 ): Promise<MountainRhythmResult> {
-  const today = getLocalDate(timeZone);
+  const planRows = await db
+    .select()
+    .from(readingPlansTable)
+    .where(eq(readingPlansTable.userId, userId));
+  const selectedPlanRow = selectedPlanId
+    ? planRows.find((row) => row.id === selectedPlanId)
+    : undefined;
+  const selectedPlan = selectedPlanRow
+    ? {
+        ...(selectedPlanRow.data as RhythmPlan),
+        id: selectedPlanRow.id,
+      }
+    : undefined;
+  const planTimeZone = resolveRhythmTimeZone(selectedPlan, timeZone);
+  const today = getLocalDate(planTimeZone);
   const window = getDateWindow(today);
-  const [planRows, eventRows, completionRows] = await Promise.all([
-    db
-      .select()
-      .from(readingPlansTable)
-      .where(eq(readingPlansTable.userId, userId)),
+  const [eventRows, completionRows] = await Promise.all([
     db
       .select({ id: eventsTable.id })
       .from(eventsTable)

@@ -83,6 +83,12 @@ Active, completed, and expired structured-plan lifecycle must use one shared cli
 
 **How to apply:** Use the shared lifecycle helper when selecting active climbs, enforcing the one-active-climb API boundary, and claiming anonymous plans. Keep ordinary plans outside this lifecycle and never delete or overwrite a prior plan when starting a new climb.
 
+Mountain Rhythm's plan-day date is determined by the selected climb's saved IANA time zone on both client and server. Legacy, missing, or invalid zones use the shared America/New_York default; a device zone is only a fallback when no saved climb is selected.
+
+**Why:** Travel and devices in different zones must not move the same scheduled climb day or its consistency boundary.
+
+**How to apply:** Derive the displayed/scored date and completion-history date from the selected plan zone. Score API callers should send the selected structured-plan ID, and the server should prefer that stored plan zone over the request's device zone. Keep journey, Today, and consistency formulas unchanged.
+
 Expired climbs should stay in the existing history view rather than reappearing as a separate past-climb section in Plans; the user clarified, “once there done, there done.”
 
 **Why:** The Plans panel should focus on the active climb, while completed or expired instances remain historical.

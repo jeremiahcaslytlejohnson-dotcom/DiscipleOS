@@ -1,6 +1,8 @@
 import { addDaysISO, getLocalWeekday } from "./local-date";
 import {
+  DEFAULT_PLAN_TIME_ZONE,
   findActiveStructuredPlan,
+  getPlanDateInTimeZone,
   getStructuredPlanKind,
   isActiveStructuredPlan,
   isStructuredPlan,
@@ -11,6 +13,18 @@ export const RHYTHM_COPY =
 export const EMPTY_RHYTHM_COPY =
   "Choose the 7-Day Climb to begin.";
 export const RECENT_RHYTHM_DAYS = 7;
+
+/**
+ * A climb's saved calendar stays authoritative across devices and travel.
+ * Legacy plans without a valid zone use the lifecycle package's shared default.
+ */
+export function getPlanDayDate(plan: any, now = new Date()) {
+  const timeZone =
+    typeof plan?.timeZone === "string"
+      ? plan.timeZone
+      : DEFAULT_PLAN_TIME_ZONE;
+  return getPlanDateInTimeZone(timeZone, now);
+}
 
 export const RHYTHM_LEVELS = [
   { min: 0, max: 24, name: "Basecamp" },

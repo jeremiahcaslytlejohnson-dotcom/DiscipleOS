@@ -2744,13 +2744,17 @@ export default function DiscipleOSApp() {
       // Step 2: re-hydrate with the defensive hydration rule (only reached when
       // the queue is empty — i.e. server has received every local change)
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const scorePlanId = resolveStructuredClimbPlanId(
+        localDataRef.current.plans,
+        localDataRef.current.selectedPlanId,
+      );
       const [eventsRes, plansRes, rhythmRes] = await Promise.all([
         fetch("/api/events", { cache: "no-store" }),
         fetch("/api/reading/plans", { cache: "no-store" }),
         fetch(
           `/api/rhythm/score?timeZone=${encodeURIComponent(timeZone)}${
-            localDataRef.current.selectedPlanId
-              ? `&planId=${encodeURIComponent(localDataRef.current.selectedPlanId)}`
+            scorePlanId
+              ? `&planId=${encodeURIComponent(scorePlanId)}`
               : ""
           }`,
           { cache: "no-store" },

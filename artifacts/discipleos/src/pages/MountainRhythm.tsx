@@ -57,6 +57,7 @@ import {
   calculateMountainRhythm,
   findActiveStructuredClimb,
   getCompletedStructuredClimb,
+  getPlanDayDate,
   getStructuredClimbType,
   mergeLocalCompletionHistory,
   isStructuredClimbComplete,
@@ -205,7 +206,7 @@ export default function MountainRhythm() {
   const [pendingReplacement, setPendingReplacement] = useState<any>(null);
   const [isReplacingClimb, setIsReplacingClimb] = useState(false);
   const [replacementError, setReplacementError] = useState("");
-  const [today, setToday] = useState(() => todayISO());
+  const [now, setNow] = useState(() => new Date());
   const [pendingCancelClimbPlanId, setPendingCancelClimbPlanId] = useState<
     string | null
   >(null);
@@ -214,14 +215,14 @@ export default function MountainRhythm() {
   >({});
 
   useEffect(() => {
-    const refreshToday = () => setToday(todayISO());
-    const interval = window.setInterval(refreshToday, 60_000);
-    window.addEventListener("focus", refreshToday);
-    document.addEventListener("visibilitychange", refreshToday);
+    const refreshNow = () => setNow(new Date());
+    const interval = window.setInterval(refreshNow, 60_000);
+    window.addEventListener("focus", refreshNow);
+    document.addEventListener("visibilitychange", refreshNow);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", refreshToday);
-      document.removeEventListener("visibilitychange", refreshToday);
+      window.removeEventListener("focus", refreshNow);
+      document.removeEventListener("visibilitychange", refreshNow);
     };
   }, []);
 
@@ -229,10 +230,10 @@ export default function MountainRhythm() {
     () => plans.filter((plan) => isStructuredClimbPlan(plan)),
     [plans],
   );
-  const activeClimb = useMemo(() => findActiveStructuredClimb(plans), [plans]);
+  const activeClimb = useMemo(() => findActiveStructuredClimb(plans), [plans, now]);
   const selectedClimbPlanId = useMemo(
     () => resolveStructuredClimbPlanId(plans, selectedPlanId),
-    [plans, selectedPlanId],
+    [plans, selectedPlanId, now],
   );
   const selectedPlan = useMemo(
     () => {
@@ -243,6 +244,7 @@ export default function MountainRhythm() {
     },
     [structuredPlans, selectedClimbPlanId],
   );
+  const today = getPlanDayDate(selectedPlan, now);
   const score = useMemo(
     () => calculateMountainRhythm({
       today,
@@ -356,10 +358,18 @@ export default function MountainRhythm() {
         // local operation is still waiting to sync.
         if (unresolvedPendingOps.length > 0) return;
 
+        const scorePlanId = resolveStructuredClimbPlanId(
+          initial.plans,
+          initial.selectedPlanId,
+        );
         const [plansResponse, eventsResponse, rhythmResponse, settingsResponse] = await Promise.all([
           fetch("/api/reading/plans", { cache: "no-store" }),
           fetch("/api/events", { cache: "no-store" }),
-          fetch(`/api/rhythm/score?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`, {
+          fetch(`/api/rhythm/score?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}${
+            scorePlanId
+              ? `&planId=${encodeURIComponent(scorePlanId)}`
+              : ""
+          }`, {
             cache: "no-store",
           }),
           isSignedIn
@@ -733,7 +743,7 @@ export default function MountainRhythm() {
       const assignment = plan.assignments.find((day: any) => day.readings.some((reading: any) => reading.key === key));
       if (assignment && nextValue && assignment.readings.every((reading: any) => reading.key === key || completed[reading.key])) {
         earnedDay = assignment.date;
-        completionDate = todayISO();
+        completionDate = getPlanDayDate(plan);
       }
       const earnedDayKeys = new Set(plan.earnedDayKeys || []);
       if (earnedDay) earnedDayKeys.add(earnedDay);
@@ -772,7 +782,7 @@ export default function MountainRhythm() {
     const currentCompleted = plan.completed || {};
     const allDone = assignment.readings.every((reading: any) => Boolean(currentCompleted[reading.key]));
     const nextValue = !allDone;
-    const completionDate = todayISO();
+    const completionDate = getPlanDayDate(plan);
     setPlans((current) => current.map((plan) => {
       if (plan.id !== planId) return plan;
       const completed = { ...(plan.completed || {}) };

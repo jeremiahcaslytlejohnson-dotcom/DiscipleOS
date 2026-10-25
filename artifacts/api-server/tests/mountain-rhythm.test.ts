@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   calculateMountainRhythm,
   getLocalDate,
+  resolveRhythmTimeZone,
 } from "../src/services/mountainRhythm";
 import {
   calculateMountainRhythm as calculateLocalMountainRhythm,
   findActiveStructuredClimb,
+  getPlanDayDate,
   isStructuredClimbComplete,
   MOUNTAIN_RHYTHM_ROUTES,
 } from "../../discipleos/src/lib/mountain-rhythm";
@@ -160,6 +162,39 @@ describe("Mountain Rhythm journey calculation", () => {
     expect(
       getLocalDate("America/New_York", new Date("2026-08-30T04:31:00.000Z")),
     ).toBe("2026-08-30");
+  });
+
+  it("keeps a selected climb on its saved plan-day calendar across device zones and rollover", () => {
+    const plan = {
+      ...journey("timezone-climb", 7),
+      timeZone: "America/New_York",
+    };
+    const beforeRollover = new Date("2026-08-30T03:59:00.000Z");
+    const afterRollover = new Date("2026-08-30T04:01:00.000Z");
+
+    for (const deviceTimeZone of ["Asia/Tokyo", "Pacific/Honolulu"]) {
+      const planTimeZone = resolveRhythmTimeZone(plan, deviceTimeZone);
+      expect(planTimeZone).toBe("America/New_York");
+      expect(getLocalDate(planTimeZone, beforeRollover)).toBe("2026-08-29");
+      expect(getPlanDayDate(plan, beforeRollover)).toBe("2026-08-29");
+      expect(getLocalDate(planTimeZone, afterRollover)).toBe("2026-08-30");
+      expect(getPlanDayDate(plan, afterRollover)).toBe("2026-08-30");
+    }
+  });
+
+  it("uses the shared lifecycle time-zone default for legacy and invalid-zone plans", () => {
+    const legacyPlan = journey("legacy-timezone-climb", 7);
+    const invalidZonePlan = { ...legacyPlan, timeZone: "Not/A_Time_Zone" };
+    const now = new Date("2026-08-30T03:00:00.000Z");
+
+    expect(resolveRhythmTimeZone(legacyPlan, "Asia/Tokyo")).toBe(
+      "America/New_York",
+    );
+    expect(resolveRhythmTimeZone(invalidZonePlan, "Asia/Tokyo")).toBe(
+      "America/New_York",
+    );
+    expect(getPlanDayDate(legacyPlan, now)).toBe("2026-08-29");
+    expect(getPlanDayDate(invalidZonePlan, now)).toBe("2026-08-29");
   });
 
   it("shows no elevation and ignores activities until a structured climb is selected", () => {
