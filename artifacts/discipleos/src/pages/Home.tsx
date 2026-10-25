@@ -1505,6 +1505,27 @@ async function saveEventToServer(event: any): Promise<void> {
   }
 }
 
+type EventSavedFeedback = {
+  id: string;
+  title: string;
+  type: string;
+  date: string;
+  mode: "added" | "updated";
+};
+
+function normalizeEventSavedFeedback(
+  event: { id?: unknown; title?: unknown; type?: unknown; date?: unknown },
+  mode: EventSavedFeedback["mode"],
+): EventSavedFeedback {
+  return {
+    id: typeof event.id === "string" ? event.id : "",
+    title: typeof event.title === "string" ? event.title : "Activity",
+    type: typeof event.type === "string" ? event.type : "event",
+    date: typeof event.date === "string" ? event.date : "",
+    mode,
+  };
+}
+
 function AccountControls() {
   const { isSignedIn, signOut } = useAuth();
   const { user } = useAccount();
@@ -1753,7 +1774,7 @@ export default function DiscipleOSApp() {
   const [eventTypeChosen, setEventTypeChosen] = useState(false);
   const [isEventMoreOptionsOpen, setIsEventMoreOptionsOpen] = useState(false);
   const [eventTitleError, setEventTitleError] = useState("");
-  const [eventSavedFeedback, setEventSavedFeedback] = useState(null);
+  const [eventSavedFeedback, setEventSavedFeedback] = useState<EventSavedFeedback | null>(null);
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -3524,7 +3545,7 @@ export default function DiscipleOSApp() {
             queuePendingOp({ type: "upsert-event", payload: updatedEvent, ts: Date.now() });
           });
         }
-        setEventSavedFeedback("Schedule updated. Completed occurrences are kept.");
+        setEventSavedFeedback(normalizeEventSavedFeedback(updatedEvent, "updated"));
         resetEventForm();
         return;
       }
@@ -3558,13 +3579,7 @@ export default function DiscipleOSApp() {
         });
       }
       showEventDate(updatedEvent.date);
-      setEventSavedFeedback({
-        id: updatedEvent.id,
-        title: updatedEvent.title,
-        type: updatedEvent.type,
-        date: updatedEvent.date,
-        mode: "updated",
-      });
+      setEventSavedFeedback(normalizeEventSavedFeedback(updatedEvent, "updated"));
       resetEventForm(updatedEvent.date);
       return;
     }
@@ -3592,13 +3607,7 @@ export default function DiscipleOSApp() {
       });
     }
     showEventDate(newEvent.date);
-    setEventSavedFeedback({
-      id: newEvent.id,
-      title: newEvent.title,
-      type: newEvent.type,
-      date: newEvent.date,
-      mode: "added",
-    });
+    setEventSavedFeedback(normalizeEventSavedFeedback(newEvent, "added"));
     resetEventForm(newEvent.date);
     setIsEventFormOpen(false);
   };
@@ -6222,7 +6231,8 @@ export default function DiscipleOSApp() {
                                {eventSavedFeedback.mode === "added" ? "Activity added" : "Activity updated"}
                              </div>
                              <div className="mt-1 truncate text-sm text-emerald-100/75">
-                               {eventSavedFeedback.title} · {formatDate(eventSavedFeedback.date)}
+                              {eventSavedFeedback.title}
+                              {eventSavedFeedback.date ? ` · ${formatDate(eventSavedFeedback.date)}` : ""}
                              </div>
                            </div>
                          </div>

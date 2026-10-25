@@ -1953,7 +1953,7 @@ test("lets custom events be completed and reopened", async ({ page }) => {
   await expect(activities.getByRole("button", { name: "Complete activity" })).toBeVisible();
 });
 
-test("edits and deletes a recurring Calendar activity", async ({ page }) => {
+test("edits and reopens a recurring prayer without losing its identity or completion history", async ({ page }) => {
   const today = todayISO();
   const todayWeekday = new Date(`${today}T12:00:00`).getDay();
   const expectedRepeatWeekdays = [0, 1, 2, 3, 4, 5, 6].filter(
@@ -1972,6 +1972,7 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
     time: "06:30",
     notes: "A recurring prayer",
     remind: false,
+    countsTowardRhythm: true,
     repeat: "daily",
     repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
     repeatUntil: addDays(1),
@@ -1980,6 +1981,13 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
 
   await stubHomeApi(page, plan, [event]);
   await seedPlans(page, [plan], [event]);
+  await page.addInitScript((completionKey) => {
+    const saved = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    saved.eventCompletions = { ...(saved.eventCompletions || {}), [completionKey]: true };
+    localStorage.setItem("discipleos-data", JSON.stringify(saved));
+  }, `${event.id}:${today}`);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/");
 
   const navigation = await openDashboardNavigation(page);
@@ -1987,6 +1995,8 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
   const activities = page.getByTestId("dashboard-calendar-activities");
   const initialRow = activities.locator(".discipleos-flat-row").filter({ hasText: event.title }).first();
   await expect(initialRow).toBeVisible();
+  await initialRow.getByRole("button", { name: "Complete activity" }).click();
+  await expect(initialRow.getByRole("button", { name: "Reopen activity" })).toBeVisible();
 
   await initialRow.getByRole("button", { name: `Edit ${event.title}`, exact: true }).click();
   const editForm = page.getByTestId("calendar-event-form");
@@ -2010,20 +2020,50 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
     (request) =>
       new URL(request.url()).pathname.endsWith("/api/events") &&
       request.method() === "POST" &&
-      request.postDataJSON()?.replacesEventId === event.id,
+      request.postDataJSON()?.id === event.id,
   );
   await editForm.getByRole("button", { name: "Save Activity", exact: true }).click();
   const updatedEventRequest = await updateRequest;
-  expect(updatedEventRequest.postDataJSON()).toMatchObject({
+  const updatedPayload = updatedEventRequest.postDataJSON();
+  expect(updatedPayload).toMatchObject({
+    id: event.id,
     title: updatedTitle,
+    type: "prayer",
     repeat: "weekly",
     repeatUntil: updatedRepeatUntil,
     repeatWeekdays: expectedRepeatWeekdays,
-    replacesEventId: event.id,
+    countsTowardRhythm: true,
   });
+  expect(updatedPayload).not.toHaveProperty("replacesEventId");
   await expect(page.getByTestId("calendar-activity-feedback")).toContainText("Activity updated");
   const updatedRow = activities.locator(".discipleos-flat-row").filter({ hasText: updatedTitle }).first();
   await expect(updatedRow).toBeVisible();
+  await expect(updatedRow.getByRole("button", { name: "Reopen activity" })).toBeVisible();
+
+  const nextOccurrence = Array.from({ length: 7 }, (_, index) => addDays(index + 1))
+    .find((date) => expectedRepeatWeekdays.includes(new Date(`${date}T12:00:00`).getDay()));
+  const skippedDate = Array.from({ length: 7 }, (_, index) => addDays(index + 1))
+    .find((date) => !expectedRepeatWeekdays.includes(new Date(`${date}T12:00:00`).getDay()));
+  expect(nextOccurrence).toBeDefined();
+  expect(skippedDate).toBeDefined();
+
+  const month = page.getByTestId("dashboard-calendar-month");
+  const currentMonth = new Date(`${today}T12:00:00`);
+  const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+  const currentMonthLabel = currentMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const nextMonthLabel = nextMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  await month.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(month.getByText(nextMonthLabel, { exact: true })).toBeVisible();
+  await month.getByRole("button", { name: "Prev", exact: true }).click();
+  await expect(month.getByText(currentMonthLabel, { exact: true })).toBeVisible();
+
+  await page.getByTestId(`calendar-day-${nextOccurrence}`).click();
+  await expect(activities.getByText(updatedTitle, { exact: true })).toBeVisible();
+  await expect(page.getByTestId(`calendar-marker-${nextOccurrence}-P`)).toBeVisible();
+  await page.getByTestId(`calendar-day-${skippedDate}`).click();
+  await expect(activities.getByText(updatedTitle, { exact: true })).toHaveCount(0);
+  await page.getByTestId(`calendar-day-${today}`).click();
+  await expect(activities.getByText(updatedTitle, { exact: true })).toBeVisible();
 
   await updatedRow.getByRole("button", { name: `Edit ${updatedTitle}`, exact: true }).click();
   const reopenedEditForm = page.getByTestId("calendar-event-form");
@@ -2040,16 +2080,7 @@ test("edits and deletes a recurring Calendar activity", async ({ page }) => {
   );
   await reopenedEditForm.getByRole("button", { name: "Cancel edit", exact: true }).click();
 
-  const deleteRequest = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname.endsWith("/api/events") &&
-      request.method() === "DELETE" &&
-      request.postDataJSON()?.id !== undefined,
-  );
-  await updatedRow.getByRole("button", { name: `Delete ${updatedTitle}`, exact: true }).click();
-  const deletedEventRequest = await deleteRequest;
-  expect(deletedEventRequest.postDataJSON()).toMatchObject({ id: expect.any(String) });
-  await expect(activities.getByText(updatedTitle, { exact: true })).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test("shows distinct accessible activity markers across Calendar dates and layouts", async ({ page }) => {
