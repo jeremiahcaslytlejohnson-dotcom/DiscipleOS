@@ -159,9 +159,9 @@ router.post("/events", async (req, res) => {
         return { ok: false as const };
       }
 
-      // Calendar edits deliberately mint a new ID. Deleting the superseded,
-      // user-owned row in this transaction keeps the visible edit as one event
-      // while leaving its historical sent_reminders record tied to the old ID.
+      // Same-discipline prayer/fasting edits are updated in place and retain
+      // their completion history. Other edits replace the superseded,
+      // user-owned row transactionally while retaining its sent-reminder history.
       if (replacesEventId) {
         const [replacedOwned] = await tx
           .select({ id: eventsTable.id, type: eventsTable.type })

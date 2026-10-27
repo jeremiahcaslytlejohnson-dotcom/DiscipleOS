@@ -34,6 +34,7 @@ import webpush from "web-push";
 import { db } from "@workspace/db";
 import {
   deletedEventTombstonesTable,
+  eventCompletionsTable,
   eventsTable,
   pushSubscriptionsTable,
   sentRemindersTable,
@@ -92,6 +93,9 @@ const app = createApp(store);
 
 afterAll(async () => {
   // Remove all rows created by this test run (identified by the prefix)
+  await db
+    .delete(eventCompletionsTable)
+    .where(like(eventCompletionsTable.eventId, `${PREFIX}%`));
   await db.delete(eventsTable).where(like(eventsTable.id, `${PREFIX}%`));
   await db
     .delete(deletedEventTombstonesTable)
@@ -890,15 +894,17 @@ describe("6 — Duplicate reminder suppression", () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 6b. Editing an event mints a new reminder identity
+// 6b. Editing a sent reminder preserves event identity and reschedules delivery
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("6b — Edited event reminders use a fresh identity", () => {
+describe("6b — Edited reminder keeps its identity and reschedules delivery", () => {
   let ownerCookie = "";
   let ownerUserId = "";
   const originalEventId = uid("edited-original");
-  const editedEventId = uid("edited-replacement");
   const endpoint = `https://push-test.example/edited/${uid()}`;
+  const eventDate = todayUTC();
+  const originalDue = new Date(`${eventDate}T09:00:00.000Z`);
+  const editedDue = new Date(`${eventDate}T09:05:00.000Z`);
 
   beforeAll(async () => {
     const ownerRes = await request(app).get("/api/session/info");
@@ -910,14 +916,19 @@ describe("6b — Edited event reminders use a fresh identity", () => {
       userId: ownerUserId,
       title: "Original reminder",
       type: "prayer",
-      date: todayUTC(),
-      time: nowHHMM(),
+      date: eventDate,
+      time: "09:00",
       reminderMinutes: 0,
       remind: true,
       timeZone: "UTC",
       repeat: "none",
       repeatWeekdays: [],
       notes: "Original reminder content",
+    });
+    await db.insert(eventCompletionsTable).values({
+      eventId: originalEventId,
+      occurrenceDate: eventDate,
+      completed: true,
     });
 
     await request(app)
@@ -929,16 +940,17 @@ describe("6b — Edited event reminders use a fresh identity", () => {
   it("sends the original reminder once", async () => {
     vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
 
-    const res = await request(app)
-      .post("/api/reminders/send")
-      .set("x-cron-secret", CRON_SECRET);
-
-    expect(res.status).toBe(200);
+    const summary = await sendDueReminders({
+      invocationId: uid("edited-original"),
+      source: "scheduled",
+      now: originalDue,
+    });
     expect(
       vi.mocked(webpush.sendNotification).mock.calls.filter(
         (call) => (call[0] as any).endpoint === endpoint,
       ),
     ).toHaveLength(1);
+    expect(summary.sent).toBeGreaterThanOrEqual(1);
 
     const sentRows = await db
       .select()
@@ -947,17 +959,16 @@ describe("6b — Edited event reminders use a fresh identity", () => {
     expect(sentRows).toHaveLength(1);
   });
 
-  it("replaces the edited event with a new reminder identity", async () => {
+  it("edits the event in place and preserves its completion history", async () => {
     const res = await request(app)
       .post("/api/events")
       .set("Cookie", ownerCookie)
       .send({
-        id: editedEventId,
-        replacesEventId: originalEventId,
+        id: originalEventId,
         title: "Edited reminder",
         type: "prayer",
-        date: todayUTC(),
-        time: nowHHMM(),
+        date: eventDate,
+        time: "09:05",
         reminderMinutes: 0,
         remind: true,
         timeZone: "UTC",
@@ -968,63 +979,87 @@ describe("6b — Edited event reminders use a fresh identity", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.event).toMatchObject({
-      id: editedEventId,
+      id: originalEventId,
       title: "Edited reminder",
       notes: "Edited reminder content",
+      time: "09:05",
     });
 
-    const oldRows = await db
+    const eventRows = await db
       .select()
       .from(eventsTable)
       .where(eq(eventsTable.id, originalEventId));
-    const editedRows = await db
+    expect(eventRows).toHaveLength(1);
+    expect(eventRows[0]).toMatchObject({
+      id: originalEventId,
+      title: "Edited reminder",
+      time: "09:05",
+    });
+
+    const completionRows = await db
       .select()
-      .from(eventsTable)
-      .where(eq(eventsTable.id, editedEventId));
-    expect(oldRows).toHaveLength(0);
-    expect(editedRows).toHaveLength(1);
+      .from(eventCompletionsTable)
+      .where(eq(eventCompletionsTable.eventId, originalEventId));
+    expect(completionRows).toHaveLength(1);
+    expect(completionRows[0]).toMatchObject({
+      eventId: originalEventId,
+      occurrenceDate: eventDate,
+      completed: true,
+    });
+
+    const historicalMarkers = await db
+      .select()
+      .from(sentRemindersTable)
+      .where(eq(sentRemindersTable.eventId, originalEventId));
+    expect(historicalMarkers).toHaveLength(1);
   });
 
-  it("sends the edited reminder once despite the original sent record", async () => {
+  it("sends the edited reminder once despite the earlier schedule marker", async () => {
     vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
 
-    const res = await request(app)
-      .post("/api/reminders/send")
-      .set("x-cron-secret", CRON_SECRET);
-
-    expect(res.status).toBe(200);
+    const summary = await sendDueReminders({
+      invocationId: uid("edited-schedule"),
+      source: "scheduled",
+      now: editedDue,
+    });
     expect(
       vi.mocked(webpush.sendNotification).mock.calls.filter(
         (call) => (call[0] as any).endpoint === endpoint,
       ),
     ).toHaveLength(1);
+    expect(summary.sent).toBeGreaterThanOrEqual(1);
 
     const sentRows = await db
       .select()
       .from(sentRemindersTable)
-      .where(eq(sentRemindersTable.eventId, editedEventId));
-    expect(sentRows).toHaveLength(1);
+      .where(eq(sentRemindersTable.eventId, originalEventId));
+    expect(sentRows).toHaveLength(2);
+    expect(sentRows.map((row) => row.sentAt?.toISOString()).sort()).toEqual([
+      originalDue.toISOString(),
+      editedDue.toISOString(),
+    ]);
   });
 
-  it("does not duplicate the edited reminder on a subsequent cron pass", async () => {
+  it("does not duplicate the rescheduled reminder on a subsequent cron pass", async () => {
     vi.mocked(webpush.sendNotification).mockResolvedValue({} as any);
 
-    const res = await request(app)
-      .post("/api/reminders/send")
-      .set("x-cron-secret", CRON_SECRET);
-
-    expect(res.status).toBe(200);
+    const summary = await sendDueReminders({
+      invocationId: uid("edited-repeat"),
+      source: "scheduled",
+      now: editedDue,
+    });
     expect(
       vi.mocked(webpush.sendNotification).mock.calls.filter(
         (call) => (call[0] as any).endpoint === endpoint,
       ),
     ).toHaveLength(0);
+    expect(summary.alreadySentSkips).toBeGreaterThanOrEqual(1);
 
     const sentRows = await db
       .select()
       .from(sentRemindersTable)
-      .where(eq(sentRemindersTable.eventId, editedEventId));
-    expect(sentRows).toHaveLength(1);
+      .where(eq(sentRemindersTable.eventId, originalEventId));
+    expect(sentRows).toHaveLength(2);
   });
 });
 

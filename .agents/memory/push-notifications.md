@@ -35,8 +35,9 @@ description: VAPID/web-push architecture, UI state rules, and test patterns for 
 - The available deployment tools and published Admin API cannot create or activate a Scheduled Deployment; the API exposes only read-only deployment endpoints, and run history is separate from Autoscale logs.
   **Why:** A code/config change or website publish alone does not prove the standalone worker is active.
   **How to apply:** Keep the single scheduled entry prepared; the owner must activate it in the signed-in Replit Publishing UI and verify a real worker completion in Monitoring before calling reminders operational.
-- `sent_reminders` deduplication is by event ID and calendar day, not scheduled-time/version. Calendar edits mint a new event ID and atomically replace the old event, so a same-day reschedule can send once as its own occurrence.
-  **Why:** The duplicate check intentionally prevents overlapping runs, while a replacement identity prevents a prior version’s sent record from suppressing the user’s edited schedule.
+- Keep same-discipline recurring-prayer edits on the same event ID and retain completion history. A sent marker suppresses only a schedule whose local due time is at or before that marker; retain older markers.
+  **Why:** Reminder rescheduling must not erase history or invalidate Calendar identity, but an earlier send must not suppress a later edited due time.
+  **How to apply:** Compare endpoint-specific markers with the current local due date/time inside the event/device lock; serialize delivery and event edits on the event ID.
 - Reminder delivery keeps the existing one-minute scheduler cadence and accepts only the due minute plus one minute of lateness; calculate due dates across local midnight for early next-day events.
   **Why:** The owner chose a one-minute maximum delay and asked that reminders crossing midnight not be lost.
   **How to apply:** Keep the retry cutoff at one minute, and consider both today’s and tomorrow’s event occurrence when finding reminders due on today’s local date. Never test this by sending a live/manual notification.
