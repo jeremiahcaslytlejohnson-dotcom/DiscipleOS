@@ -3173,7 +3173,9 @@ test("keeps the three summary cards readable across target widths", async ({ pag
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);
   await expect(page.getByTestId("mountain-rhythm-mountain")).toBeVisible();
-  await expect(page.getByTestId("mountain-rhythm-elevation-guides").locator("g")).toHaveCount(5);
+  await expect(
+    page.getByTestId("mountain-rhythm-elevation-guide-lines").locator("line"),
+  ).toHaveCount(5);
   await expect(page.getByTestId("mountain-rhythm-milestones")).toHaveCount(0);
   await expect(page.getByTestId("mountain-rhythm-status")).toContainText("Today’s next step");
   await expect(page.getByTestId("mountain-rhythm-elevation-label-50")).toHaveText("Gaining Elevation");

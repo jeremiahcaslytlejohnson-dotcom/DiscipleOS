@@ -279,7 +279,14 @@ async function stubMountainApi(page: Page) {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     const body = pathname.endsWith("/session/info")
-      ? { success: true, established: false }
+      ? {
+          success: true,
+          userId: "visual-polish-owner",
+          authenticated: false,
+          established: false,
+        }
+      : pathname.endsWith("/auth/me")
+        ? { authenticated: false, user: null }
       : pathname.endsWith("/reading/plans")
         ? { success: true, plans: [] }
         : pathname.endsWith("/events")
