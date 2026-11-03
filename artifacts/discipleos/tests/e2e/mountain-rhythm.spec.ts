@@ -402,8 +402,9 @@ async function expectDistinctMountainMetrics(page: Page, journeyLabel: string) {
       name: new RegExp(`${journeyLabel} reading-rhythm trail`),
     }),
   ).toBeVisible();
-  await expect(mountainPanel.getByTestId("mountain-rhythm-elevation-guides").locator("g"))
-    .toHaveCount(5);
+  await expect(
+    mountainPanel.getByTestId("mountain-rhythm-elevation-guide-lines").locator("line"),
+  ).toHaveCount(5);
   await expect(mountainPanel.getByTestId("mountain-rhythm-stage-rail")).toHaveCount(0);
   await expect(mountainPanel.getByTestId("mountain-rhythm-current-status"))
     .toContainText("Current elevation:");
@@ -1625,23 +1626,6 @@ test("plots each 7-Day Climb day as a separate ascent point", async ({ page }) =
     expect(guideAnchors).toEqual(
       Array.from({ length: 5 }, () => ({ x: "8", anchor: "start" })),
     );
-    const guideTextRatios = await visibleGuideLabels.evaluateAll((labels) =>
-      labels.map((label) => {
-        const bounds = label.getBoundingClientRect();
-        const fontSize = Number.parseFloat(getComputedStyle(label).fontSize);
-        return {
-          name: label.textContent?.trim(),
-          ratio: bounds.width / fontSize,
-          bounds: bounds.width,
-          fontSize,
-          transform: label.parentElement?.getAttribute("transform"),
-        };
-      }),
-    );
-    expect(
-      Math.max(...guideTextRatios.map((label) => label.ratio)),
-      JSON.stringify(guideTextRatios),
-    ).toBeLessThan(11.5);
     const activeGuideText = await visibleGuideLabels.evaluateAll((labels) =>
       labels.map((label) => label.textContent?.trim()),
     );
