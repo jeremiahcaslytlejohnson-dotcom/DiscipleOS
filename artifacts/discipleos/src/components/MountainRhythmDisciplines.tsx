@@ -95,6 +95,10 @@ export default function MountainRhythmDisciplines({
   onToggleCompletion: (eventId: string, date: string, completed: boolean) => void;
 }) {
   const persisted = trackingFor(plan, events, ownerId);
+  const [locallyAnsweredKey, setLocallyAnsweredKey] = useState<string | null>(null);
+  const setupAnswered =
+    persisted.setupAnswered ||
+    (!plan && locallyAnsweredKey === persisted.localKey);
   const [selected, setSelected] = useState({
     prayer: persisted.prayer.enabled, fasting: persisted.fasting.enabled,
   });
@@ -192,8 +196,12 @@ export default function MountainRhythmDisciplines({
       prayer: { enabled: next.prayer, eventIds: current.prayer.eventIds },
       fasting: { enabled: next.fasting, eventIds: current.fasting.eventIds },
     };
-    if (plan) onSavePlan({ ...plan, disciplineTracking: updated });
-    else window.localStorage.setItem(current.localKey, JSON.stringify(updated));
+    if (plan) {
+      onSavePlan({ ...plan, disciplineTracking: updated });
+    } else {
+      window.localStorage.setItem(current.localKey, JSON.stringify(updated));
+      setLocallyAnsweredKey(current.localKey);
+    }
   };
 
   const endCommitmentEarly = async (discipline: Discipline) => {
@@ -376,7 +384,7 @@ export default function MountainRhythmDisciplines({
 
   return (
     <section className="mt-5 min-w-0" data-testid="mountain-rhythm-disciplines">
-      {!persisted.setupAnswered && step === "choose" ? (
+      {!setupAnswered && step === "choose" ? (
         <div className="rounded-xl border border-[#D4A017]/35 bg-[#111820] p-4 sm:p-5" data-testid="mountain-rhythm-commitment-invitation">
           <h2 className="text-lg font-semibold leading-6 text-white sm:text-xl">Add Prayer or Fasting to Your Rhythm</h2>
           <p className="mt-2 text-sm leading-6 text-white/75">These optional commitments stay separate from Scripture completion and climb progress.</p>
@@ -399,7 +407,7 @@ export default function MountainRhythmDisciplines({
         </div>
       ) : null}
 
-      {persisted.setupAnswered && step === "choose" ? (
+      {setupAnswered && step === "choose" ? (
         <>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-white/65">Optional commitments</div>
           <p className="mt-1 text-sm text-white/55">Prayer and fasting never affect Scripture completion or climb progress.</p>

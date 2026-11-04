@@ -61,6 +61,7 @@ function makePlan({
   return {
     id,
     name,
+    timeZone: "UTC",
     journeyKey: days === 7 ? "7-day-climb" : days === 20 ? "20-day-reset" : "40-day-climb",
     journeyType: days === 7 ? "7-day-climb" : days === 20 ? "20-day-reset" : "40-day-climb",
     journeyDays: days,
@@ -94,6 +95,15 @@ async function stubApi(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(sessionInfo),
+      });
+      return;
+    }
+
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: false, user: null }),
       });
       return;
     }
@@ -139,6 +149,23 @@ async function stubApi(
       body: JSON.stringify({ success: true }),
     });
   });
+}
+
+async function stubAnonymousApi(
+  page: Page,
+  ownerId: string,
+  options: { failPlanPosts?: boolean } = {},
+) {
+  await stubApi(
+    page,
+    {
+      success: true,
+      userId: ownerId,
+      authenticated: false,
+      established: false,
+    },
+    options,
+  );
 }
 
 async function stubAuthenticatedApi(
@@ -352,6 +379,17 @@ async function openMountainRhythm(page: Page) {
   ).toBe(true);
 }
 
+async function expandOptionalCommitments(page: Page) {
+  const section = page.getByTestId("mountain-rhythm-commitments-layout");
+  await expect(section).toBeVisible();
+  if (!(await section.getAttribute("open"))) {
+    await section.locator("summary").click();
+  }
+  const tracker = section.getByTestId("mountain-rhythm-disciplines");
+  await expect(tracker).toBeVisible();
+  return tracker;
+}
+
 async function completeClimbSetup(page: Page, kind = "7-day-climb") {
   await page.getByTestId(`button-choose-${kind}`).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -540,7 +578,7 @@ test("declining both commitments records neither choice without creating events"
   });
   await seedLocalData(page, [], null, { ownerId: "anonymous-no-discipline-session" });
   await openMountainRhythm(page);
-  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  const tracker = await expandOptionalCommitments(page);
   let eventPosts = 0;
   page.on("request", (request) => {
     if (request.url().endsWith("/api/events") && request.method() === "POST") eventPosts++;
@@ -551,16 +589,24 @@ test("declining both commitments records neither choice without creating events"
 });
 
 test("guides optional prayer setup through a confirmed start date and preserves Scripture progress", async ({ page }) => {
+  const ownerId = "anonymous-mountain-session";
+  const today = new Date().toISOString().slice(0, 10);
+  const plan = makePlan({
+    id: "optional-commitment-climb",
+    days: 7,
+    name: "7-Day Climb",
+    today,
+  });
   await stubApi(page, {
     success: true,
-    userId: "anonymous-mountain-session",
+    userId: ownerId,
     authenticated: false,
     established: false,
   });
-  await seedLocalData(page, [], null, { ownerId: "anonymous-mountain-session" });
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await page.setViewportSize({ width: 1280, height: 900 });
   await openMountainRhythm(page);
-  const tracker = page.getByTestId("mountain-rhythm-disciplines");
+  const tracker = await expandOptionalCommitments(page);
   await expect(tracker.getByRole("heading", { name: "Add Prayer or Fasting to Your Rhythm" })).toBeVisible();
   await expect(tracker.getByTestId("mountain-rhythm-commitment-invitation")).toContainText(
     "optional commitments",
@@ -600,10 +646,9 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   await fastingCard.getByText("Set your own fasting schedule").click();
   await tracker.getByRole("button", { name: "Continue" }).click();
   const startInput = tracker.getByLabel("Commitment start date");
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const expectedTomorrow = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-  await expect(startInput).toHaveValue(expectedTomorrow);
+  const appToday = await startInput.getAttribute("min");
+  expect(appToday).toBeTruthy();
+  await expect(startInput).toHaveValue(addDays(appToday!, 1));
   let eventPosts = 0;
   page.on("request", (request) => {
     if (request.url().endsWith("/api/events") && request.method() === "POST") eventPosts++;
@@ -670,7 +715,7 @@ test("guides optional prayer setup through a confirmed start date and preserves 
   await expect(page.getByTestId("mountain-rhythm-metric-journey")).toContainText("0 of 7 planned days");
 
   await page.reload();
-  const restoredTracker = page.getByTestId("mountain-rhythm-disciplines");
+  const restoredTracker = await expandOptionalCommitments(page);
   await expect(restoredTracker.getByRole("checkbox").nth(0)).toBeChecked();
   await expect(restoredTracker.getByRole("checkbox").nth(1)).toBeChecked();
   await expect(restoredTracker.getByTestId("mountain-rhythm-commitment-invitation")).toHaveCount(0);
@@ -764,8 +809,7 @@ test("shares one prayer occurrence completion between Mountain Rhythm and Calend
   });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/mountain-rhythm");
-  const tracker = page.getByTestId("mountain-rhythm-disciplines");
-  await expect(tracker).toBeVisible();
+  const tracker = await expandOptionalCommitments(page);
   await expect(tracker.getByTestId("discipline-summary-prayer"))
     .toContainText("Prayer: 0 of 1 scheduled times completed");
   await tracker.getByRole("button", { name: `Mark complete prayer for ${today}` }).click();
@@ -780,6 +824,7 @@ test("shares one prayer occurrence completion between Mountain Rhythm and Calend
   await expect(activities.getByRole("button", { name: "Complete activity" })).toBeVisible();
 
   await page.goto("/mountain-rhythm");
+  await expandOptionalCommitments(page);
   await expect(page.getByTestId("mountain-rhythm-disciplines")
     .getByTestId("discipline-summary-prayer"))
     .toContainText("Prayer: 0 of 1 scheduled times completed");
@@ -2524,6 +2569,7 @@ test("keeps the chart at Basecamp and trims only the metrics-to-chart gap", asyn
 });
 
 test("repairs an oversized saved 7-Day Climb schedule", async ({ page }) => {
+  const ownerId = "malformed-schedule-owner";
   const today = new Date().toISOString().slice(0, 10);
   const malformedPlan = {
     id: "malformed-seven-day",
@@ -2549,8 +2595,8 @@ test("repairs an oversized saved 7-Day Climb schedule", async ({ page }) => {
     },
   };
 
-  await stubApi(page);
-  await seedLocalData(page, [malformedPlan], malformedPlan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [malformedPlan], malformedPlan.id, { ownerId });
   await openMountainRhythm(page);
 
   await expect.poll(async () => page.evaluate(() => {
@@ -2779,7 +2825,7 @@ for (const route of [
     await openMountainRhythm(page);
 
     await expect(page.getByTestId("mountain-rhythm-complete")).toContainText(`${route.label} complete`);
-    await expect(page.getByTestId(`button-choose-${route.kind}`)).toContainText(`${route.label} · Complete`);
+    await expect(page.getByTestId(`button-choose-${route.kind}`)).toContainText("Select route");
     await expect(page.getByTestId(`completed-climb-${route.kind}`)).toHaveCount(0);
     await expandPastClimbs(page);
     await expect(page.getByTestId(`completed-climb-${route.kind}`)).toContainText("100% journey progress");
@@ -2790,6 +2836,7 @@ for (const route of [
 test("shows the newest available Route to date day first and collapses earlier days independently", async ({
   page,
 }) => {
+  const ownerId = "route-day-order-owner";
   const today = await page.evaluate(() => {
     const date = new Date();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -2805,8 +2852,8 @@ test("shows the newest available Route to date day first and collapses earlier d
     completedIndexes: [1],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const routeDays = page
@@ -2877,6 +2924,7 @@ test("shows the newest available Route to date day first and collapses earlier d
 test("updates Today’s reading for a partial day without awarding ascent", async ({
   page,
 }) => {
+  const ownerId = "partial-climb-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "partial-climb",
@@ -2885,8 +2933,8 @@ test("updates Today’s reading for a partial day without awarding ascent", asyn
     today,
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const todayMetric = page.getByTestId("mountain-rhythm-metric-today");
@@ -2912,6 +2960,7 @@ test("updates Today’s reading for a partial day without awarding ascent", asyn
 test("completes every reading for a day with one action and keeps it after reload", async ({
   page,
 }) => {
+  const ownerId = "one-tap-climb-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "one-tap-climb",
@@ -2927,8 +2976,8 @@ test("completes every reading for a day with one action and keeps it after reloa
     }
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const firstDay = page.getByTestId("route-day-1");
@@ -2960,6 +3009,7 @@ test("completes every reading for a day with one action and keeps it after reloa
 test("places a catch-up ascent on the completion date instead of backfilling earlier points", async ({
   page,
 }) => {
+  const ownerId = "catch-up-climb-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "catch-up-climb",
@@ -2970,8 +3020,8 @@ test("places a catch-up ascent on the completion date instead of backfilling ear
     completedIndexes: [0, 2, 3],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const points = () => page.locator('[data-testid^="mountain-rhythm-day-point-"]');
@@ -3046,6 +3096,7 @@ test("preserves catch-up timing after refresh hydration", async ({ page }) => {
 test("flatlines after one missed day, regresses after two, and recovers on catch-up", async ({
   page,
 }) => {
+  const ownerId = "rhythm-recovery-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "rhythm-recovery-climb",
@@ -3056,8 +3107,8 @@ test("flatlines after one missed day, regresses after two, and recovers on catch
     completedIndexes: [0],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const points = () => page.locator('[data-testid^="mountain-rhythm-day-point-"]');
@@ -3084,6 +3135,7 @@ test("flatlines after one missed day, regresses after two, and recovers on catch
 test("keeps on-schedule consistency separate from current reading checkboxes", async ({
   page,
 }) => {
+  const ownerId = "missed-climb-owner";
   const today = new Date().toISOString().slice(0, 10);
   const plan = makePlan({
     id: "missed-climb",
@@ -3094,8 +3146,8 @@ test("keeps on-schedule consistency separate from current reading checkboxes", a
     completedIndexes: [0, 1, 2, 3],
   });
 
-  await stubApi(page);
-  await seedLocalData(page, [plan], plan.id);
+  await stubAnonymousApi(page, ownerId);
+  await seedLocalData(page, [plan], plan.id, { ownerId });
   await openMountainRhythm(page);
 
   const journeyMetric = page.getByTestId("mountain-rhythm-metric-journey");

@@ -1309,7 +1309,7 @@ test("undoes a completed Calendar day while preserving its earned history", asyn
   };
   const dayCompletionWrites: any[] = [];
   await stubHomeApi(page, plan);
-  await seedPlans(page, [plan], [], true);
+  await seedPlans(page, [plan], [], true, "visual-polish-owner");
   page.on("request", (request) => {
     if (request.url().includes("/api/reading/day-complete") && request.method() === "POST") {
       dayCompletionWrites.push(request.postDataJSON());
@@ -1331,6 +1331,11 @@ test("undoes a completed Calendar day while preserving its earned history", asyn
     completed: false,
   });
 
+  await expect.poll(async () => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+    const storedPlan = data.plans?.find((item: any) => item.id === "calendar-undo-plan");
+    return storedPlan?.completed;
+  })).toEqual({ "calendar-undo-1": false, "calendar-undo-2": false });
   const storedPlanState = await page.evaluate(() => {
     const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
     const storedPlan = data.plans?.find((item: any) => item.id === "calendar-undo-plan");
