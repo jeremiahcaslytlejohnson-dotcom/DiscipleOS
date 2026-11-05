@@ -50,6 +50,7 @@ import {
   getVerifiedSessionOwner,
   loadLocalOnlyAfterSignOut,
   loadPendingOpsState,
+  removePendingOp,
   reconcileSessionBoundary,
   savePendingOps,
 } from "../lib/sync";
@@ -213,15 +214,23 @@ export default function MountainRhythm() {
   const [routeDayExpandedOverrides, setRouteDayExpandedOverrides] = useState<
     Record<string, boolean>
   >({});
+  const pendingSyncLockRef = useRef(false);
+  const pendingSyncRequestedRef = useRef(false);
+  const retryPendingSyncRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const refreshNow = () => setNow(new Date());
+    const refreshNow = () => {
+      setNow(new Date());
+      if (document.visibilityState === "visible") retryPendingSyncRef.current();
+    };
     const interval = window.setInterval(refreshNow, 60_000);
     window.addEventListener("focus", refreshNow);
+    window.addEventListener("online", refreshNow);
     document.addEventListener("visibilitychange", refreshNow);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", refreshNow);
+      window.removeEventListener("online", refreshNow);
       document.removeEventListener("visibilitychange", refreshNow);
     };
   }, []);
@@ -506,6 +515,92 @@ export default function MountainRhythm() {
     },
     [ownerId],
   );
+
+  const retryPendingSync = useCallback(async () => {
+    if (pendingSyncLockRef.current) {
+      pendingSyncRequestedRef.current = true;
+      return;
+    }
+    if (
+      !sessionChecked ||
+      !ownerId ||
+      !verifiedPlanOwnerId ||
+      verifiedPlanOwnerId !== ownerId
+    ) {
+      return;
+    }
+
+    pendingSyncLockRef.current = true;
+    try {
+      const pendingState = loadPendingOpsState();
+      if (pendingState.ownerId && pendingState.ownerId !== verifiedPlanOwnerId) return;
+
+      const opsToFlush = pendingState.ops;
+      const remaining = await flushPendingOps(
+        opsToFlush,
+        () => verifiedPlanOwnerId === ownerId,
+      );
+      const latestState = loadPendingOpsState();
+      const queuedCounts = new Map<string, number>();
+      opsToFlush.forEach((op) => {
+        const key = JSON.stringify(op);
+        queuedCounts.set(key, (queuedCounts.get(key) || 0) + 1);
+      });
+      const addedDuringFlush = latestState.ops.filter((op) => {
+        const key = JSON.stringify(op);
+        const count = queuedCounts.get(key) || 0;
+        if (count === 0) return true;
+        queuedCounts.set(key, count - 1);
+        return false;
+      });
+      const nextPendingOps = [...remaining, ...addedDuringFlush];
+      savePendingOps(
+        nextPendingOps,
+        latestState.ownerId || verifiedPlanOwnerId,
+      );
+      if (nextPendingOps.length > 0) return;
+
+      const response = await fetch("/api/reading/plans", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = await response.json();
+      if (!body?.success || !Array.isArray(body.plans)) return;
+
+      const localPlansById = new Map(plans.map((plan) => [plan.id, plan]));
+      const serverPlans = body.plans.map((plan: any) =>
+        mergeLocalCompletionHistory(
+          normalizeStoredPlan(plan),
+          localPlansById.get(plan.id),
+        ),
+      );
+      const normalizedPlans = appendOwnerBoundLocalPlans(
+        serverPlans,
+        plans,
+        ownerId,
+        verifiedPlanOwnerId,
+        hasAuthenticatedSession,
+      );
+      setPlans(normalizedPlans);
+      setSelectedPlanId((current) => resolveSelectedPlanId(normalizedPlans, current));
+      setSaveError("");
+    } catch {
+      // Retain optimistic state and the durable queue until a later retry.
+    } finally {
+      pendingSyncLockRef.current = false;
+      if (pendingSyncRequestedRef.current) {
+        pendingSyncRequestedRef.current = false;
+        window.setTimeout(() => retryPendingSyncRef.current(), 0);
+      }
+    }
+  }, [
+    hasAuthenticatedSession,
+    ownerId,
+    plans,
+    sessionChecked,
+    verifiedPlanOwnerId,
+  ]);
+  retryPendingSyncRef.current = () => {
+    void retryPendingSync();
+  };
 
   const savePlan = useCallback(async (plan: any) => {
     const response = await fetch("/api/reading/plans", {

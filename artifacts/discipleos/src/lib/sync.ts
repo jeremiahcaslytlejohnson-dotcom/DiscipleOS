@@ -296,6 +296,21 @@ export function addPendingOp(
   return next;
 }
 
+export function removePendingOp(
+  op: PendingOp,
+  ownerId: string | null = null,
+): void {
+  const state = loadPendingOpsState();
+  if (ownerId && state.ownerId && state.ownerId !== ownerId) return;
+  const serialized = JSON.stringify(op);
+  const index = state.ops.findIndex((candidate) => JSON.stringify(candidate) === serialized);
+  if (index < 0) return;
+
+  const next = [...state.ops];
+  next.splice(index, 1);
+  savePendingOps(next, state.ownerId || ownerId);
+}
+
 /**
  * Flush pending ops to the server in insertion order (oldest first).
  * Retryable failures are kept in the returned array so the caller can persist
@@ -363,6 +378,7 @@ export async function flushPendingOps(
             completed: op.completed,
             earnedDay: op.earnedDay,
             completionDate: op.completionDate,
+            mutationTs: op.ts,
           }),
         });
         ok = res.ok;
@@ -376,6 +392,7 @@ export async function flushPendingOps(
             date: op.date,
             completed: op.completed,
             completionDate: op.completionDate,
+            mutationTs: op.ts,
           }),
         });
         ok = res.ok;

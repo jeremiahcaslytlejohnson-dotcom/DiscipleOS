@@ -3254,6 +3254,7 @@ export default function DiscipleOSApp() {
     const currentPlan = currentPlans.find((plan) => plan.id === planId);
     if (!currentPlan) return;
 
+    const mutationTs = Date.now();
     const completedMap = getCompletedMap(currentPlan);
     const newValue = !Boolean(completedMap[key]);
     const nextCompleted = { ...completedMap, [key]: newValue };
@@ -3284,6 +3285,10 @@ export default function DiscipleOSApp() {
     const updatedPlan = {
       ...currentPlan,
       completed: nextCompleted,
+      completionUpdatedAt: {
+        ...(currentPlan.completionUpdatedAt || {}),
+        [key]: mutationTs,
+      },
       earnedDayKeys: [...earnedDayKeys],
       dayCompletionDates,
     };
@@ -3314,66 +3319,67 @@ export default function DiscipleOSApp() {
         completed: newValue,
         earnedDay,
         completionDate,
-        ts: Date.now(),
+        ts: mutationTs,
       });
       void syncWithServer();
     }
   };
 
   const markDayPlanComplete = (planId, dateISO, newValue = true) => {
-    const currentPlan = plans.find((plan) => plan.id === planId);
-    const currentAssignment = currentPlan?.assignments?.find((day) => day.date === dateISO);
-    if (!currentPlan || !currentAssignment?.readings?.length) return;
-    const allDone = isPlanDayComplete(currentPlan, dateISO);
-    if (allDone === newValue) return;
+    const currentPlans = localDataRef.current.plans;
+    const currentPlan = currentPlans.find((plan) => plan.id === planId);
+    const assignment = currentPlan?.assignments?.find((day) => day.date === dateISO);
+    if (!currentPlan || !assignment?.readings?.length) return;
+    if (isPlanDayComplete(currentPlan, dateISO) === newValue) return;
+
+    const mutationTs = Date.now();
     const completionDate = newValue ? todayISO() : undefined;
-    setPlans((prevPlans) =>
-      prevPlans.map((plan) => {
-        if (plan.id !== planId) return plan;
+    const nextCompleted = getCompletedMap(currentPlan);
+    const completionUpdatedAt = { ...(currentPlan.completionUpdatedAt || {}) };
+    assignment.readings.forEach((reading) => {
+      nextCompleted[reading.key] = newValue;
+      completionUpdatedAt[reading.key] = mutationTs;
+    });
 
-        const assignment = plan.assignments.find((day) => day.date === dateISO);
-        if (!assignment || assignment.readings.length === 0) return plan;
+    const earnedDayKeys = getEarnedDayKeys(currentPlan);
+    const dayCompletionDates = { ...(currentPlan.dayCompletionDates || {}) };
+    if (newValue) {
+      earnedDayKeys.add(dateISO);
+      if (!dayCompletionDates[dateISO]) dayCompletionDates[dateISO] = completionDate;
+    }
 
-        const completedMap = getCompletedMap(plan);
-        const dayKeys = assignment.readings.map((r) => r.key);
-
-        const nextCompleted = { ...completedMap };
-        dayKeys.forEach((key) => {
-          nextCompleted[key] = newValue;
-        });
-        const earnedDayKeys = getEarnedDayKeys(plan);
-        const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
-        if (newValue) {
-          earnedDayKeys.add(dateISO);
-          if (!dayCompletionDates[dateISO]) {
-            dayCompletionDates[dateISO] = completionDate;
-          }
-        }
-
-        return {
-          ...plan,
-          completed: nextCompleted,
-          ...(newValue ? { earnedDayKeys: [...earnedDayKeys], dayCompletionDates } : {}),
-        };
-      })
+    const updatedPlan = {
+      ...currentPlan,
+      completed: nextCompleted,
+      completionUpdatedAt,
+      ...(newValue ? { earnedDayKeys: [...earnedDayKeys], dayCompletionDates } : {}),
+    };
+    const nextPlans = currentPlans.map((plan) =>
+      plan.id === planId ? updatedPlan : plan,
     );
+    const nextLocalData = {
+      ...localDataRef.current,
+      ownerId: serverOwnerRef.current ?? localDataRef.current.ownerId,
+      plans: nextPlans,
+    };
+    localDataRef.current = nextLocalData;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextLocalData));
+    } catch {
+      // Keep the in-memory optimistic state usable when browser storage is unavailable.
+    }
+    setPlans(nextPlans);
+
     if (!localOnlyAfterSignOutRef.current) {
-      fetch("/api/reading/day-complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, date: dateISO, completed: newValue, completionDate }),
-      }).then((response) => {
-        if (!response.ok) throw new Error("Failed to save day progress");
-      }).catch(() => {
-        queuePendingOp({
-          type: "day-complete",
-          planId,
-          date: dateISO,
-          completed: newValue,
-          completionDate,
-          ts: Date.now(),
-        });
+      queuePendingOp({
+        type: "day-complete",
+        planId,
+        date: dateISO,
+        completed: newValue,
+        completionDate,
+        ts: mutationTs,
       });
+      void syncWithServer();
     }
   };
 

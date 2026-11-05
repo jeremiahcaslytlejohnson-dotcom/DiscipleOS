@@ -133,8 +133,8 @@ export function mergeLocalCompletionHistory(serverPlan: any, localPlan: any) {
     ]),
   ];
   const dayCompletionDates = {
-    ...(serverPlan.dayCompletionDates || {}),
     ...(localPlan.dayCompletionDates || {}),
+    ...(serverPlan.dayCompletionDates || {}),
   };
 
   return {

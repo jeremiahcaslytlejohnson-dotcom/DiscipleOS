@@ -48,6 +48,79 @@ function normalizePlan(plan: any) {
   return plan;
 }
 
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+function asCompletionTimestampMap(value: unknown): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(asRecord(value)).filter(
+      ([, timestamp]) =>
+        typeof timestamp === "number" && Number.isSafeInteger(timestamp) && timestamp >= 0,
+    ),
+  ) as Record<string, number>;
+}
+
+function normalizeCompletionMutationTimestamp(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : Date.now();
+}
+
+function mergePlanCompletionState(plan: any, currentData: Record<string, any>) {
+  const incomingCompleted = asRecord(plan.completed);
+  const currentCompleted = asRecord(currentData.completed);
+  const incomingTimestamps = asCompletionTimestampMap(plan.completionUpdatedAt);
+  const currentTimestamps = asCompletionTimestampMap(currentData.completionUpdatedAt);
+  const completed = { ...incomingCompleted };
+  const completionUpdatedAt = { ...incomingTimestamps };
+
+  for (const [key, currentValue] of Object.entries(currentCompleted)) {
+    const currentTimestamp = currentTimestamps[key];
+    const incomingTimestamp = incomingTimestamps[key];
+    const incomingIsNewer =
+      Object.prototype.hasOwnProperty.call(incomingCompleted, key) &&
+      currentTimestamp !== undefined &&
+      incomingTimestamp !== undefined &&
+      incomingTimestamp > currentTimestamp;
+
+    if (!incomingIsNewer) completed[key] = currentValue;
+  }
+
+  for (const [key, currentTimestamp] of Object.entries(currentTimestamps)) {
+    if (
+      incomingTimestamps[key] === undefined ||
+      incomingTimestamps[key] <= currentTimestamp
+    ) {
+      completionUpdatedAt[key] = currentTimestamp;
+    }
+  }
+
+  const existingEarnedDayKeys = Array.isArray(currentData.earnedDayKeys)
+    ? currentData.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
+    : [];
+  const incomingEarnedDayKeys = Array.isArray(plan.earnedDayKeys)
+    ? plan.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
+    : [];
+  const earnedDayKeys = [
+    ...new Set([...existingEarnedDayKeys, ...incomingEarnedDayKeys]),
+  ];
+  const dayCompletionDates = {
+    ...asRecord(plan.dayCompletionDates),
+    ...asRecord(currentData.dayCompletionDates),
+  };
+
+  return {
+    ...plan,
+    completed,
+    ...(Object.keys(completionUpdatedAt).length > 0 ? { completionUpdatedAt } : {}),
+    ...(earnedDayKeys.length > 0 ? { earnedDayKeys } : {}),
+    ...(Object.keys(dayCompletionDates).length > 0 ? { dayCompletionDates } : {}),
+  };
+}
+
 function isRetiredResetPlan(plan: any) {
   const name = typeof plan?.name === "string" ? plan.name.trim() : "";
   const templateKey = typeof plan?.templateKey === "string" ? plan.templateKey.trim() : "";
@@ -211,41 +284,11 @@ router.post("/reading/plans", async (req, res) => {
         .select({ data: readingPlansTable.data })
         .from(readingPlansTable)
         .where(and(eq(readingPlansTable.id, plan.id), eq(readingPlansTable.userId, userId)))
+        .for("update")
         .limit(1);
       const currentData = currentPlan?.data as Record<string, unknown> | undefined;
       if (currentData) {
-        const existingEarnedDayKeys = Array.isArray(currentData.earnedDayKeys)
-          ? currentData.earnedDayKeys.filter((date): date is string => typeof date === "string")
-          : [];
-        const incomingEarnedDayKeys = Array.isArray(plan.earnedDayKeys)
-          ? plan.earnedDayKeys.filter((date: unknown): date is string => typeof date === "string")
-          : [];
-        const existingCompletionDates =
-          currentData.dayCompletionDates &&
-          typeof currentData.dayCompletionDates === "object" &&
-          !Array.isArray(currentData.dayCompletionDates)
-            ? currentData.dayCompletionDates
-            : {};
-        const incomingCompletionDates =
-          plan.dayCompletionDates &&
-          typeof plan.dayCompletionDates === "object" &&
-          !Array.isArray(plan.dayCompletionDates)
-            ? plan.dayCompletionDates
-            : {};
-        const earnedDayKeys = [
-          ...new Set([...existingEarnedDayKeys, ...incomingEarnedDayKeys]),
-        ];
-        const dayCompletionDates = {
-          ...existingCompletionDates,
-          ...incomingCompletionDates,
-        };
-        planToStore = {
-          ...plan,
-          ...(earnedDayKeys.length > 0 ? { earnedDayKeys } : {}),
-          ...(Object.keys(dayCompletionDates).length > 0
-            ? { dayCompletionDates }
-            : {}),
-        };
+        planToStore = mergePlanCompletionState(plan, currentData as Record<string, any>);
       }
 
       const isActivePlan = isActiveStructuredPlan(plan);
@@ -478,7 +521,7 @@ router.delete("/reading/plans", async (req, res) => {
 router.post("/reading/complete", async (req, res) => {
   try {
     const userId = req.session.userId!;
-    const { planId, key, completed, earnedDay, completionDate } = req.body;
+    const { planId, key, completed, earnedDay, completionDate, mutationTs } = req.body;
     if (!planId || !key) {
       res.status(400).json({ success: false, error: "Missing planId or key" });
       return;
@@ -526,9 +569,23 @@ router.post("/reading/complete", async (req, res) => {
         !Array.isArray(planData.completed)
           ? planData.completed
           : {};
+      const completionUpdatedAt = asCompletionTimestampMap(planData.completionUpdatedAt);
+      const requestedTimestamp = normalizeCompletionMutationTimestamp(mutationTs);
+      const shouldApplyCompletion =
+        completionUpdatedAt[key] === undefined ||
+        requestedTimestamp > completionUpdatedAt[key];
+      const nextCompletedMap = { ...completedMap };
+      const nextCompletionUpdatedAt = { ...completionUpdatedAt };
+      if (shouldApplyCompletion) {
+        nextCompletedMap[key] = value;
+        nextCompletionUpdatedAt[key] = requestedTimestamp;
+      }
       const nextPlanData: Record<string, any> = {
         ...planData,
-        completed: { ...completedMap, [key]: value },
+        completed: nextCompletedMap,
+        ...(Object.keys(nextCompletionUpdatedAt).length > 0
+          ? { completionUpdatedAt: nextCompletionUpdatedAt }
+          : {}),
       };
       if (normalizedEarnedDay) {
         if (value && normalizedCompletionDate) {
@@ -572,7 +629,7 @@ router.post("/reading/complete", async (req, res) => {
 router.post("/reading/day-complete", async (req, res) => {
   try {
     const userId = req.session.userId!;
-    const { planId, date, completed, completionDate } = req.body;
+    const { planId, date, completed, completionDate, mutationTs } = req.body;
     if (!planId || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       res.status(400).json({ success: false, error: "Missing planId or valid date" });
       return;
@@ -613,11 +670,26 @@ router.post("/reading/day-complete", async (req, res) => {
         !Array.isArray(storedData.completed)
           ? storedData.completed
           : {};
+      const completionUpdatedAt = asCompletionTimestampMap(storedData.completionUpdatedAt);
+      const requestedTimestamp = normalizeCompletionMutationTimestamp(mutationTs);
+      const nextCompletedMap = { ...completedMap };
+      const nextCompletionUpdatedAt = { ...completionUpdatedAt };
+      keys.forEach((key) => {
+        if (
+          completionUpdatedAt[key] === undefined ||
+          requestedTimestamp > completionUpdatedAt[key]
+        ) {
+          nextCompletedMap[key] = value;
+          nextCompletionUpdatedAt[key] = requestedTimestamp;
+        }
+      });
       const nextPlanData: Record<string, any> = {
         ...storedData,
-        completed: Object.fromEntries(keys.map((key) => [key, value])),
+        completed: nextCompletedMap,
+        ...(Object.keys(nextCompletionUpdatedAt).length > 0
+          ? { completionUpdatedAt: nextCompletionUpdatedAt }
+          : {}),
       };
-      nextPlanData.completed = { ...completedMap, ...nextPlanData.completed };
       if (value) {
         const earnedDayKeys = Array.isArray(storedData.earnedDayKeys)
           ? storedData.earnedDayKeys.filter((day: unknown): day is string => typeof day === "string")
