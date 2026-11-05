@@ -2,7 +2,7 @@
 - [DiscipleOS stabilization freeze](discipleos-stabilization-freeze.md) — Until stabilization is verified and explicitly approved, do not surface new suggested tasks or optional improvements.
 - [Push notifications](push-notifications.md) — VAPID worker config, production cron rules, per-endpoint dedupe, and safe operational logging.
 - [Session persistence](session-persistence.md) — Sessions backed by Postgres via connect-pg-simple; sessionEstablished flag drives hydration trust; defensive loadData() in Home.tsx.
-- [Reconnect sync](reconnect-sync.md) — pendingOpsRef queue in Home.tsx; syncWithServer() centralises flush+hydrate; online/focus/visibilitychange listeners with 400ms debounce + isSyncingRef guard.
+- [Reconnect sync](reconnect-sync.md) — owner-bound offline replay; per-reading mutation versions protect completion state and catch-up dates from stale full-plan hydration.
 - [Account data claim](account-data-claim.md) — legacy anonymous data may be claimed only by the authenticated account in the same browser session.
 - [Mountain Rhythm](mountain-rhythm.md) — Keep planned terrain separate from score data; only completed segments highlight, and visual tests must not write to a non-isolated database.
 - [Mountain climb setup](mountain-climb-setup.md) — Preserve route and review state while setup remains open; signed-in browser fixtures must align session and auth identity.

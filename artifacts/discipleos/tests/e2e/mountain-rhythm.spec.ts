@@ -3050,6 +3050,15 @@ test("preserves catch-up timing after refresh hydration", async ({ page }) => {
     startOffset: -4,
     completedIndexes: [0, 2],
   });
+  const localCompletionTimestamps = Object.fromEntries(
+    [0, 2].flatMap((dayIndex) =>
+      plan.assignments[dayIndex].readings.map((reading: any) => [
+        reading.key,
+        dayIndex === 2 ? 3000 : 1000,
+      ]),
+    ),
+  );
+  plan.completionUpdatedAt = localCompletionTimestamps;
   plan.dayCompletionDates = {
     [plan.assignments[0].date]: plan.assignments[0].date,
     [plan.assignments[2].date]: today,
@@ -3057,8 +3066,14 @@ test("preserves catch-up timing after refresh hydration", async ({ page }) => {
 
   const serverPlan = {
     ...plan,
-    // Older saved data may contain the scheduled date for a catch-up. The
-    // browser's completion timeline is the more accurate same-device record.
+    // The local record's newer per-reading timestamps make its catch-up date
+    // authoritative over this stale full-plan snapshot.
+    completionUpdatedAt: {
+      ...localCompletionTimestamps,
+      ...Object.fromEntries(
+        plan.assignments[2].readings.map((reading: any) => [reading.key, 2000]),
+      ),
+    },
     dayCompletionDates: {
       [plan.assignments[0].date]: plan.assignments[0].date,
       [plan.assignments[2].date]: plan.assignments[2].date,

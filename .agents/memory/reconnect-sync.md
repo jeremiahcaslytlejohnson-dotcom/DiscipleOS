@@ -14,6 +14,12 @@ Server-backed local state and pending operations are session-bound. The client v
 
 **How to apply:** Keep owner metadata with both the event/plan snapshot and pending-op queue. Treat ownership 409 responses as non-retryable conflicts; continue retrying only transient failures.
 
+Reading completion writes keep per-reading mutation order through offline replay. Stale full-plan snapshots must not replace a strictly newer local completion or timing record; when timestamps are equal or unavailable, the server's earned-day date remains authoritative.
+
+**Why:** Without comparing mutation versions, a newer local catch-up date can be lost during hydration; blindly preferring local history can also overwrite established server history.
+
+**How to apply:** Merge completed values, mutation timestamps, earned-day keys, and completion dates together. Prefer local state only when its per-reading timestamp is strictly newer; use server history on ties or missing timestamps, and preserve earned-day history through uncompletion.
+
 ## Architecture
 
 ### artifacts/discipleos/src/lib/sync.ts

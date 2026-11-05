@@ -126,22 +126,96 @@ function getDayCompletionDates(plan: any): Record<string, string> {
 export function mergeLocalCompletionHistory(serverPlan: any, localPlan: any) {
   if (!localPlan) return serverPlan;
 
+  const asRecord = (value: unknown): Record<string, any> =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, any>
+      : {};
+  const asTimestamps = (value: unknown): Record<string, number> =>
+    Object.fromEntries(
+      Object.entries(asRecord(value)).filter(
+        ([, timestamp]) =>
+          typeof timestamp === "number" &&
+          Number.isSafeInteger(timestamp) &&
+          timestamp >= 0,
+      ),
+    ) as Record<string, number>;
+  const localCompleted = asRecord(localPlan.completed);
+  const serverCompleted = asRecord(serverPlan.completed);
+  const localTimestamps = asTimestamps(localPlan.completionUpdatedAt);
+  const serverTimestamps = asTimestamps(serverPlan.completionUpdatedAt);
+  const completed = { ...localCompleted, ...serverCompleted };
+  const completionUpdatedAt = { ...localTimestamps, ...serverTimestamps };
+
+  for (const [key, localTimestamp] of Object.entries(localTimestamps)) {
+    const serverTimestamp = serverTimestamps[key];
+    if (serverTimestamp === undefined || localTimestamp > serverTimestamp) {
+      completionUpdatedAt[key] = localTimestamp;
+      if (Object.prototype.hasOwnProperty.call(localCompleted, key)) {
+        completed[key] = localCompleted[key];
+      }
+    }
+  }
+
   const earnedDayKeys = [
     ...new Set([
       ...(Array.isArray(localPlan.earnedDayKeys) ? localPlan.earnedDayKeys : []),
       ...(Array.isArray(serverPlan.earnedDayKeys) ? serverPlan.earnedDayKeys : []),
     ]),
   ];
+  const localDates = getDayCompletionDates(localPlan);
+  const serverDates = getDayCompletionDates(serverPlan);
   const dayCompletionDates = {
-    ...(localPlan.dayCompletionDates || {}),
-    ...(serverPlan.dayCompletionDates || {}),
+    ...localDates,
+    ...serverDates,
   };
+  for (const [day, localDate] of Object.entries(localDates)) {
+    if (!serverDates[day]) continue;
+    const localTimestamp = getDayCompletionMutationTimestamp(localPlan, day);
+    const serverTimestamp = getDayCompletionMutationTimestamp(serverPlan, day);
+    if (
+      localTimestamp !== null &&
+      (serverTimestamp === null || localTimestamp > serverTimestamp)
+    ) {
+      dayCompletionDates[day] = localDate;
+    }
+  }
 
   return {
     ...serverPlan,
+    ...(Object.keys(localCompleted).length > 0 || Object.keys(serverCompleted).length > 0
+      ? { completed }
+      : {}),
+    ...(Object.keys(completionUpdatedAt).length > 0
+      ? { completionUpdatedAt }
+      : {}),
     ...(earnedDayKeys.length > 0 ? { earnedDayKeys } : {}),
     ...(Object.keys(dayCompletionDates).length > 0 ? { dayCompletionDates } : {}),
   };
+}
+
+function getDayCompletionMutationTimestamp(plan: any, day: string): number | null {
+  const assignment = Array.isArray(plan?.assignments)
+    ? plan.assignments.find((item: any) => item?.date === day)
+    : null;
+  const completionUpdatedAt = plan?.completionUpdatedAt;
+  if (
+    !Array.isArray(assignment?.readings) ||
+    !completionUpdatedAt ||
+    typeof completionUpdatedAt !== "object" ||
+    Array.isArray(completionUpdatedAt)
+  ) {
+    return null;
+  }
+
+  const timestamps = assignment.readings
+    .map((reading: any) => completionUpdatedAt[reading?.key])
+    .filter(
+      (timestamp: unknown): timestamp is number =>
+        typeof timestamp === "number" &&
+        Number.isSafeInteger(timestamp) &&
+        timestamp >= 0,
+    );
+  return timestamps.length > 0 ? Math.max(...timestamps) : null;
 }
 
 function getEarnedDayCompletionDates(

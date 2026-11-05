@@ -114,6 +114,23 @@ function loadLocalData() {
   }
 }
 
+function persistLocalPlans(plans: any[], ownerId: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    const local = loadLocalData();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...local,
+        ownerId: ownerId ?? local.ownerId,
+        plans,
+      }),
+    );
+  } catch {
+    // The pending operation still provides a durable retry when storage is unavailable.
+  }
+}
+
 function formatTime(minutes: number) {
   if (!minutes) return "A short reading";
   return `About ${minutes} min`;
@@ -190,6 +207,7 @@ export default function MountainRhythm() {
   } = useAuth();
   const initial = useMemo(() => loadLocalData(), []);
   const [plans, setPlans] = useState(initial.plans);
+  const plansRef = useRef<any[]>(initial.plans);
   const [events, setEvents] = useState(initial.events);
   const [eventCompletions, setEventCompletions] = useState(initial.eventCompletions);
   const [selectedPlanId, setSelectedPlanId] = useState(initial.selectedPlanId);
@@ -219,19 +237,24 @@ export default function MountainRhythm() {
   const retryPendingSyncRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const refreshNow = () => {
-      setNow(new Date());
+    plansRef.current = plans;
+  }, [plans]);
+
+  useEffect(() => {
+    const refreshNow = () => setNow(new Date());
+    const refreshAndSync = () => {
+      refreshNow();
       if (document.visibilityState === "visible") retryPendingSyncRef.current();
     };
     const interval = window.setInterval(refreshNow, 60_000);
-    window.addEventListener("focus", refreshNow);
-    window.addEventListener("online", refreshNow);
-    document.addEventListener("visibilitychange", refreshNow);
+    window.addEventListener("focus", refreshAndSync);
+    window.addEventListener("online", refreshAndSync);
+    document.addEventListener("visibilitychange", refreshAndSync);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", refreshNow);
-      window.removeEventListener("online", refreshNow);
-      document.removeEventListener("visibilitychange", refreshNow);
+      window.removeEventListener("focus", refreshAndSync);
+      window.removeEventListener("online", refreshAndSync);
+      document.removeEventListener("visibilitychange", refreshAndSync);
     };
   }, []);
 
@@ -346,6 +369,7 @@ export default function MountainRhythm() {
           unresolvedPendingOps = boundary.pendingOps;
           if (boundary.localDataWasCleared) {
             setEvents([]);
+            plansRef.current = [];
             setPlans([]);
             setEventCompletions({});
             setSelectedPlanId(null);
@@ -414,6 +438,7 @@ export default function MountainRhythm() {
               currentOwnerId,
               isSignedIn,
             );
+            plansRef.current = hydratedPlans;
             setPlans(hydratedPlans);
             setOwnerId(currentOwnerId);
             setVerifiedPlanOwnerId(currentOwnerId);
@@ -565,7 +590,8 @@ export default function MountainRhythm() {
       const body = await response.json();
       if (!body?.success || !Array.isArray(body.plans)) return;
 
-      const localPlansById = new Map(plans.map((plan) => [plan.id, plan]));
+      const currentPlans = plansRef.current;
+      const localPlansById = new Map(currentPlans.map((plan) => [plan.id, plan]));
       const serverPlans = body.plans.map((plan: any) =>
         mergeLocalCompletionHistory(
           normalizeStoredPlan(plan),
@@ -574,13 +600,18 @@ export default function MountainRhythm() {
       );
       const normalizedPlans = appendOwnerBoundLocalPlans(
         serverPlans,
-        plans,
+        currentPlans,
         ownerId,
         verifiedPlanOwnerId,
         hasAuthenticatedSession,
       );
+      plansRef.current = normalizedPlans;
       setPlans(normalizedPlans);
-      setSelectedPlanId((current) => resolveSelectedPlanId(normalizedPlans, current));
+      setSelectedPlanId((current) =>
+        normalizedPlans.some((plan) => plan.id === current)
+          ? current
+          : normalizedPlans[0]?.id || null,
+      );
       setSaveError("");
     } catch {
       // Retain optimistic state and the durable queue until a later retry.
@@ -594,7 +625,6 @@ export default function MountainRhythm() {
   }, [
     hasAuthenticatedSession,
     ownerId,
-    plans,
     sessionChecked,
     verifiedPlanOwnerId,
   ]);
@@ -827,91 +857,142 @@ export default function MountainRhythm() {
   }, [activeClimb, canShowPlanState, isLoading, sessionChecked]);
 
   const toggleReading = useCallback((planId: string, key: string) => {
-    let nextValue = false;
+    const currentPlans = plansRef.current;
+    const currentPlan = currentPlans.find((plan) => plan.id === planId);
+    if (!currentPlan) return;
+
+    const completed = { ...(currentPlan.completed || {}) };
+    const nextValue = !Boolean(completed[key]);
+    completed[key] = nextValue;
+    const completionUpdatedAt = {
+      ...(currentPlan.completionUpdatedAt || {}),
+      [key]: Date.now(),
+    };
     let earnedDay: string | undefined;
     let completionDate: string | undefined;
-    setPlans((current) => current.map((plan) => {
-      if (plan.id !== planId) return plan;
-      const completed = { ...(plan.completed || {}) };
-      nextValue = !completed[key];
-      completed[key] = nextValue;
-      const assignment = plan.assignments.find((day: any) => day.readings.some((reading: any) => reading.key === key));
-      if (assignment && nextValue && assignment.readings.every((reading: any) => reading.key === key || completed[reading.key])) {
-        earnedDay = assignment.date;
-        completionDate = getPlanDayDate(plan);
-      }
-      const earnedDayKeys = new Set(plan.earnedDayKeys || []);
-      if (earnedDay) earnedDayKeys.add(earnedDay);
-      const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
-      if (earnedDay && completionDate && !dayCompletionDates[earnedDay]) {
-        dayCompletionDates[earnedDay] = completionDate;
-      }
-      return { ...plan, completed, earnedDayKeys: [...earnedDayKeys], dayCompletionDates };
-    }));
+    const mutationTs = completionUpdatedAt[key];
+    const assignment = currentPlan.assignments.find((day: any) =>
+      day.readings.some((reading: any) => reading.key === key),
+    );
+    if (
+      assignment &&
+      nextValue &&
+      assignment.readings.every(
+        (reading: any) => reading.key === key || completed[reading.key],
+      )
+    ) {
+      earnedDay = assignment.date;
+      completionDate = getPlanDayDate(currentPlan);
+    }
+    const earnedDayKeys = new Set(currentPlan.earnedDayKeys || []);
+    if (earnedDay) earnedDayKeys.add(earnedDay);
+    const dayCompletionDates = { ...(currentPlan.dayCompletionDates || {}) };
+    if (earnedDay && completionDate && !dayCompletionDates[earnedDay]) {
+      dayCompletionDates[earnedDay] = completionDate;
+    }
+    const updatedPlan = {
+      ...currentPlan,
+      completed,
+      completionUpdatedAt,
+      earnedDayKeys: [...earnedDayKeys],
+      dayCompletionDates,
+    };
+    const nextPlans = currentPlans.map((plan) =>
+      plan.id === planId ? updatedPlan : plan,
+    );
+    plansRef.current = nextPlans;
+    setPlans(nextPlans);
+    persistLocalPlans(nextPlans, ownerId);
+    const op = {
+      type: "chapter-complete" as const,
+      planId,
+      key,
+      completed: nextValue,
+      earnedDay,
+      completionDate,
+      ts: mutationTs,
+    };
+    queuePending(op);
     fetch("/api/reading/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId, key, completed: nextValue, earnedDay, completionDate }),
+      body: JSON.stringify({
+        planId,
+        key,
+        completed: nextValue,
+        earnedDay,
+        completionDate,
+        mutationTs,
+      }),
     })
       .then((response) => {
         if (!response.ok) throw new Error("Could not save reading progress");
+        removePendingOp(op, ownerId);
+        void retryPendingSync();
       })
       .catch(() => {
-        queuePending({
-          type: "chapter-complete",
-          planId,
-          key,
-          completed: nextValue,
-          earnedDay,
-          completionDate,
-          ts: Date.now(),
-        });
         setSaveError("Your progress is saved on this device and will sync when you reconnect.");
       });
-  }, [queuePending]);
+  }, [ownerId, queuePending, retryPendingSync]);
 
   const completeDay = useCallback((planId: string, date: string) => {
-    const plan = plans.find((item: any) => item.id === planId);
+    const currentPlans = plansRef.current;
+    const plan = currentPlans.find((item: any) => item.id === planId);
     const assignment = plan?.assignments?.find((day: any) => day.date === date);
     if (!plan || !assignment?.readings?.length) return;
     const currentCompleted = plan.completed || {};
     const allDone = assignment.readings.every((reading: any) => Boolean(currentCompleted[reading.key]));
     const nextValue = !allDone;
     const completionDate = getPlanDayDate(plan);
-    setPlans((current) => current.map((plan) => {
-      if (plan.id !== planId) return plan;
-      const completed = { ...(plan.completed || {}) };
-      assignment.readings.forEach((reading: any) => {
-        completed[reading.key] = nextValue;
-      });
-      const earnedDayKeys = new Set(plan.earnedDayKeys || []);
-      const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
-      if (nextValue) {
-        earnedDayKeys.add(date);
-        if (!dayCompletionDates[date]) dayCompletionDates[date] = completionDate;
-      }
-      return { ...plan, completed, earnedDayKeys: [...earnedDayKeys], dayCompletionDates };
-    }));
+    const mutationTs = Date.now();
+    const completed = { ...(plan.completed || {}) };
+    const completionUpdatedAt = { ...(plan.completionUpdatedAt || {}) };
+    assignment.readings.forEach((reading: any) => {
+      completed[reading.key] = nextValue;
+      completionUpdatedAt[reading.key] = mutationTs;
+    });
+    const earnedDayKeys = new Set(plan.earnedDayKeys || []);
+    const dayCompletionDates = { ...(plan.dayCompletionDates || {}) };
+    if (nextValue) {
+      earnedDayKeys.add(date);
+      if (!dayCompletionDates[date]) dayCompletionDates[date] = completionDate;
+    }
+    const updatedPlan = {
+      ...plan,
+      completed,
+      completionUpdatedAt,
+      earnedDayKeys: [...earnedDayKeys],
+      dayCompletionDates,
+    };
+    const nextPlans = currentPlans.map((candidate: any) =>
+      candidate.id === planId ? updatedPlan : candidate,
+    );
+    plansRef.current = nextPlans;
+    setPlans(nextPlans);
+    persistLocalPlans(nextPlans, ownerId);
+    const op = {
+      type: "day-complete" as const,
+      planId,
+      date,
+      completed: nextValue,
+      completionDate,
+      ts: mutationTs,
+    };
+    queuePending(op);
     fetch("/api/reading/day-complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId, date, completed: nextValue, completionDate }),
+      body: JSON.stringify({ planId, date, completed: nextValue, completionDate, mutationTs }),
     })
       .then((response) => {
         if (!response.ok) throw new Error("Could not save day progress");
+        removePendingOp(op, ownerId);
+        void retryPendingSync();
       })
       .catch(() => {
-        queuePending({
-          type: "day-complete",
-          planId,
-          date,
-          completed: nextValue,
-          completionDate,
-          ts: Date.now(),
-        });
         setSaveError("Your progress is saved on this device and will sync when you reconnect.");
       });
-  }, [plans, queuePending]);
+  }, [ownerId, queuePending, retryPendingSync]);
 
   const currentRoute = (Array.isArray(selectedPlan?.assignments)
     ? selectedPlan.assignments

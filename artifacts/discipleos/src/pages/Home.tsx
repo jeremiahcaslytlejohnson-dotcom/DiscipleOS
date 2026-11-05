@@ -2801,6 +2801,9 @@ export default function DiscipleOSApp() {
       if (plansData?.success && Array.isArray(plansData.plans)) {
         const serverPlans = plansData.plans;
         if (sessionEstablished || serverPlans.length > 0) {
+          if (sessionEstablished) {
+            preserveUnverifiedLocalCacheRef.current = false;
+          }
           const localPlansById = new Map(
             localDataRef.current.plans.map((plan) => [plan.id, plan]),
           );

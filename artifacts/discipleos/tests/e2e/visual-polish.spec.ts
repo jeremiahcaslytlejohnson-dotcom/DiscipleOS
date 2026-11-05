@@ -625,8 +625,8 @@ test("completes a plan day in one tap, persists it, and exposes undo", async ({ 
     todayReading.getByTestId("today-estimated-reading-time-complete-day-plan"),
   ).toHaveText("≈ 4 min");
   const todayCompleteDay = page.getByTestId("today-complete-day-complete-day-plan");
-  await expect(todayCompleteDay).toHaveText("Day complete");
-  await expect(todayReading.getByText("Day complete", { exact: true })).toHaveCount(1);
+  await expect(todayCompleteDay).toHaveText("Complete day");
+  await expect(todayReading.getByText("Day complete", { exact: true })).toHaveCount(0);
   const todayCompleteDayGeometry = await todayCompleteDay.evaluate((button) => ({
     height: button.getBoundingClientRect().height,
     scrollWidth: button.scrollWidth,

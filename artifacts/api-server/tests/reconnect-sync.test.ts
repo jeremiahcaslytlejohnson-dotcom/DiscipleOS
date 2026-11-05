@@ -367,7 +367,7 @@ describe("3 — reconnect with matching state does not duplicate records", () =>
 
     const plans = await request(app).get("/api/reading/plans").set("Cookie", cookie);
     const savedPlan = plans.body.plans.find((item: any) => item.id === planId);
-    expect(savedPlan?.completed?.["timed-day-0"]).toBe(false);
+    expect(savedPlan?.completed?.["timed-day-0"]).toBe(true);
     expect(savedPlan?.earnedDayKeys).toEqual(["2026-09-01"]);
     expect(savedPlan?.dayCompletionDates).toEqual({ "2026-09-01": "2026-09-03" });
   });

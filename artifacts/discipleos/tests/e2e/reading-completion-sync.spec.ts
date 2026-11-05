@@ -179,6 +179,119 @@ test("Mountain Rhythm keeps its owner-scoped cache when account claim fails", as
   ).toEqual({ ownerId: "previous-anonymous-owner", planId: cachedPlan.id });
 });
 
+test("a successful account claim hydrates completed readings and earned-day dates", async ({
+  page,
+}) => {
+  const anonymousOwnerId = "anonymous-reading-owner";
+  const accountOwnerId = "claimed-reading-owner";
+  const plan = makePlan();
+  const completedKey = COMPLETION_KEYS[0];
+  const earnedDay = todayISO();
+  plan.completed = { [completedKey]: false, [COMPLETION_KEYS[1]]: false };
+  plan.earnedDayKeys = [];
+  plan.dayCompletionDates = {};
+  plan.completionUpdatedAt = {};
+  const claimedPlan = {
+    ...plan,
+    completed: { [completedKey]: true, [COMPLETION_KEYS[1]]: false },
+    earnedDayKeys: [earnedDay],
+    dayCompletionDates: { [earnedDay]: "2026-11-04" },
+    completionUpdatedAt: { [completedKey]: 1000 },
+  };
+  let claimSucceeded = false;
+  let claimRequests = 0;
+
+  await page.addInitScript(
+    ({ anonymousOwnerId, initialPlan, pendingOpsKey }) => {
+      if (localStorage.getItem("discipleos-data")) return;
+      localStorage.setItem(
+        "discipleos-data",
+        JSON.stringify({
+          ownerId: anonymousOwnerId,
+          plans: [initialPlan],
+          events: [],
+          eventCompletions: {},
+          selectedPlanId: initialPlan.id,
+        }),
+      );
+      localStorage.setItem(
+        pendingOpsKey,
+        JSON.stringify({ ownerId: anonymousOwnerId, ops: [] }),
+      );
+    },
+    { anonymousOwnerId, initialPlan: plan, pendingOpsKey: PENDING_OPS_KEY },
+  );
+  await page.route("**/api/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        json: { authenticated: true, user: { id: accountOwnerId } },
+      });
+      return;
+    }
+    if (pathname.endsWith("/session/info")) {
+      await route.fulfill({
+        status: 200,
+        json: {
+          success: true,
+          established: true,
+          authenticated: true,
+          userId: accountOwnerId,
+        },
+      });
+      return;
+    }
+    if (pathname.endsWith("/account/claim")) {
+      claimRequests += 1;
+      claimSucceeded = true;
+      await route.fulfill({ status: 200, json: { success: true } });
+      return;
+    }
+    if (pathname.endsWith("/reading/plans") && route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        json: { success: true, plans: claimSucceeded ? [claimedPlan] : [] },
+      });
+      return;
+    }
+    if (pathname.endsWith("/events")) {
+      await route.fulfill({ status: 200, json: { success: true, events: [] } });
+      return;
+    }
+    if (pathname.endsWith("/rhythm/score")) {
+      await route.fulfill({
+        status: 200,
+        json: { success: true, eventCompletions: [] },
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, json: { success: true } });
+  });
+
+  await page.goto("/");
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await expect(
+    page.getByTestId(`today-reading-${completedKey}`),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => claimRequests).toBeGreaterThan(0);
+  await expect.poll(() =>
+    page.evaluate((date: string) => {
+      const data = JSON.parse(localStorage.getItem("discipleos-data") || "{}");
+      return {
+        ownerId: data.ownerId,
+        completionDate: data.plans?.[0]?.dayCompletionDates?.[date],
+      };
+    }, earnedDay),
+  ).toEqual({ ownerId: accountOwnerId, completionDate: "2026-11-04" });
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await expect(
+    page.getByTestId(`today-reading-${completedKey}`),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -491,10 +604,21 @@ async function stubReadingApi(
           });
           return;
         }
-        state.plan.completed = {
-          ...(state.plan.completed || {}),
-          [payload.key]: Boolean(payload.completed),
-        };
+        const completionUpdatedAt = state.plan.completionUpdatedAt || {};
+        const mutationTs = Number(payload.mutationTs) || Date.now();
+        if (
+          completionUpdatedAt[payload.key] === undefined ||
+          mutationTs > completionUpdatedAt[payload.key]
+        ) {
+          state.plan.completed = {
+            ...(state.plan.completed || {}),
+            [payload.key]: Boolean(payload.completed),
+          };
+          state.plan.completionUpdatedAt = {
+            ...completionUpdatedAt,
+            [payload.key]: mutationTs,
+          };
+        }
         if (payload.earnedDay && payload.completionDate && payload.completed) {
           state.plan.earnedDayKeys = [
             ...new Set([...(state.plan.earnedDayKeys || []), payload.earnedDay]),
@@ -504,6 +628,93 @@ async function stubReadingApi(
             [payload.earnedDay]:
               state.plan.dayCompletionDates?.[payload.earnedDay] ||
               payload.completionDate,
+          };
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true }),
+        });
+      } catch {
+        // A refresh can abort an in-flight request; the persisted queue replays it.
+      } finally {
+        state.activeCompletions -= 1;
+        if (attempt === 1 && state.failFirstCompletion) {
+          state.firstAttemptSettled = true;
+        }
+      }
+      return;
+    }
+
+    if (pathname.endsWith("/reading/day-complete") && request.method() === "POST") {
+      const attempt = ++state.completionAttempts;
+      state.activeCompletions += 1;
+      state.maxActiveCompletions = Math.max(
+        state.maxActiveCompletions,
+        state.activeCompletions,
+      );
+
+      try {
+        const delayMs =
+          attempt === 1 && state.failFirstCompletion
+            ? state.firstCompletionDelayMs
+            : state.completionDelayMs;
+        if (delayMs > 0) await delay(delayMs);
+
+        if (attempt === 1 && state.failFirstCompletion) {
+          await route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ success: false }),
+          });
+          return;
+        }
+
+        const payload = request.postDataJSON() as {
+          planId: string;
+          date: string;
+          completed: boolean;
+          completionDate?: string;
+          mutationTs?: number;
+        };
+        const assignment = state.plan.assignments?.find(
+          (day: any) => day.date === payload.date,
+        );
+        if (
+          ownerId !== OWNER_ID ||
+          payload.planId !== state.plan.id ||
+          !assignment
+        ) {
+          await route.fulfill({
+            status: 409,
+            contentType: "application/json",
+            body: JSON.stringify({ success: false }),
+          });
+          return;
+        }
+
+        const completed = { ...(state.plan.completed || {}) };
+        const completionUpdatedAt = { ...(state.plan.completionUpdatedAt || {}) };
+        const mutationTs = Number(payload.mutationTs) || Date.now();
+        for (const reading of assignment.readings || []) {
+          if (
+            completionUpdatedAt[reading.key] === undefined ||
+            mutationTs > completionUpdatedAt[reading.key]
+          ) {
+            completed[reading.key] = Boolean(payload.completed);
+            completionUpdatedAt[reading.key] = mutationTs;
+          }
+        }
+        state.plan.completed = completed;
+        state.plan.completionUpdatedAt = completionUpdatedAt;
+        if (payload.completed && payload.completionDate) {
+          state.plan.earnedDayKeys = [
+            ...new Set([...(state.plan.earnedDayKeys || []), payload.date]),
+          ];
+          state.plan.dayCompletionDates = {
+            ...(state.plan.dayCompletionDates || {}),
+            [payload.date]:
+              state.plan.dayCompletionDates?.[payload.date] || payload.completionDate,
           };
         }
         await route.fulfill({
@@ -676,6 +887,92 @@ test("an offline chapter check replays and reconciles after reconnect", async ({
   await expect(reading).toHaveAttribute("aria-pressed", "true");
 });
 
+test("an offline day completion survives refresh and retries after reconnect", async ({
+  page,
+}) => {
+  const state = createApiState();
+  await stubReadingApi(page, state);
+  await seedReadingState(page, state.plan);
+  await openToday(page, state);
+
+  state.offline = true;
+  await page.getByTestId(`today-complete-day-${PLAN_ID}`).click();
+  await expect.poll(() => readPendingCount(page)).toBe(1);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("dashboard-today-content")).toBeVisible();
+  await expect.poll(() => readPendingCount(page)).toBe(1);
+
+  state.offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => readPendingCount(page)).toBe(0);
+  for (const key of COMPLETION_KEYS) {
+    await expect.poll(() => state.plan.completed[key]).toBe(true);
+  }
+  expect(state.plan.dayCompletionDates?.[todayISO()]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("Mountain Rhythm retries a queued day completion when the connection returns", async ({
+  page,
+}) => {
+  const plan = makeActiveClimbPlan();
+  const state = createApiState({ plan });
+  await stubReadingApi(page, state);
+  await seedReadingState(page, plan);
+  await page.goto("/mountain-rhythm");
+  await expect(page.getByTestId("route-day-1")).toBeVisible();
+
+  state.offline = true;
+  await page.getByTestId("button-complete-day-1").click();
+  await expect(page.getByTestId("button-complete-day-1")).toHaveText("Undo day");
+  await expect.poll(() => readPendingCount(page)).toBe(1);
+
+  state.offline = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => readPendingCount(page)).toBe(0);
+  for (const assignment of plan.assignments) {
+    for (const reading of assignment.readings) {
+      if (assignment.date !== todayISO()) continue;
+      await expect.poll(() => state.plan.completed[reading.key]).toBe(true);
+    }
+  }
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("button-complete-day-1")).toHaveText("Undo day");
+});
+
+test("a focused tab refreshes reading progress written from another device", async ({
+  page,
+  browser,
+}) => {
+  const state = createApiState();
+  await stubReadingApi(page, state);
+  await seedReadingState(page, state.plan);
+  await openToday(page, state);
+
+  const deviceContext = await browser.newContext();
+  try {
+    const devicePage = await deviceContext.newPage();
+    await stubReadingApi(devicePage, state);
+    await seedReadingState(devicePage, state.plan);
+    await devicePage.goto(page.url());
+    await devicePage.locator(".launch-splash").waitFor({ state: "detached" });
+    const deviceReading = devicePage.getByTestId(
+      `today-reading-${COMPLETION_KEYS[0]}`,
+    );
+    await expect(deviceReading).toHaveAttribute("aria-pressed", "false");
+    await deviceReading.click();
+    await expect(deviceReading).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => state.plan.completed[COMPLETION_KEYS[0]]).toBe(true);
+
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      page.getByTestId(`today-reading-${COMPLETION_KEYS[0]}`),
+    ).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    await deviceContext.close();
+  }
+});
+
 test("an offline active-climb reading keeps its date and progress after reconnect and refresh", async ({
   page,
   browser,
@@ -712,6 +1009,7 @@ test("an offline active-climb reading keeps its date and progress after reconnec
       completed: true,
       earnedDay: todayISO(),
       completionDate: todayISO(),
+      ts: expect.any(Number),
     },
   });
 
@@ -745,7 +1043,7 @@ test("an offline active-climb reading keeps its date and progress after reconnec
   const navigation = page.getByTestId("dashboard-navigation-row");
   await navigation.getByRole("button", { name: "Plans", exact: true }).click();
   const activeClimb = page.getByTestId("dashboard-active-climb");
-  await expect(activeClimb).toContainText("14% complete");
+  await expect(activeClimb).toContainText("14% of assigned chapters complete");
   await expect(
     activeClimb.getByTestId(`plan-day-section-${plan.id}-${todayISO()}`),
   ).toContainText("1/1 chapters complete");
@@ -926,11 +1224,11 @@ test("same-owner plan snapshot keeps Mountain Rhythm, Home, and the selected Cal
   await page.getByTestId("dashboard-progress")
     .getByRole("button", { name: /^Progress/ }).click();
   await expect(page.getByTestId("dashboard-progress-plan-choices")).toHaveCount(0);
-  await expect(page.getByTestId("dashboard-progress-selected-plan"))
-    .toHaveText("Mountain Rhythm · Synthetic 7-Day Climb");
-  await expect(page.getByTestId("dashboard-progress-percent")).toContainText("71.4%");
+  await expect(page.getByTestId("dashboard-progress-selected-plan")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-progress-percent")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-progress-detail"))
-    .not.toContainText("Today’s climb complete");
+    .toHaveAttribute("data-plan-id", plan.id);
+  await expect(page.getByTestId("dashboard-progress-detail")).toContainText("Next reading");
   await expect(page.getByTestId(`today-complete-day-${plan.id}`))
     .toContainText("Day complete");
 

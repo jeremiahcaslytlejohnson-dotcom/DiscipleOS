@@ -9,6 +9,7 @@ const fakeDatabase = vi.hoisted(() => {
   let legacyReadTarget = 0;
   let legacyBarrier: Promise<void> | undefined;
   let releaseLegacyBarrier: (() => void) | undefined;
+  let rowLockCount = 0;
 
   return {
     plans,
@@ -19,6 +20,13 @@ const fakeDatabase = vi.hoisted(() => {
       legacyReadTarget = 0;
       legacyBarrier = undefined;
       releaseLegacyBarrier = undefined;
+      rowLockCount = 0;
+    },
+    recordRowLock() {
+      rowLockCount += 1;
+    },
+    getRowLockCount() {
+      return rowLockCount;
     },
     enableLegacyReadBarrier(target: number) {
       legacyBarrierEnabled = true;
@@ -114,6 +122,21 @@ vi.mock("@workspace/db", () => {
           },
         };
       },
+      insert() {
+        return {
+          values(values: { id: string; userId: string; data: Record<string, any> }) {
+            return {
+              async onConflictDoUpdate(options: { set: { data: Record<string, any> } }) {
+                const existing = fakeDatabase.plans.get(values.id);
+                fakeDatabase.plans.set(values.id, {
+                  userId: existing?.userId || values.userId,
+                  data: clone(options.set.data || values.data),
+                });
+              },
+            };
+          },
+        };
+      },
     };
   }
 
@@ -123,6 +146,7 @@ vi.mock("@workspace/db", () => {
       const releases: Array<() => void> = [];
       const tx = makeClient({
         async lockForUpdate(key) {
+          fakeDatabase.recordRowLock();
           releases.push(await acquireRowLock(key));
         },
       });
@@ -241,5 +265,113 @@ describe("reading completion writes serialize per user and plan", () => {
     expect(fakeDatabase.plans.get(OTHER_PLAN_ID)!.data.completed).toEqual({
       "other-plan-chapter": true,
     });
+  });
+
+  it("keeps newer completion state and the first date through stale writes and plan replay", async () => {
+    const app = makeApp();
+
+    const firstCompletion = await request(app).post("/reading/day-complete").send({
+      planId: PLAN_ID,
+      date: "2026-09-02",
+      completed: true,
+      completionDate: "2026-09-03",
+      mutationTs: 200,
+    });
+    const staleUncompletion = await request(app).post("/reading/day-complete").send({
+      planId: PLAN_ID,
+      date: "2026-09-02",
+      completed: false,
+      mutationTs: 100,
+    });
+    const staleReplay = await request(app).post("/reading/plans").send({
+      ...makePlan(PLAN_ID, [
+        { date: "2026-09-01", keys: ["chapter-a"] },
+        { date: "2026-09-02", keys: ["day-b1", "day-b2"] },
+      ]),
+      completed: {
+        "chapter-a": false,
+        "day-b1": false,
+        "day-b2": false,
+      },
+      dayCompletionDates: {
+        "2026-09-02": "2026-09-09",
+      },
+    });
+
+    expect(firstCompletion.status).toBe(200);
+    expect(staleUncompletion.status).toBe(200);
+    expect(staleReplay.status).toBe(200);
+
+    const savedPlan = fakeDatabase.plans.get(PLAN_ID)!.data;
+    expect(savedPlan.completed).toMatchObject({
+      "day-b1": true,
+      "day-b2": true,
+    });
+    expect(savedPlan.earnedDayKeys).toEqual(["2026-08-30", "2026-09-02"]);
+    expect(savedPlan.dayCompletionDates).toEqual({
+      "2026-08-30": "2026-08-31",
+      "2026-09-02": "2026-09-03",
+    });
+    expect(savedPlan.completionUpdatedAt).toMatchObject({
+      "day-b1": 200,
+      "day-b2": 200,
+    });
+  });
+
+  it("accepts a newer explicit uncompletion without deleting earned history", async () => {
+    const app = makeApp();
+    await request(app).post("/reading/day-complete").send({
+      planId: PLAN_ID,
+      date: "2026-09-02",
+      completed: true,
+      completionDate: "2026-09-03",
+      mutationTs: 200,
+    });
+
+    const response = await request(app).post("/reading/day-complete").send({
+      planId: PLAN_ID,
+      date: "2026-09-02",
+      completed: false,
+      mutationTs: 300,
+    });
+
+    expect(response.status).toBe(200);
+    const savedPlan = fakeDatabase.plans.get(PLAN_ID)!.data;
+    expect(savedPlan.completed).toMatchObject({
+      "day-b1": false,
+      "day-b2": false,
+    });
+    expect(savedPlan.earnedDayKeys).toContain("2026-09-02");
+    expect(savedPlan.dayCompletionDates["2026-09-02"]).toBe("2026-09-03");
+  });
+
+  it("serializes a stale full-plan replay with a concurrent completion", async () => {
+    const app = makeApp();
+    const stalePlan = {
+      ...makePlan(PLAN_ID, [
+        { date: "2026-09-01", keys: ["chapter-a"] },
+        { date: "2026-09-02", keys: ["day-b1", "day-b2"] },
+      ]),
+      completed: {
+        "chapter-a": false,
+        "day-b1": false,
+        "day-b2": false,
+      },
+    };
+
+    const [planResponse, completionResponse] = await Promise.all([
+      request(app).post("/reading/plans").send(stalePlan),
+      request(app).post("/reading/complete").send({
+        planId: PLAN_ID,
+        key: "chapter-a",
+        completed: true,
+        mutationTs: 500,
+      }),
+    ]);
+
+    expect(planResponse.status).toBe(200);
+    expect(completionResponse.status).toBe(200);
+    expect(fakeDatabase.getRowLockCount()).toBeGreaterThanOrEqual(2);
+    expect(fakeDatabase.plans.get(PLAN_ID)!.data.completed["chapter-a"]).toBe(true);
   });
 });
