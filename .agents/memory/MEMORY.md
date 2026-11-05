@@ -29,5 +29,6 @@
 - [Plan-day grouping](plan-day-grouping.md) — current-day incomplete reading stays in progress; only incomplete past days count as catch-up.
 - [Git credential safety](git-credential-safety.md) — keep GitHub tokens out of remote URLs; Replit blocks local `.git` writes unless explicitly enabled.
 - [Tailwind spacing overrides](tailwind-spacing-overrides.md) — inspect both physical and logical margins before changing a vertical spacing utility; complementary margins can accumulate.
+- [PNPM Vite workflow refresh](pnpm-vite-workflow-refresh.md) — after lockfile changes, refresh installed packages and restart Vite workflows before diagnosing missing old store paths.
 - [Active-climb sync tests](active-climb-sync-tests.md) — offline browser fixtures must persist earned schedule days and actual completion dates, not just completed chapter flags.
 - [Plans-page CTA hierarchy](plans-page-cta-hierarchy.md) — with saved plans, Add plan stays primary and Guided Climb remains an optional text link, not a setup prompt.

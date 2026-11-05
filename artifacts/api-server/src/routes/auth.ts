@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { Router, type Request } from "express";
 import {
   authEmailCodesTable,
@@ -287,74 +287,115 @@ router.post("/auth/request-code", async (req, res) => {
   }
 
   try {
-    const now = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
     const isTestEmail = isTestVerificationEmail(email);
     const requestIp = getRequestIp(req);
-    if (!isTestEmail) {
-      const [latest] = await db
-        .select({ createdAt: authEmailCodesTable.createdAt })
-        .from(authEmailCodesTable)
-        .where(
-          and(
-            eq(authEmailCodesTable.email, email),
-            eq(authEmailCodesTable.purpose, purpose),
-          ),
-        )
-        .orderBy(desc(authEmailCodesTable.createdAt))
-        .limit(1);
-
-      if (latest && now - latest.createdAt.getTime() < AUTH_RESEND_INTERVAL_MS) {
-        rateLimitResponse(
-          res,
-          Math.ceil((AUTH_RESEND_INTERVAL_MS - (now - latest.createdAt.getTime())) / 1000),
+    const code = generateVerificationCode();
+    const { hash, salt } = hashVerificationCode(code);
+    const reservation = await db.transaction(async (tx) => {
+      if (!isTestEmail) {
+        // Serialize checks and reservations across API instances. Acquire keys in
+        // the same order so requests sharing an email and/or IP cannot deadlock.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discipleos:auth-email:${email}:${purpose}`}, 0))`,
         );
-        return;
-      }
+        if (requestIp) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discipleos:auth-ip:${requestIp}`}, 0))`,
+          );
+        }
 
-      const hourAgo = new Date(now - 60 * 60 * 1000);
-      const [recent] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(authEmailCodesTable)
-        .where(
-          and(
-            eq(authEmailCodesTable.email, email),
-            eq(authEmailCodesTable.purpose, purpose),
-            gt(authEmailCodesTable.createdAt, hourAgo),
-          ),
-        );
-      if ((recent?.count ?? 0) >= AUTH_MAX_CODES_PER_HOUR) {
-        rateLimitResponse(res, 3600);
-        return;
-      }
+        const [latest] = await tx
+          .select({ createdAt: authEmailCodesTable.createdAt })
+          .from(authEmailCodesTable)
+          .where(
+            and(
+              eq(authEmailCodesTable.email, email),
+              eq(authEmailCodesTable.purpose, purpose),
+            ),
+          )
+          .orderBy(desc(authEmailCodesTable.createdAt))
+          .limit(1);
 
-      if (requestIp) {
-        const [recentIp] = await db
+        if (latest && nowMs - latest.createdAt.getTime() < AUTH_RESEND_INTERVAL_MS) {
+          return {
+            limited: true as const,
+            retryAfterSeconds: Math.ceil(
+              (AUTH_RESEND_INTERVAL_MS - (nowMs - latest.createdAt.getTime())) / 1000,
+            ),
+          };
+        }
+
+        const hourAgo = new Date(nowMs - 60 * 60 * 1000);
+        const [recent] = await tx
           .select({ count: sql<number>`count(*)::int` })
           .from(authEmailCodesTable)
           .where(
             and(
-              eq(authEmailCodesTable.requestIp, requestIp),
+              eq(authEmailCodesTable.email, email),
+              eq(authEmailCodesTable.purpose, purpose),
               gt(authEmailCodesTable.createdAt, hourAgo),
             ),
           );
-        if ((recentIp?.count ?? 0) >= AUTH_MAX_CODES_PER_HOUR * 4) {
-          rateLimitResponse(res, 3600);
-          return;
+        if ((recent?.count ?? 0) >= AUTH_MAX_CODES_PER_HOUR) {
+          return { limited: true as const, retryAfterSeconds: 3600 };
+        }
+
+        if (requestIp) {
+          const [recentIp] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(authEmailCodesTable)
+            .where(
+              and(
+                eq(authEmailCodesTable.requestIp, requestIp),
+                gt(authEmailCodesTable.createdAt, hourAgo),
+              ),
+            );
+          if ((recentIp?.count ?? 0) >= AUTH_MAX_CODES_PER_HOUR * 4) {
+            return { limited: true as const, retryAfterSeconds: 3600 };
+          }
         }
       }
+
+      const [challenge] = await tx
+        .insert(authEmailCodesTable)
+        .values({
+          email,
+          purpose,
+          codeHash: hash,
+          codeSalt: salt,
+          expiresAt: new Date(nowMs + AUTH_CODE_TTL_MS),
+          requestIp,
+        })
+        .returning({ id: authEmailCodesTable.id });
+      if (!challenge) throw new Error("Could not reserve verification code");
+      return { limited: false as const, challengeId: challenge.id };
+    });
+
+    if (reservation.limited) {
+      rateLimitResponse(res, reservation.retryAfterSeconds);
+      return;
     }
 
-    const code = generateVerificationCode();
-    const { hash, salt } = hashVerificationCode(code);
-    await sendVerificationEmail({ to: email, code });
-    await db.insert(authEmailCodesTable).values({
-      email,
-      purpose,
-      codeHash: hash,
-      codeSalt: salt,
-      expiresAt: new Date(now + AUTH_CODE_TTL_MS),
-      requestIp,
-    });
+    try {
+      await sendVerificationEmail({ to: email, code });
+    } catch (error) {
+      // A failed delivery should not leave a usable challenge or consume quota.
+      try {
+        await db
+          .delete(authEmailCodesTable)
+          .where(
+            and(
+              eq(authEmailCodesTable.id, reservation.challengeId),
+              isNull(authEmailCodesTable.consumedAt),
+            ),
+          );
+      } catch (cleanupError) {
+        req.log.error({ error: cleanupError }, "Could not remove undelivered auth challenge");
+      }
+      throw error;
+    }
 
     res.json({
       success: true,
@@ -411,14 +452,20 @@ router.post("/auth/verify-code", async (req, res) => {
     const invalid = !challenge || challenge.expiresAt <= now || challenge.attemptCount >= AUTH_MAX_ATTEMPTS;
     if (invalid || !verifyVerificationCode(code, challenge.codeHash, challenge.codeSalt)) {
       if (challenge && challenge.expiresAt > now && challenge.attemptCount < AUTH_MAX_ATTEMPTS) {
-        const nextAttempts = challenge.attemptCount + 1;
         await db
           .update(authEmailCodesTable)
           .set({
             attemptCount: sql`${authEmailCodesTable.attemptCount} + 1`,
-            consumedAt: nextAttempts >= AUTH_MAX_ATTEMPTS ? now : null,
+            consumedAt: sql`CASE WHEN ${authEmailCodesTable.attemptCount} + 1 >= ${AUTH_MAX_ATTEMPTS} THEN ${now} ELSE NULL END`,
           })
-          .where(eq(authEmailCodesTable.id, challenge.id));
+          .where(
+            and(
+              eq(authEmailCodesTable.id, challenge.id),
+              isNull(authEmailCodesTable.consumedAt),
+              gt(authEmailCodesTable.expiresAt, now),
+              lt(authEmailCodesTable.attemptCount, AUTH_MAX_ATTEMPTS),
+            ),
+          );
       }
       res.status(400).json({
         success: false,
@@ -428,10 +475,26 @@ router.post("/auth/verify-code", async (req, res) => {
       return;
     }
 
-    await db
+    const [consumed] = await db
       .update(authEmailCodesTable)
       .set({ consumedAt: now })
-      .where(eq(authEmailCodesTable.id, challenge.id));
+      .where(
+        and(
+          eq(authEmailCodesTable.id, challenge.id),
+          isNull(authEmailCodesTable.consumedAt),
+          gt(authEmailCodesTable.expiresAt, now),
+          lt(authEmailCodesTable.attemptCount, AUTH_MAX_ATTEMPTS),
+        ),
+      )
+      .returning({ id: authEmailCodesTable.id });
+    if (!consumed) {
+      res.status(400).json({
+        success: false,
+        code: "CODE_INVALID_OR_EXPIRED",
+        error: "That verification code is invalid or expired.",
+      });
+      return;
+    }
 
     let [user] = await db
       .select()
