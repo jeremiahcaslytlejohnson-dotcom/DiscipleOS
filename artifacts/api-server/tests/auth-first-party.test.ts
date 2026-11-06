@@ -13,6 +13,7 @@ import {
   AUTH_CODE_TTL_MS,
   hashVerificationCode,
 } from "../src/lib/auth-codes";
+import { purgeExpiredAuthCodeRows } from "../src/services/authCodeRetention";
 import { isEmailDeliveryConfigured } from "../src/services/emailDelivery";
 
 const app = createApp(createPgSessionStore());
@@ -25,11 +26,13 @@ async function seedCode({
   purpose = "email",
   code = "123456",
   expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS),
+  createdAt = new Date(),
 }: {
   email: string;
   purpose?: "email" | "sign-in" | "sign-up";
   code?: string;
   expiresAt?: Date;
+  createdAt?: Date;
 }) {
   const { hash, salt } = hashVerificationCode(code);
   await db.insert(authEmailCodesTable).values({
@@ -38,6 +41,7 @@ async function seedCode({
     codeHash: hash,
     codeSalt: salt,
     expiresAt,
+    createdAt,
     requestIp: "auth-test",
   });
 }
@@ -198,6 +202,39 @@ describe("first-party passwordless authentication", () => {
       .from(eventsTable)
       .where(eq(eventsTable.userId, userId));
     expect(events).toHaveLength(0);
+  });
+
+  it("retains expired auth rows for 24 hours before purging them", async () => {
+    const now = new Date();
+    const olderEmail = `auth-retention-old-${Date.now()}@example.com`;
+    const recentEmail = `auth-retention-recent-${Date.now()}@example.com`;
+    createdEmails.push(olderEmail, recentEmail);
+
+    await seedCode({
+      email: olderEmail,
+      expiresAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 25 * 60 * 60 * 1000 - AUTH_CODE_TTL_MS),
+    });
+    await seedCode({
+      email: recentEmail,
+      expiresAt: new Date(now.getTime() - 23 * 60 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 23 * 60 * 60 * 1000 - AUTH_CODE_TTL_MS),
+    });
+
+    const deleted = await purgeExpiredAuthCodeRows(now);
+    expect(deleted).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(authEmailCodesTable)
+        .where(eq(authEmailCodesTable.email, olderEmail)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(authEmailCodesTable)
+        .where(eq(authEmailCodesTable.email, recentEmail)),
+    ).toHaveLength(1);
   });
 
   it("rejects expired and incorrect codes without revealing stored values", async () => {
