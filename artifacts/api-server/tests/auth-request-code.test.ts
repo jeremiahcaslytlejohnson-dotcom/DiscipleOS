@@ -126,6 +126,36 @@ describe("generic passwordless email-code requests", () => {
     expect(codes).toHaveLength(1);
   });
 
+  it("removes a failed email reservation and allows an immediate retry", async () => {
+    const email = `auth-request-delivery-failure-${Date.now()}@example.com`;
+    createdEmails.push(email);
+    resendProxy.mockResolvedValueOnce(new Response(null, { status: 503 }));
+
+    await request(app)
+      .post("/api/auth/request-code")
+      .send({ email, purpose: "email" })
+      .expect(502);
+
+    const afterFailure = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.email, email));
+    expect(afterFailure).toHaveLength(0);
+
+    await request(app)
+      .post("/api/auth/request-code")
+      .send({ email, purpose: "email" })
+      .expect(200);
+
+    expect(resendProxy).toHaveBeenCalledTimes(2);
+    const afterRetry = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.email, email));
+    expect(afterRetry).toHaveLength(1);
+    expect(afterRetry[0].consumedAt).toBeNull();
+  });
+
   it("creates one account for a new email and reuses it on later verification", async () => {
     const email = `auth-request-account-${Date.now()}@example.com`;
     createdEmails.push(email);

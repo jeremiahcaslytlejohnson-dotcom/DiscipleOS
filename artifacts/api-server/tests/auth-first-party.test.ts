@@ -1,5 +1,6 @@
 import request from "supertest";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { UpsertEventBody } from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
 import {
   authEmailCodesTable,
@@ -20,6 +21,7 @@ const app = createApp(createPgSessionStore());
 const createdUserIds: string[] = [];
 const createdEmails: string[] = [];
 const createdPlanIds: string[] = [];
+const createdEventIds: string[] = [];
 
 async function seedCode({
   email,
@@ -50,6 +52,9 @@ describe("first-party passwordless authentication", () => {
   afterAll(async () => {
     for (const email of createdEmails) {
       await db.delete(authEmailCodesTable).where(eq(authEmailCodesTable.email, email));
+    }
+    for (const id of createdEventIds) {
+      await db.delete(eventsTable).where(eq(eventsTable.id, id));
     }
     for (const id of createdUserIds) {
       await db.delete(usersTable).where(eq(usersTable.id, id));
@@ -186,22 +191,58 @@ describe("first-party passwordless authentication", () => {
     const userId = verified.body.user.id as string;
     createdUserIds.push(userId);
 
-    await browser
-      .post("/api/events")
-      .send({
-        title: "Oversized recurrence",
-        type: "prayer",
-        date: "2026-11-06",
-        time: "07:00",
-        repeatWeekdays: Array.from({ length: 8 }, (_, index) => index),
-      })
-      .expect(400);
+    const safeParseSpy = vi.spyOn(UpsertEventBody, "safeParse");
+    try {
+      await browser
+        .post("/api/events")
+        .send({
+          title: "Oversized recurrence",
+          type: "prayer",
+          date: "2026-11-06",
+          time: "07:00",
+          repeatWeekdays: Array.from({ length: 8 }, (_, index) => index),
+        })
+        .expect(400);
+      expect(safeParseSpy).not.toHaveBeenCalled();
+    } finally {
+      safeParseSpy.mockRestore();
+    }
 
     const events = await db
       .select()
       .from(eventsTable)
       .where(eq(eventsTable.userId, userId));
     expect(events).toHaveLength(0);
+  });
+
+  it("accepts the exact seven-weekday recurrence boundary", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const email = `auth-weekdays-valid-${suffix}@e2e.discipleos.test`;
+    const eventId = `auth-weekdays-valid-event-${suffix}`;
+    createdEmails.push(email);
+    createdEventIds.push(eventId);
+    await seedCode({ email, code: "731044" });
+
+    const browser = request.agent(app);
+    const verified = await browser
+      .post("/api/auth/verify-code")
+      .send({ email, purpose: "email", code: "731044" })
+      .expect(200);
+    createdUserIds.push(verified.body.user.id as string);
+
+    const response = await browser
+      .post("/api/events")
+      .send({
+        id: eventId,
+        title: "Seven weekday recurrence",
+        type: "prayer",
+        date: "2026-11-06",
+        time: "07:00",
+        repeatWeekdays: [0, 1, 2, 3, 4, 5, 6],
+      })
+      .expect(200);
+
+    expect(response.body.event.repeatWeekdays).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 
   it("retains expired auth rows for 24 hours before purging them", async () => {
