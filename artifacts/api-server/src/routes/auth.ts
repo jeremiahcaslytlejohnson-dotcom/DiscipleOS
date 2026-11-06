@@ -456,7 +456,7 @@ router.post("/auth/verify-code", async (req, res) => {
           .update(authEmailCodesTable)
           .set({
             attemptCount: sql`${authEmailCodesTable.attemptCount} + 1`,
-            consumedAt: sql`CASE WHEN ${authEmailCodesTable.attemptCount} + 1 >= ${AUTH_MAX_ATTEMPTS} THEN ${now} ELSE NULL END`,
+            consumedAt: sql`CASE WHEN ${authEmailCodesTable.attemptCount} + 1 >= ${AUTH_MAX_ATTEMPTS} THEN ${now}::timestamptz ELSE NULL::timestamptz END`,
           })
           .where(
             and(
