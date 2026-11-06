@@ -117,6 +117,89 @@ describe("first-party passwordless authentication", () => {
     await browser.get("/api/settings").expect(401);
   });
 
+  it("allows only one concurrent PostgreSQL verification to consume a code", async () => {
+    const email = `auth-concurrent-${Date.now()}-${Math.random().toString(36).slice(2)}@e2e.discipleos.test`;
+    createdEmails.push(email);
+    await seedCode({ email, code: "731042" });
+
+    const [first, second] = await Promise.all([
+      request.agent(app)
+        .post("/api/auth/verify-code")
+        .send({ email, purpose: "email", code: "731042" }),
+      request.agent(app)
+        .post("/api/auth/verify-code")
+        .send({ email, purpose: "email", code: "731042" }),
+    ]);
+    const successful = [first, second].filter((response) => response.status === 200);
+    const rejected = [first, second].filter((response) => response.status === 400);
+
+    expect(successful).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    createdUserIds.push(successful[0].body.user.id as string);
+
+    const [storedCode] = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.email, email));
+    expect(storedCode.consumedAt).toBeInstanceOf(Date);
+  });
+
+  it("consumes a code after the fifth incorrect attempt in PostgreSQL", async () => {
+    const email = `auth-lockout-${Date.now()}-${Math.random().toString(36).slice(2)}@e2e.discipleos.test`;
+    createdEmails.push(email);
+    await seedCode({ email, code: "731042" });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(app)
+        .post("/api/auth/verify-code")
+        .send({ email, purpose: "email", code: "000000" })
+        .expect(400);
+    }
+
+    const [storedCode] = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.email, email));
+    expect(storedCode.attemptCount).toBe(5);
+    expect(storedCode.consumedAt).toBeInstanceOf(Date);
+
+    await request(app)
+      .post("/api/auth/verify-code")
+      .send({ email, purpose: "email", code: "731042" })
+      .expect(400);
+  });
+
+  it("rejects oversized recurrence arrays before Zod validation", async () => {
+    const email = `auth-weekdays-${Date.now()}-${Math.random().toString(36).slice(2)}@e2e.discipleos.test`;
+    createdEmails.push(email);
+    await seedCode({ email, code: "731043" });
+
+    const browser = request.agent(app);
+    const verified = await browser
+      .post("/api/auth/verify-code")
+      .send({ email, purpose: "email", code: "731043" })
+      .expect(200);
+    const userId = verified.body.user.id as string;
+    createdUserIds.push(userId);
+
+    await browser
+      .post("/api/events")
+      .send({
+        title: "Oversized recurrence",
+        type: "prayer",
+        date: "2026-11-06",
+        time: "07:00",
+        repeatWeekdays: Array.from({ length: 8 }, (_, index) => index),
+      })
+      .expect(400);
+
+    const events = await db
+      .select()
+      .from(eventsTable)
+      .where(eq(eventsTable.userId, userId));
+    expect(events).toHaveLength(0);
+  });
+
   it("rejects expired and incorrect codes without revealing stored values", async () => {
     const email = `auth-expired-${Date.now()}@example.com`;
     createdEmails.push(email);

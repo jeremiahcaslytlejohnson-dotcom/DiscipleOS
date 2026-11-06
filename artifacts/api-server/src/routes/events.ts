@@ -89,6 +89,15 @@ router.get("/events", async (req, res) => {
 router.post("/events", async (req, res) => {
   try {
     const userId = req.session.userId!;
+    // Reject unbounded arrays before Zod walks every element. The API contract
+    // permits at most one entry for each weekday.
+    if (
+      Array.isArray(req.body?.repeatWeekdays) &&
+      req.body.repeatWeekdays.length > 7
+    ) {
+      res.status(400).json({ success: false, error: "Invalid event payload" });
+      return;
+    }
     const parsed = UpsertEventBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ success: false, error: "Invalid event payload" });

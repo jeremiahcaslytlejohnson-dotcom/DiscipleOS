@@ -32,3 +32,4 @@
 - [PNPM Vite workflow refresh](pnpm-vite-workflow-refresh.md) — after lockfile changes, refresh installed packages and restart Vite workflows before diagnosing missing old store paths.
 - [Active-climb sync tests](active-climb-sync-tests.md) — offline browser fixtures must persist earned schedule days and actual completion dates, not just completed chapter flags.
 - [Plans-page CTA hierarchy](plans-page-cta-hierarchy.md) — with saved plans, Add plan stays primary and Guided Climb remains an optional text link, not a setup prompt.
+- [Auth PostgreSQL checks](auth-postgres-checks.md) — mocked DB tests miss timestamp typing and locking issues in OTP SQL; verify auth flows on isolated real PostgreSQL.

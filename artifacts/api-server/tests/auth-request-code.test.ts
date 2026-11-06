@@ -104,6 +104,28 @@ describe("generic passwordless email-code requests", () => {
     expect(existingCodes[0].codeHash).not.toContain(existingCode);
   });
 
+  it("serializes concurrent code requests with real PostgreSQL", async () => {
+    const email = `auth-request-concurrent-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+    createdEmails.push(email);
+
+    const responses = await Promise.all([
+      request(app)
+        .post("/api/auth/request-code")
+        .send({ email, purpose: "email" }),
+      request(app)
+        .post("/api/auth/request-code")
+        .send({ email, purpose: "email" }),
+    ]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 429]);
+    expect(resendProxy).toHaveBeenCalledTimes(1);
+    const codes = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.email, email));
+    expect(codes).toHaveLength(1);
+  });
+
   it("creates one account for a new email and reuses it on later verification", async () => {
     const email = `auth-request-account-${Date.now()}@example.com`;
     createdEmails.push(email);

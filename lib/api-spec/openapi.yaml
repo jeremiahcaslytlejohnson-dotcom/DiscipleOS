@@ -310,6 +310,7 @@ components:
           type: string
         repeatWeekdays:
           type: array
+          maxItems: 7
           items:
             type: integer
         repeatUntil:
@@ -344,6 +345,7 @@ components:
           type: string
         repeatWeekdays:
           type: array
+          maxItems: 7
           items:
             type: integer
         repeatUntil:
