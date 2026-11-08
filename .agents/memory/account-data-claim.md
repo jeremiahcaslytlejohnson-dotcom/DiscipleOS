@@ -14,3 +14,9 @@ Email verification should claim the current browser's anonymous data before navi
 **Why:** Waiting for the destination page to notice the new session creates a timing window where local plans can appear disconnected or be reconciled against the account before the claim completes.
 
 **How to apply:** Preserve the browser session through verification, run `/api/account/claim` immediately after successful code verification, then refresh the auth context and hydrate plans.
+
+Concurrent claims must serialize by anonymous browser identity before selecting records, and transfer counts should reflect rows actually moved.
+
+**Why:** Overlapping requests for one anonymous browser can otherwise race across account destinations or report the same transfer more than once.
+
+**How to apply:** Acquire a transaction-scoped lock on the anonymous owner, keep ownership in each update predicate, and count only returned rows.

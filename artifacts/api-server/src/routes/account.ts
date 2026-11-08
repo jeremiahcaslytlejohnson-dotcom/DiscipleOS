@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   deletedEventTombstonesTable,
@@ -57,6 +57,12 @@ router.post("/account/claim", requireAuth, async (req, res) => {
 
   try {
     const claimed = await db.transaction(async (tx) => {
+      // A browser identity can be presented by overlapping requests (or
+      // sessions). Serialize the transfer so one account claims it at a time.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`discipleos:account-claim:${anonymousUserId}`}, 0))`,
+      );
+
       const anonymousEvents = await tx
         .select()
         .from(eventsTable)
@@ -115,11 +121,28 @@ router.post("/account/claim", requireAuth, async (req, res) => {
 
         if (accountEvent) {
           if ((event.updatedAt?.getTime() ?? 0) > (accountEvent.updatedAt?.getTime() ?? 0)) {
-            await tx.update(eventsTable).set({ ...event, userId: accountUserId }).where(eq(eventsTable.id, event.id));
+            await tx
+              .update(eventsTable)
+              .set({ ...event, userId: accountUserId })
+              .where(
+                and(
+                  eq(eventsTable.id, event.id),
+                  eq(eventsTable.userId, anonymousUserId),
+                ),
+              );
           }
         } else {
-          await tx.update(eventsTable).set({ userId: accountUserId }).where(eq(eventsTable.id, event.id));
-          events++;
+          const [movedEvent] = await tx
+            .update(eventsTable)
+            .set({ userId: accountUserId })
+            .where(
+              and(
+                eq(eventsTable.id, event.id),
+                eq(eventsTable.userId, anonymousUserId),
+              ),
+            )
+            .returning({ id: eventsTable.id });
+          if (movedEvent) events++;
         }
       }
 
@@ -143,13 +166,22 @@ router.post("/account/claim", requireAuth, async (req, res) => {
             }).where(eq(readingPlansTable.id, targetPlanId));
           }
         } else {
-          await tx.update(readingPlansTable).set({
-            id: targetPlanId,
-            userId: accountUserId,
-            data: nextPlanData,
-            templateKey: plan.templateKey,
-          }).where(and(eq(readingPlansTable.id, plan.id), eq(readingPlansTable.userId, anonymousUserId)));
-          plans++;
+          const [movedPlan] = await tx
+            .update(readingPlansTable)
+            .set({
+              id: targetPlanId,
+              userId: accountUserId,
+              data: nextPlanData,
+              templateKey: plan.templateKey,
+            })
+            .where(
+              and(
+                eq(readingPlansTable.id, plan.id),
+                eq(readingPlansTable.userId, anonymousUserId),
+              ),
+            )
+            .returning({ id: readingPlansTable.id });
+          if (movedPlan) plans++;
         }
       }
 
@@ -174,11 +206,17 @@ router.post("/account/claim", requireAuth, async (req, res) => {
                 ),
               );
           }
-          await tx
+          const [movedSubscription] = await tx
             .update(pushSubscriptionsTable)
             .set({ userId: accountUserId })
-            .where(eq(pushSubscriptionsTable.id, subscription.id));
-          subscriptions++;
+            .where(
+              and(
+                eq(pushSubscriptionsTable.id, subscription.id),
+                eq(pushSubscriptionsTable.userId, anonymousUserId),
+              ),
+            )
+            .returning({ id: pushSubscriptionsTable.id });
+          if (movedSubscription) subscriptions++;
         }
       }
 

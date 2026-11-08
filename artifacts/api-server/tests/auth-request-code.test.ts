@@ -126,6 +126,37 @@ describe("generic passwordless email-code requests", () => {
     expect(codes).toHaveLength(1);
   });
 
+  it("enforces the hourly IP limit across distinct emails in PostgreSQL", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const requestIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const emails = Array.from(
+      { length: 21 },
+      (_, index) => `auth-request-ip-limit-${suffix}-${index}@example.com`,
+    );
+    createdEmails.push(...emails);
+
+    const responses = [];
+    for (const email of emails) {
+      responses.push(
+        await request(app)
+          .post("/api/auth/request-code")
+          .set("x-forwarded-for", requestIp)
+          .send({ email, purpose: "email" }),
+      );
+    }
+
+    expect(responses.slice(0, 20).map((response) => response.status)).toEqual(
+      Array(20).fill(200),
+    );
+    expect(responses[20].status).toBe(429);
+    expect(resendProxy).toHaveBeenCalledTimes(20);
+    const ipRows = await db
+      .select()
+      .from(authEmailCodesTable)
+      .where(eq(authEmailCodesTable.requestIp, requestIp));
+    expect(ipRows).toHaveLength(20);
+  });
+
   it("removes a failed email reservation and allows an immediate retry", async () => {
     const email = `auth-request-delivery-failure-${Date.now()}@example.com`;
     createdEmails.push(email);
